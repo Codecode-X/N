@@ -76,7 +76,7 @@ CLIP推理过程是基于对比学习的，即找出与当前图片最相似的�
    3, A woman without glasses in kitchen, A woman in kitchen, glasses
    ```
 
-   该部分数据可利用GPT等LLM工具或其他工具进行采集，一共需要采集 800 条。`by: 奥利奥` 
+   该部分数据可利用GPT等LLM工具或其他工具进行采集，一共需要采集 800 条。`by: 奥利奥 & Ete` 
 
 2. **Token分类器代码实现：**实现一个轻量级的Token分类器，对文本编码器输出的token进行处理，得到postive  token和negetive token。三种token的形状应相同。`by: 染红` 
 
