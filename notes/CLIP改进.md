@@ -18,7 +18,7 @@
 
 **VLMs**在**图像分类和检索等粗粒度任务**上表现优异，但在**需要局部理解的细粒度任务**中仍然存在挑战。本文对模型的特征进行了全面分析。
 
-![image-20250312232131057](images\image-20250312232131057.png)
+<img src="images\image-20250312232131057.png" alt="image-20250312232131057" style="zoom:50%;" />
 
 * **关键问题**：**语义特征高度相关**，某个类别的特征包含了其他类别的信息，即 **互信息（Mutual Feature Information, MFI）**。例如对Clip的实验发现**“人（person）-狗（dog）”的文本特征相似度高达 0.84**。
 * **原因如下**：
@@ -39,7 +39,7 @@
 
 通过这两个关键模块，Unmix-CLIP 能够**减少 VLMs 的语义混淆问题**，提高在细粒度任务上的表现。
 
-![image-20250311224845735](images\image-20250311224845735.png)
+<img src="images\image-20250311224845735.png" alt="image-20250311224845735" style="zoom:50%;" />
 
 #### **特征提取与投影**
 
@@ -145,7 +145,7 @@ CLIP在 **组合性（compositionality）**方面仍然面临挑战 [28]，它�
 > > * 在**文本模态**上，情况类似，基于**文本表示**的线性探测器的准确率也高于随机基线。例如，在 PUG 数据集上的文本测试集，探测器的预测准确率为 **1.00**，远超随机基线（0.12）。
 > >
 > > 实验表明，在大多数情况下，**单一模态的嵌入包含正确的属性-对象绑定信息**，这表明 CLIP 的 **BoW 现象主要源于浅层的文本-图像对齐不充分**，而~~不是个体模态的特征表征不足~~。
-> > ![image-20250313131003110](images\image-20250313131003110.png)
+> > <img src="images\image-20250313131003110.png" alt="image-20250313131003110" style="zoom:50%;" />
 
 基于这一发现，我们提出了一个新假设：CLIP 的**BoW 现象主要是由于余弦相似度计算导致的表面对齐问题**。
 
@@ -187,7 +187,7 @@ CLIP在 **组合性（compositionality）**方面仍然面临挑战 [28]，它�
 
 1. **两种数据生成管道**：分别基于 **LLM（大语言模型）** 和 **MLLM（多模态大模型）**，旨在解决 CLIP 训练数据中的两大问题：**否定表达的稀缺** 以及 **文本与视觉内容的错位**。
 
-   ![image-20250312164345916](images\image-20250312164345916.png)
+   <img src="images\image-20250312164345916.png" alt="image-20250312164345916" style="zoom:50%;" />
 
 2. **模型微调**：通过在生成的数据上微调CLIP的文本编码器，开发出一个名为**NegationCLIP**的模型，该模型在保持通用性的同时，增强了对否定概念的理解。
 
@@ -199,11 +199,11 @@ CLIP在 **组合性（compositionality）**方面仍然面临挑战 [28]，它�
 
 > **相关工作：**最先进的 **TinyCLIP [50]** 也研究了 CLIP 的蒸馏问题。TinyCLIP 的核心方法是**权重继承**，即将部分权重从训练良好的教师模型转移到小型学生模型。然而，~~这种方法要求教师和学生模型**具有相同的架构风格~~**，从而**限制了实际应用的范围**。
 
-![image-20250312115733488](images\image-20250312115733488.png)
+<img src="images\image-20250312115733488.png" alt="image-20250312115733488" style="zoom:50%;" />
 
-![image-20250312115744389](images\image-20250312115744389.png)
+<img src="images\image-20250312115744389.png" alt="image-20250312115744389" style="zoom:50%;" />
 
-![image-20250312115805826](images\image-20250312115805826.png)
+<img src="images\image-20250312115805826.png" alt="image-20250312115805826" style="zoom:50%;" />
 
 本文从**关系、特征、梯度和对比**等不同角度对 CLIP 知识蒸馏进行全面研究。设计了**两类知识蒸馏策略**：
 
@@ -212,13 +212,13 @@ CLIP在 **组合性（compositionality）**方面仍然面临挑战 [28]，它�
    - 将学生模型视为一个**锚点（Anchor）**，**与教师模型的嵌入进行对比**。
    - 在 CLIP 训练过程中，结合学生和教师的特征进行**联合学习**。
 
-![image-20250312121418793](images\image-20250312121418793.png)
+<img src="images\image-20250312121418793.png" alt="image-20250312121418793" style="zoom:50%;" />
 
 **实验结果:**
 
 * **简单的特征模仿（FD）+ 均方误差（MSE）损失** 实现了最佳性能。
 
-  <img src="images\image-20250312123357609.png" alt="image-20250312123357609" style="zoom: 25%;" />
+  <img src="images\image-20250312123357609.png" alt="image-20250312123357609" style="zoom: 33%;" />
 
   > 损失函数如下：
   > $$
@@ -230,7 +230,7 @@ CLIP在 **组合性（compositionality）**方面仍然面临挑战 [28]，它�
 
 * **交互式对比学习（ICL）** 取得了**第二好的效果**。
 
-  <img src="images\image-20250312123419978.png" alt="image-20250312123419978" style="zoom:25%;" />
+  <img src="images\image-20250312123419978.png" alt="image-20250312123419978" style="zoom: 33%;" />
 
   > 损失函数如下：
   >
@@ -313,22 +313,22 @@ $$
 
 ### 2025-CLIP提示学习综述-Generalizable Prompt Learning of CLIP_ A Brief Overview
 
-![image-20250312151044972](images\image-20250312151044972.png)**小样本（few-shot)学习**首先是在大量额外数据上学习出可泛化的模型或知识，然后将其转移到仅有有限训练数据的下游任务中。这意味着**实际的下游任务数据与上游训练数据之间通常存在数据分布差异**。在传统的机器学习问题中，研究人员通常**假设训练数据和测试数据是独立同分布的**。然而，**小样本学习不再遵循这一假设**，要求模型在上游训练过程中学会**跨分布泛化**的能力，而**不仅仅是考虑在相同分布的数据上的泛化问题**。
+<img src="images\image-20250312151044972.png" alt="image-20250312151044972" style="zoom:50%;" />**小样本（few-shot)学习**首先是在大量额外数据上学习出可泛化的模型或知识，然后将其转移到仅有有限训练数据的下游任务中。这意味着**实际的下游任务数据与上游训练数据之间通常存在数据分布差异**。在传统的机器学习问题中，研究人员通常**假设训练数据和测试数据是独立同分布的**。然而，**小样本学习不再遵循这一假设**，要求模型在上游训练过程中学会**跨分布泛化**的能力，而**不仅仅是考虑在相同分布的数据上的泛化问题**。
 
 * **CoOp**: **将prompt看作是可学习的参数序列**（不需要符合任何语法，甚至可能是串乱码），**冻结Clip的文本编码器和图像编码器的参数**，通过**反向传播优化prompt序列**，使得编码后的图像特征和对应类的文本特征尽可能接近，和其他类的文本特征尽可能的远离。| 缺点是学到的**learned prompts无法解释**，因为把它们连起来似乎都不是什么正常语言表达，且CoOp**对于Unseen classes泛化性不强，在Base classes上可能产生了过拟合**。
-  <img src="https://i-blog.csdnimg.cn/blog_migrate/7e73386938e5092453f703d2068c4a24.png" alt="img" style="zoom: 67%;" />
+  <img src="https://i-blog.csdnimg.cn/blog_migrate/7e73386938e5092453f703d2068c4a24.png" alt="img" style="zoom: 50%;" />
 
 * **CoCoOp**：让**可学习的learned prompts考虑每一个输入**，这样对于**每个样本都有一个特定的prompt**让context focus在样本的一些特征或者属性上，CoCoOp的这种提示向量也叫**dynamic prompt**。| 缺点在于**不好训练**。需要更多的GPU资源，收敛速度也更慢。原因是因为CoCoOp基于实例条件设计，要求每个图像通过文本编码器独立地向前传递实例特定的提示，训练时**只能将batch size设为1**。CLIP的泛化能力被发挥到了极致，CoOp更加关注在特定数据集上的性能，**CoCoOp较为尴尬，泛化性上比CoOp强，但是又不如CLIP，基类上的性能不如CoOp。**
 
   <img src="https://i-blog.csdnimg.cn/blog_migrate/a5b227d9d48da7eca6475864cd5254d4.png" alt="img" style="zoom: 50%;" />
 
-  <img src="https://i-blog.csdnimg.cn/blog_migrate/511a046a5df50c880e8f973e8aaef160.png" alt="img" style="zoom: 67%;" />
+  <img src="https://i-blog.csdnimg.cn/blog_migrate/511a046a5df50c880e8f973e8aaef160.png" alt="img" style="zoom: 50%;" />
 
 ---
 
 ### 2021-CLIP-Adapter: Better Vision-Language Models with Feature Adapters
 
-![image-20250310230337579](images\image-20250310230337579.png)
+<img src="images\image-20250310230337579.png" alt="image-20250310230337579" style="zoom:50%;" />
 
 提出了一种 **CLIP-Adapter** 方法，与 prompt tuning （CoOp）不同，CLIP-Adapter **不调整文本输入，而是针对 视觉分支 或 语言分支 进行 特征适配**。
 
