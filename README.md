@@ -36,15 +36,15 @@ CLIP推理过程是基于对比学习的，即找出与当前图片最相似的�
 
 方案1
 
-![image-20250314172912177](\notes\images\image-20250314172912177.png)
+<img src="\notes\images\image-20250314172912177.png" alt="image-20250314172912177" style="zoom: 50%;" />
 
 方案2
 
-![image-20250314172931664](\notes\images\image-20250314172931664.png)
+<img src="\notes\images\image-20250314172931664.png" alt="image-20250314172931664" style="zoom:50%;" />
 
 方案3
 
-![image-20250314172938521](\notes\images\image-20250314172938521.png)
+<img src="\notes\images\image-20250314172938521.png" alt="image-20250314172938521" style="zoom:50%;" />
 
 ---
 
