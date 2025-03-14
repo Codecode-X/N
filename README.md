@@ -36,15 +36,15 @@ CLIP推理过程是基于对比学习的，即找出与当前图片最相似的�
 
 方案1
 
-![image-20250314172912177](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250314172912177.png)
+![image-20250314172912177](\notes\images\image-20250314172912177.png)
 
 方案2
 
-![image-20250314172931664](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250314172931664.png)
+![image-20250314172931664](\notes\images\image-20250314172931664.png)
 
 方案3
 
-![image-20250314172938521](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250314172938521.png)
+![image-20250314172938521](\notes\images\image-20250314172938521.png)
 
 ---
 
