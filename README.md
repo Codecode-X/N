@@ -7,7 +7,7 @@
 
 当前项目主要是解决 **CLIP无法理解”否定“prompt** 的问题，如下图所示：
 
-<img src="https://github.com/Codecode-X/NegCLIP/blob/main/notes/images/image-20250312163611184.png" alt="image-20250312163611184" style="zoom:33%;" />
+<img src=".\notes\images\image-20250312163611184.png" alt="image-20250312163611184" style="zoom:33%;" />
 
 ---
 
