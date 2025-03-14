@@ -8,13 +8,13 @@
 
 本文将 **CLIP迁移到视频-文本检索任务** 。
 
-![image-20250314160003559](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250314160003559.png)
+![image-20250314160003559](images\image-20250314160003559.png)
 
 **关键适配措施**：
 
 * 基于 CLIP 设计**三种相似度计算方法**（视频特征池化方法），**池化掉视频特征的时间维度，以与文本特征对齐**。
 
-  ![image-20250314155951673](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250314155951673.png)
+  ![image-20250314155951673](images\image-20250314155951673.png)
 
   > * **小数据集:  ** 使用 **均值池化** 减少新参数的引入，防止过拟合
   > * **大数据集：**引入**自注意力**等机制，可以更好地建模时间依赖关系
@@ -32,15 +32,15 @@
 > * 预训练：直接使用CLIP的预训练权重
 > * 提示：文本提示（label套入模板），图像提示（池化掉视频特征的时间维度，以与文本特征对齐）
 
-<img src="C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250228224617197.png" alt="image-20250228224617197" style="zoom: 33%;" />
+<img src="images\image-20250228224617197.png" alt="image-20250228224617197" style="zoom: 33%;" />
 
-![image-20250228225614995](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250228225614995.png)
+![image-20250228225614995](images\image-20250228225614995.png)
 
 ---
 
 ### 2022-(clip-语义分割)-DenseCLIP: Language-Guided Dense Prediction with Context-Aware Prompting
 
-![image-20250310233444769](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250310233444769.png)
+![image-20250310233444769](images\image-20250310233444769.png)
 
 本文提出了一种新的语言引导密集预测框架——**DenseCLIP**：受 CLIP 原始对比学习框架的启发，将 CLIP 的“图像-文本匹配”任务转换为“**像素-文本匹配**”任务，利用**像素-文本匹配得分图**来指导模型的学习。
 
@@ -96,7 +96,7 @@ $$
 
 在**视觉或语言域减少 domain gap 能显著提升 CLIP 在下游任务的性能**（例如CoOp）。因此，本文不直接使用预定义的文本模板，而是采用**上下文感知的提示学习**，利用**视觉上下文**来优化**文本特征**。（例如："a photo of a cat in the grass." 比单纯的 "a photo of a cat." 更准确）
 
-<img src="C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250310235311224.png" alt="image-20250310235311224" style="zoom: 33%;" />
+<img src="images\image-20250310235311224.png" alt="image-20250310235311224" style="zoom: 33%;" />
 
 **(0) ❌基准：CoOp提示**
 
@@ -143,11 +143,11 @@ $$
 
 **related work：**依靠**单一的视觉形态**不足以处理所有与凝视无关的因素。
 
-<img src="C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250308205403206.png" alt="image-20250308205403206" style="zoom:33%;" />
+<img src="images\image-20250308205403206.png" alt="image-20250308205403206" style="zoom:33%;" />
 
 我们提出了一种名为CLIP- gaze的新方法，该方法利用预训练的视觉语言模型CLIP**将一般可转移知识传授给凝视估计模型**，并增强提取的凝视特征的**泛化能力**。因此CLIP- gaze可以利用CLIP灵活地**处理各种与凝视无关的因素**，而不是依赖~~昂贵的模型~~或~~不可控的对抗方法~~，只能处理~~有限的~~凝视无关因素。
 
-![image-20250308220645475](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250308220645475.png)
+![image-20250308220645475](images\image-20250308220645475.png)
 
 #### **模型组成**
 
@@ -212,7 +212,7 @@ $$
 
 * 由于**CoOp**这种**固定的提示无法适应每个个体的个性化特征**，而**CoCoOp** 通过轻量级神经网络生成与图像内容相关的提示，但直接利用图像内容可能引入**与凝视相关的信息**，从而影响模型提取凝视无关特征的能力。**PCO** 提出了一种新颖的方法，专门设计了基于**人脸身份特征**的个性化提示生成策略。PCO利用 **3DMM** **提取个体的身份特征**，并通过 **Meta-Net** 生成**个性化的文本提示**，使其仅捕捉**凝视无关特征**（如身份、表情、性别等）。
 
-![image-20250309132121791](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250309132121791.png)
+![image-20250309132121791](images\image-20250309132121791.png)
 
 PCO 在 CLIP 特征空间中最大化图像特征与匹配的文本特征之间的相似度。定义类别预测概率和相应的训练损失函数为：
 $$
@@ -282,11 +282,11 @@ $$
 
 ### 2024-AAAI-叶茫-An Empirical Study of CLIP for Text-Based Person Search(Clip-基于文本的人物搜索)
 
-<img src="C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250309185652250.png" alt="image-20250309185652250" style="zoom:33%;" />
+<img src="images\image-20250309185652250.png" alt="image-20250309185652250" style="zoom:33%;" />
 
 对 CLIP 在文本-行人检索（Text-Based Person Search，TBPS）任务中的应用进行了深入的实验分析，主要从 **数据增强** 和 **损失函数** 两个方面入手，并最终提出了一种高效、轻量级的 **TBPS-CLIP** 方案。
 
-![image-20250309214107514](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250309214107514.png)
+![image-20250309214107514](images\image-20250309214107514.png)
 
 -----
 
@@ -371,7 +371,7 @@ $$
 
 ### 2025-ICASSP-CR-CLIP - (文本描述+对比学习)for gaze预测
 
-<img src="C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250308132505729.png" alt="image-20250308132505729" style="zoom:33%;" />
+<img src="images\image-20250308132505729.png" alt="image-20250308132505729" style="zoom:33%;" />
 
 一种**基于 CLIP 的通用 gaze 估计方法**，通过**文本描述+对比学习+加权角度误差**来改进 gaze 预测。
 
@@ -503,7 +503,7 @@ $$
 
 我们提出了一个**Audio-Visual CLIP基础模型**，该模型包含一个**冻结的视频编码器**和一个**冻结的音频编码器**，以及在这些编码器之上**训练的非线性变换网络**，以将编码器的嵌入映射到一个**共享的潜在空间**（shared latent space）。这样一来，模型可以学习到**音频和视频之间的对齐关系**，实现跨模态的理解和检索。
 
-<img src="C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250313233653467.png" alt="image-20250313233653467" style="zoom: 33%;" />
+<img src="images\image-20250313233653467.png" alt="image-20250313233653467" style="zoom: 33%;" />
 
 > 该模型是在我们提出的**音视频数据集 (Audio-Video dataset)** 上进行训练的
 
@@ -603,7 +603,7 @@ $$
 
 为了克服上述两个挑战，我们提出了**CLIP4VLA（CLIP for Vision, Language and Audio）**，该模型通过**统一的三编码器**结构扩展CLIP，以适应音频模态并实现高效的多模态处理。
 
-![ ](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250314003128552.png)
+![ ](images\image-20250314003128552.png)
 
 **> 数据提取**
 
@@ -618,7 +618,7 @@ $$
 
 **> 音频编码器 (Audio Encoder)**
 
-![image-20250314003200661](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250314003200661.png)
+![image-20250314003200661](images\image-20250314003200661.png)
 
 训练有素的专家可以通过**观察声谱图**推测**环境事件**或**人类语音**。因此，机器也可以通过**视觉声谱图**的输入来**编码音频信息**。为了保证不同模态的架构一致性，我们设计的**音频编码器与视觉编码器结构相同**。
 
@@ -639,7 +639,7 @@ $$
 - 自然事件或环境音使用 `[NB]` 提取**非语言信息**；
 - **既包含语言信息又包含非语言信息**的复杂场景可以结合**两种标记**，以更全面地理解视频内容。
 
-![image-20250314145806139](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250314145806139.png)
+![image-20250314145806139](images\image-20250314145806139.png)
 
 #### CLIP4VLA 预训练和微调方法
 
@@ -689,9 +689,9 @@ CLIP4VLA 通过 **跨模态对比学习** 和 **模态内自监督学习** 进�
   * **全局对局部**：引入 **视频时间编码模块**（N 层 Transformer），捕捉**视频帧 和 音频片段 **的**时间相关性**，与 **文本特征** 计算**相似度**。
   * **局部对局部**：引入 **细粒度跨模态融合模块**（N 层 Transformer），**深入挖掘** 文本与视觉、音频 的 **局部特征相关性**。
 
-  ![image-20250314150429647](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250314150429647.png)
+  ![image-20250314150429647](images\image-20250314150429647.png)
 
-  ![image-20250314145941820](C:\Users\xiaoj\AppData\Roaming\Typora\typora-user-images\image-20250314145941820.png)
+  ![image-20250314145941820](images\image-20250314145941820.png)
 
 * **视频字幕生成**
 
