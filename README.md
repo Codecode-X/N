@@ -46,6 +46,8 @@ CLIP推理过程是基于对比学习的，即找出与当前图片最相似的�
 
 <img src="\notes\images\image-20250314172938521.png" alt="image-20250314172938521" style="zoom:50%;" />
 
+<img src="\notes\images\idea.png" alt="image-20250314172938521" style="zoom:50%;" />
+
 ---
 
 ### Reference
