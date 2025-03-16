@@ -1,4 +1,4 @@
-# NegCLIP 
+# NP-CLIP 
 
 > DDL: 2025.5.7 🥇 
 > *European Conference on Artificial Intelligence*  😻`欧洲小而美`
