@@ -1,4 +1,4 @@
-# NP-CLIP 
+# NP-CLIP - 请换到dev分支
 
 > DDL: 2025.5.7 🥇 
 > *European Conference on Artificial Intelligence*  😻`欧洲小而美`
