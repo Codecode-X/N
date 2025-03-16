@@ -2,7 +2,7 @@
 
 ### 🐱‍👤标准CLIP
 
-<img src="notes/images/CLIP 否定/image-20250316123947128.png" alt="image-20250316123947128" style="zoom:50%;" />
+<img src="images/image-20250316123947128.png" alt="image-20250316123947128" style="zoom:50%;" />
 
 #### **标注CLIP训练损失：**
 
@@ -59,17 +59,17 @@ $$
 
 1. **属性理解**：通过 **Visual Genome Attribution** 测试模型对对象属性的理解能力。
 
-   <img src="notes/images/CLIP 否定/image-20250316000852301.png" alt="image-20250316000852301" style="zoom:33%;" />
+   <img src="images/image-20250316000852301.png" alt="image-20250316000852301" style="zoom:33%;" />
 
 2. **关系理解**：通过 **Visual Genome Relation** 测试模型对对象之间关系的理解能力。
 
-   <img src="notes/images/CLIP 否定/image-20250316000823776.png" alt="image-20250316000823776" style="zoom:33%;" />
+   <img src="images/image-20250316000823776.png" alt="image-20250316000823776" style="zoom:33%;" />
 
 3. **顺序敏感性**：通过 **COCO-Order & Flickr30k-Order** 评估模型对**图像-文本匹配中的顺序信息**的敏感性。
 
    > 原句子；仅打乱名词和形容词；打乱除名词和形容词外的所有词；打乱三元组；在三元组内打乱单词
 
-   <img src="notes/images/CLIP 否定/image-20250316000907077.png" alt="image-20250316000907077" style="zoom:33%;" />
+   <img src="images/image-20250316000907077.png" alt="image-20250316000907077" style="zoom:33%;" />
 
 ARO 数据集规模比以往的组合性评测基准大 **多个数量级**，包含超过 **50,000 个测试样本**。
 
@@ -85,13 +85,13 @@ ARO 数据集规模比以往的组合性评测基准大 **多个数量级**，�
 
 - 现有的数据集允许 VLMs 在 **图像-文本检索任务** 上表现良好，而无需真正理解**组合关系和顺序信息**。
 
-  ![image-20250316002313094](notes/images/CLIP 否定/image-20250316002313094.png)
+  ![image-20250316002313094](images/image-20250316002313094.png)
 
 - 这表明，VLMs 可能通过 **捷径** 完成任务，而不是学会真正的组合性表示。
 
 #### **解决方案-基于组合关系的困难负样本挖掘**
 
-<img src="notes/images/CLIP 否定/image-20250315234234049.png" alt="image-20250315234234049" style="zoom: 33%;" />
+<img src="images/image-20250315234234049.png" alt="image-20250315234234049" style="zoom: 33%;" />
 
 研究者提出了一种 **基于组合关系的困难负样本挖掘** 方法。
 
@@ -114,7 +114,7 @@ ARO 数据集规模比以往的组合性评测基准大 **多个数量级**，�
 
 我们开发了一个全面的**基准**，来**评估视觉-语言模型理解明确否定词的能力**。我们贡献了**CC-Neg数据集**，其中包含228,246个图像-文本对，以及语法正确且流畅的否定文本描述。
 
-<img src="notes/images/CLIP 否定/image-20250315222824852.png" alt="image-20250315222824852" style="zoom:50%;" />
+<img src="images/image-20250315222824852.png" alt="image-20250315222824852" style="zoom:50%;" />
 
 > **CC-Neg数据集构建**：将文本分解为一个主语和K个谓词-对象对，并**随机否定一个谓语-对象对**，从而获得**否定文本**
 
@@ -124,7 +124,7 @@ ARO 数据集规模比以往的组合性评测基准大 **多个数量级**，�
 
 **> 3 个相似度矩阵**
 
-<img src="notes/images/CLIP 否定/image-20250315231120652.png" alt="image-20250315231120652" style="zoom:50%;" />
+<img src="images/image-20250315231120652.png" alt="image-20250315231120652" style="zoom:50%;" />
 
 1. **真实图像与所有文本的相似度（$P$）**
 
@@ -203,17 +203,17 @@ $$
 
 ### 2025-CVPR-否定评估benchmark-Vision-Language Models Do Not Understand Negation
 
-<img src="notes/images/CLIP 否定/image-20250315180526208.png" alt="image-20250315180526208" style="zoom:33%;" />
+<img src="images/image-20250315180526208.png" alt="image-20250315180526208" style="zoom:33%;" />
 
 #### 新的VLMs否定理解基准 NegBench
 
 一个专门用于评估视觉语言模型（VLMs）**对否定理解能力**的新基准。NegBench 涵盖了 **18 种任务变体** 和 **79,000 个示例**，数据来源包括 **图像、视频和医学数据集**。
 
-![image-20250315182149653](notes/images/CLIP 否定/image-20250315182149653.png)
+![image-20250315182149653](images/image-20250315182149653.png)
 
 🎈NegBench 首先是**基于模板**生成正、负描述，然后再**基于LLM**将模板描述润色为**自然语言描述**。
 
-<img src="notes/images/CLIP 否定/image-20250316175310322.png" alt="image-20250316175310322" style="zoom: 50%;" />
+<img src="images/image-20250316175310322.png" alt="image-20250316175310322" style="zoom: 50%;" />
 
 NegBench 由**两个核心任务**组成，分别用于在**不同模态下**测试模型的**否定理解能力**：
 
@@ -238,9 +238,9 @@ NegBench 由**两个核心任务**组成，分别用于在**不同模态下**测
 
   * 作为对照，发现它的嵌入空间能有效地**区分肯定和否定**，并且能沿着“对象类别轴”和“否定轴”进行有意义的排列。
 
-<img src="notes/images/CLIP 否定/image-20250316175708327.png" alt="image-20250316175708327" style="zoom:50%;" />
+<img src="images/image-20250316175708327.png" alt="image-20250316175708327" style="zoom:50%;" />
 
-<img src="notes/images/CLIP 否定/image-20250316175641921.png" alt="image-20250316175641921" style="zoom:50%;" />
+<img src="images/image-20250316175641921.png" alt="image-20250316175641921" style="zoom:50%;" />
 
 #### 数据驱动微调CLIP提升否定理解
 
