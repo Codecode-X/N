@@ -63,24 +63,27 @@ CLIP推理过程是基于对比学习的，即找出与当前图片最相似的�
 
 **任务摘要**：完成token分类器的训练**数据采集**，完成一个**base模型的所有编码**。
 
-1. **数据采集工作**：由于Token分类器的训练需要数据，数据内容包括：
+1. **`by: 奥利奥 & Ete` 数据采集工作 **：由于 Token 分类器的训练需要数据，数据行包括以下**6个字段**：
+   $$
+   i,n,m,S_\text{pn},L_\text{p},L_\text{n},S_\text{p},S_\text{n}
+   $$
 
-   * 一段包含一个或多个否定的描述性语句（prompt）
-   * 该句子中包含的肯定部分内容（postive prompt）
-   * 该句子包含的否定部分内容（negetive prompt）
+   - $i$：数据**行索引**。
+   - $n,m$：分别表示**否定描述的个数（0,1,2）**和**肯定描述的个数（0~7）**。
+   - $S_\text{pn}$：一段包含 **$n$ 个否定描述**和 **$m$ 个肯定描述**的**描述性语句**，定义为：$S_\text{pn} = L_\text{n} \cup L_\text{p}$
+   - $L_\text{p}$：句子$S_\text{pn}$中包含的 **$m$ 个肯定描述列表**：$L_\text{p} = \{s_{\text{p}_1}, s_{\text{p}_2}, \dots, s_{\text{p}_m} \}, \quad |L_\text{p}| = m$
+   - $L_\text{n}$：句子$S_\text{pn}$中包含的 **$n$ 个否定描述列表**：$L_\text{n} = \{s_{\text{n}_1}, s_{\text{n}_2}, \dots, s_{\text{n}_n} \}, \quad |L_\text{n}| = n$
+   - $S_\text{p}$：**只保留 $m$ 个肯定描述的描述性语句**：$S_\text{p} = S_\text{pn} \setminus L_\text{n} = L_\text{p}$
+   - $S_\text{n}$：**只保留 $n$ 个否定描述的描述性语句**：$S_\text{n} = S_\text{pn} \setminus L_\text{p} = L_\text{n}$
 
-   ```csv
-   """id, prompt, postive promptm, negetive prompt"""
-   1, She wears a coat not a jacket, She wears a coat, a jacket
-   2, The park has trees but no flowers, The park has trees, flowers
-   3, A woman without glasses in kitchen, A woman in kitchen, glasses
-   ```
+   该部分数据可利用GPT等LLM工具或其他工具进行生成或采集，**要求:**
 
-   该部分数据可利用GPT等LLM工具或其他工具进行采集，一共需要采集 800 条。`by: 奥利奥 & Ete` 
+   * 采集 **1000 条**，并存入**csv**，相关格式可**参考群里的示例**。
+   * 要求描述**多样化，真实化**，而不是~~模板化，统一化~~（可以**借鉴NegBench的方法**，即**先产生模板化**的句子，再让机器将其**润色**为自然语言）。
 
-2. **Token分类器代码实现**：实现一个轻量级的Token分类器，对文本编码器输出的token进行处理，得到postive  token和negetive token。三种token的形状应相同。`by: 染红` 
+2. **`by: 染红`  Token分类器代码实现**：实现一个轻量级的Token分类器，对文本编码器输出的token进行处理，得到postive  token和negetive token。三种token的形状应相同。
 
-3. **基于CoOp增强的CLIP模型实现**：实现模型的其他部分，包括训练和测试部分。`by: X` 
+3. `by: X`  **基于CoOp增强的CLIP模型实现**：实现模型的其他部分，包括训练和测试部分。
 
 `🎈 2025.3.22-3.28` 
 
