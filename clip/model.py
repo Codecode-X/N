@@ -217,7 +217,7 @@ class Transformer(nn.Module):
 
     def forward(self, x: torch.Tensor, attention_maps=None):
         if attention_maps is None:
-            return self.resblocks(x, attention_maps)
+            return self.resblocks(x)
         else:
             for block in self.resblocks:
                 x = block(x, attention_maps)
