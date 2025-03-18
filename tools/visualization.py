@@ -67,13 +67,16 @@ def display_img_attn(image_path):
 
     # 4. 计算注意力映射
     attention_maps = get_attention_map(model, image)  # 形状 (12, 1, 50, 50) 包含 cls token
-    attention_maps = attention_maps[:, :, 1:, 1:]  # 取索引 1: 之后的部分，去除 cls token，形状 (12, 1, 49, 49) 
+    # attention_maps = attention_maps[:, :, :, 1:]  # 观察全局互注意力 - 取索引 1: 之后的部分，去除 cls token，形状 (12, 1, 50, 49) 
+    
+    attention_maps = np.expand_dims(attention_maps[:, :, 0, 1:], axis=2)  # 只观察 cls token 关注哪些像素  (12, 1, 1, 49) 
+    
     # 5. 计算每个 patch 受到的总注意力
     # 对每一层的每列求和，得到每个 patch 受到的关注度
     num_layers = len(attention_maps)
     layer_attentions = []
     for i in range(num_layers):
-        layer_attention = np.sum(attention_maps[i][0], axis=0)  # 取第 i 层的注意力权重
+        layer_attention = np.sum(attention_maps[i][0], axis=0)  # 取第 i 层的注意力权重 (1, 50, 49)->(1, 49) 
         # 归一化
         layer_attention = (layer_attention - layer_attention.min()) / (layer_attention.max() - layer_attention.min())
         layer_attentions.append(layer_attention)
