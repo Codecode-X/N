@@ -13,39 +13,33 @@ import torch.nn as nn
 from .tools import mkdir_if_missing
 
 __all__ = [
-    "save_checkpoint",
-    "load_checkpoint",
-    "resume_from_checkpoint",
-    "open_all_layers",
-    "open_specified_layers",
-    "count_num_param",
-    "load_pretrained_weights",
-    "init_network_weights",
+    "save_checkpoint", # 保存检查点
+    "load_checkpoint", # 加载检查点 
+    "resume_from_checkpoint", # 从检查点恢复训练
+    "open_all_layers", # 打开模型中的所有层进行训练
+    "open_specified_layers", # 打开模型中指定的层进行训练
+    "count_num_param", # 计算模型中的参数数量
+    "load_pretrained_weights", # 加载预训练权重到模型
+    "init_network_weights", # 初始化网络权重
 ]
 
+def save_checkpoint(state, save_dir, is_best=False,
+                    remove_module_from_keys=True, model_name="" ):
+    r"""保存检查点。
 
-def save_checkpoint(
-    state,
-    save_dir,
-    is_best=False,
-    remove_module_from_keys=True,
-    model_name=""
-):
-    r"""Save checkpoint.
-
-    Args:
-        state (dict): dictionary.
-        save_dir (str): directory to save checkpoint.
-        is_best (bool, optional): if True, this checkpoint will be copied and named
-            ``model-best.pth.tar``. Default is False.
-        remove_module_from_keys (bool, optional): whether to remove "module."
-            from layer names. Default is True.
-        model_name (str, optional): model name to save.
+    参数:
+        state (dict): 字典，包含模型状态。
+        save_dir (str): 保存检查点的目录。
+        is_best (bool, optional): 如果为True，这个检查点会被复制并命名为
+            ``model-best.pth.tar``。默认值为False。
+        remove_module_from_keys (bool, optional): 是否从层名称中移除"module."。
+            默认值为True。
+        model_name (str, optional): 保存的模型名称。
     """
-    mkdir_if_missing(save_dir)
+    mkdir_if_missing(save_dir) # 创建保存目录
 
     if remove_module_from_keys:
-        # remove 'module.' in state_dict's keys
+        # 从 state_dict 的键中移除'module.'
         state_dict = state["state_dict"]
         new_state_dict = OrderedDict()
         for k, v in state_dict.items():
@@ -54,15 +48,15 @@ def save_checkpoint(
             new_state_dict[k] = v
         state["state_dict"] = new_state_dict
 
-    # save model
+    # 保存模型
     epoch = state["epoch"]
     if not model_name:
         model_name = "model.pth.tar-" + str(epoch)
     fpath = osp.join(save_dir, model_name)
     torch.save(state, fpath)
-    print(f"Checkpoint saved to {fpath}")
+    print(f"检查点已保存到 {fpath}")
 
-    # save current model name
+    # 保存当前模型名称
     checkpoint_file = osp.join(save_dir, "checkpoint")
     checkpoint = open(checkpoint_file, "w+")
     checkpoint.write("{}\n".format(osp.basename(fpath)))
@@ -71,30 +65,29 @@ def save_checkpoint(
     if is_best:
         best_fpath = osp.join(osp.dirname(fpath), "model-best.pth.tar")
         shutil.copy(fpath, best_fpath)
-        print('Best checkpoint saved to "{}"'.format(best_fpath))
-
+        print('最佳检查点已保存到 "{}"'.format(best_fpath))
 
 def load_checkpoint(fpath):
-    r"""Load checkpoint.
+    r"""加载检查点。
 
-    ``UnicodeDecodeError`` can be well handled, which means
-    python2-saved files can be read from python3.
+    可以很好地处理``UnicodeDecodeError``，这意味着
+    python2保存的文件可以从python3读取。
 
-    Args:
-        fpath (str): path to checkpoint.
+    参数:
+        fpath (str): 检查点路径。
 
-    Returns:
+    返回:
         dict
 
-    Examples::
+    示例::
         >>> fpath = 'log/my_model/model.pth.tar-10'
         >>> checkpoint = load_checkpoint(fpath)
     """
     if fpath is None:
-        raise ValueError("File path is None")
+        raise ValueError("文件路径为 None")
 
     if not osp.exists(fpath):
-        raise FileNotFoundError('File is not found at "{}"'.format(fpath))
+        raise FileNotFoundError('文件未找到 "{}"'.format(fpath))
 
     map_location = None if torch.cuda.is_available() else "cpu"
 
@@ -109,28 +102,26 @@ def load_checkpoint(fpath):
         )
 
     except Exception:
-        print('Unable to load checkpoint from "{}"'.format(fpath))
+        print('无法从 "{}" 加载检查点'.format(fpath))
         raise
 
     return checkpoint
 
-
 def resume_from_checkpoint(fdir, model, optimizer=None, scheduler=None):
-    r"""Resume training from a checkpoint.
+    r"""从检查点恢复训练。
 
-    This will load (1) model weights and (2) ``state_dict``
-    of optimizer if ``optimizer`` is not None.
+    这将加载 (1) 模型权重 和 (2) 优化器的``state_dict``（如果``optimizer``不为None）。
 
-    Args:
-        fdir (str): directory where the model was saved.
-        model (nn.Module): model.
-        optimizer (Optimizer, optional): an Optimizer.
-        scheduler (Scheduler, optional): an Scheduler.
+    参数:
+        fdir (str): 保存模型的目录。
+        model (nn.Module): 模型。
+        optimizer (Optimizer, optional): 优化器。
+        scheduler (Scheduler, optional): 调度器。
 
-    Returns:
-        int: start_epoch.
+    返回:
+        int: start_epoch。
 
-    Examples::
+    示例::
         >>> fdir = 'log/my_model'
         >>> start_epoch = resume_from_checkpoint(fdir, model, optimizer, scheduler)
     """
@@ -138,117 +129,89 @@ def resume_from_checkpoint(fdir, model, optimizer=None, scheduler=None):
         model_name = checkpoint.readlines()[0].strip("\n")
         fpath = osp.join(fdir, model_name)
 
-    print('Loading checkpoint from "{}"'.format(fpath))
+    print('从 "{}" 加载检查点'.format(fpath))
     checkpoint = load_checkpoint(fpath)
     model.load_state_dict(checkpoint["state_dict"])
-    print("Loaded model weights")
+    print("已加载模型权重")
 
     if optimizer is not None and "optimizer" in checkpoint.keys():
         optimizer.load_state_dict(checkpoint["optimizer"])
-        print("Loaded optimizer")
+        print("已加载优化器")
 
     if scheduler is not None and "scheduler" in checkpoint.keys():
         scheduler.load_state_dict(checkpoint["scheduler"])
-        print("Loaded scheduler")
+        print("已加载调度器")
 
     start_epoch = checkpoint["epoch"]
-    print("Previous epoch: {}".format(start_epoch))
+    print("上一个 epoch: {}".format(start_epoch))
 
     return start_epoch
 
-
-def adjust_learning_rate(
-    optimizer,
-    base_lr,
-    epoch,
-    stepsize=20,
-    gamma=0.1,
-    linear_decay=False,
-    final_lr=0,
-    max_epoch=100,
-):
-    r"""Adjust learning rate.
-
-    Deprecated.
-    """
-    if linear_decay:
-        # linearly decay learning rate from base_lr to final_lr
-        frac_done = epoch / max_epoch
-        lr = frac_done*final_lr + (1.0-frac_done) * base_lr
-    else:
-        # decay learning rate by gamma for every stepsize
-        lr = base_lr * (gamma**(epoch // stepsize))
-
-    for param_group in optimizer.param_groups:
-        param_group["lr"] = lr
-
-
 def set_bn_to_eval(m):
-    r"""Set BatchNorm layers to eval mode."""
-    # 1. no update for running mean and var
-    # 2. scale and shift parameters are still trainable
-    classname = m.__class__.__name__
-    if classname.find("BatchNorm") != -1:
-        m.eval()
-
+    r"""将BatchNorm层设置为评估模式。
+        1. 不更新 running mean 和 var
+        2. 缩放参数 scale 和 平移参数 shift 参数仍然可训练（独立于评估模式）
+    """
+    classname = m.__class__.__name__ # 获取类名
+    if classname.find("BatchNorm") != -1: # 如果匹配到了 BatchNorm
+        m.eval() # 设置为评估模式
 
 def open_all_layers(model):
-    r"""Open all layers in model for training.
+    r"""打开模型中的所有层进行训练。
 
-    Examples::
+    示例::
         >>> open_all_layers(model)
     """
     model.train()
     for p in model.parameters():
         p.requires_grad = True
 
-
 def open_specified_layers(model, open_layers):
-    r"""Open specified layers in model for training while keeping
-    other layers frozen.
+    r"""打开模型中指定的层进行训练，同时保持其他层冻结。
 
-    Args:
-        model (nn.Module): neural net model.
-        open_layers (str or list): layers open for training.
+    参数:
+        model (nn.Module): 神经网络模型。
+        open_layers (str or list): 打开训练的层。
 
-    Examples::
-        >>> # Only model.classifier will be updated.
+    示例::
+        >>> # 只有model.classifier会被更新。
         >>> open_layers = 'classifier'
         >>> open_specified_layers(model, open_layers)
-        >>> # Only model.fc and model.classifier will be updated.
+        >>> # 只有model.fc和model.classifier会被更新。
         >>> open_layers = ['fc', 'classifier']
         >>> open_specified_layers(model, open_layers)
     """
-    if isinstance(model, nn.DataParallel):
-        model = model.module
+    if isinstance(model, nn.DataParallel): # 如果模型是 nn.DataParallel
+        model = model.module # 获取模型
 
     if isinstance(open_layers, str):
         open_layers = [open_layers]
 
+    # 检查是否存在指定的层
     for layer in open_layers:
-        assert hasattr(model, layer), f"{layer} is not an attribute"
+        assert hasattr(model, layer), f"{layer} 不是一个属性"
 
-    for name, module in model.named_children():
-        if name in open_layers:
-            module.train()
+    # 遍历模型的的所有子模块
+    for name, module in model.named_children(): 
+        if name in open_layers: # 打开模型中指定的层进行训练
+            module.train() 
             for p in module.parameters():
                 p.requires_grad = True
-        else:
+        else: # 其他层冻结
             module.eval()
             for p in module.parameters():
                 p.requires_grad = False
 
-
 def count_num_param(model=None, params=None):
-    r"""Count number of parameters in a model.
+    r"""计算模型中的参数数量。
 
-    Args:
-        model (nn.Module): network model.
-        params: network model`s params.
-    Examples::
+    参数:
+        model (nn.Module): 神经网络模型。
+        params: 神经网络模型的参数。
+
+    示例::
         >>> model_size = count_num_param(model)
     """
-
     if model is not None:
         return sum(p.numel() for p in model.parameters())
 
@@ -261,21 +224,20 @@ def count_num_param(model=None, params=None):
                 s += p.numel()
         return s
 
-    raise ValueError("model and params must provide at least one.")
-
+    raise ValueError("model 和 params 必须至少提供一个。")
 
 def load_pretrained_weights(model, weight_path):
-    r"""Load pretrianed weights to model.
+    r"""加载预训练权重到模型。
 
-    Features::
-        - Incompatible layers (unmatched in name or size) will be ignored.
-        - Can automatically deal with keys containing "module.".
+    特性::
+        - 不兼容的层（名称或大小不匹配）将被忽略。
+        - 可以自动处理包含"module."的键。
 
-    Args:
-        model (nn.Module): network model.
-        weight_path (str): path to pretrained weights.
+    参数:
+        model (nn.Module): 神经网络模型。
+        weight_path (str): 预训练权重的路径。
 
-    Examples::
+    示例::
         >>> weight_path = 'log/my_model/model-best.pth.tar'
         >>> load_pretrained_weights(model, weight_path)
     """
@@ -285,37 +247,47 @@ def load_pretrained_weights(model, weight_path):
     else:
         state_dict = checkpoint
 
-    model_dict = model.state_dict()
-    new_state_dict = OrderedDict()
-    matched_layers, discarded_layers = [], []
+    model_dict = model.state_dict() # 获取模型当前的 state_dict
+    new_state_dict = OrderedDict() # 存储匹配的层的预训练权重的 state_dict
+    matched_layers, discarded_layers = [], [] # 匹配的层，丢弃的层
 
+    # 遍历预训练权重的 state_dict，记录匹配和不匹配的层
     for k, v in state_dict.items():
         if k.startswith("module."):
-            k = k[7:]  # discard module.
+            k = k[7:]  # 丢弃 module.
 
-        if k in model_dict and model_dict[k].size() == v.size():
-            new_state_dict[k] = v
-            matched_layers.append(k)
-        else:
-            discarded_layers.append(k)
-
-    model_dict.update(new_state_dict)
+        if k in model_dict and model_dict[k].size() == v.size(): # 如果匹配（键名和大小匹配）
+            new_state_dict[k] = v # 存储匹配的层的预训练权重
+            matched_layers.append(k) # 记录匹配的层
+        else: # 如果不匹配
+            discarded_layers.append(k) # 记录丢弃的层
+     
+    # 更新模型的 state_dict
+    model_dict.update(new_state_dict) # 将匹配的层的预训练权重更新到模型的 state_dict
     model.load_state_dict(model_dict)
 
-    if len(matched_layers) == 0:
+    if len(matched_layers) == 0: # 如果完全没有匹配的层
         warnings.warn(
-            f"Cannot load {weight_path} (check the key names manually)"
+            f"无法加载 {weight_path} (请手动检查键名)"
         )
-    else:
-        print(f"Successfully loaded pretrained weights from {weight_path}")
+    else: # 打印没有匹配的层
+        print(f"成功从 {weight_path} 加载预训练权重")
         if len(discarded_layers) > 0:
             print(
-                f"Layers discarded due to unmatched keys or size: {discarded_layers}"
+                f"由于键名或大小不匹配而丢弃的层：{discarded_layers}"
             )
 
-
 def init_network_weights(model, init_type="normal", gain=0.02):
-
+    """初始化网络权重。
+    参数:
+        model (nn.Module): 神经网络模型。
+        init_type (str): 初始化类型。可选值包括：
+            - normal: 标准正态分布
+            - xavier: Xavier 初始化
+            - kaiming: Kaiming 初始化
+            - orthogonal: 正交初始化
+        gain (float): 缩放因子。
+    """
     def _init_func(m):
         classname = m.__class__.__name__
 
