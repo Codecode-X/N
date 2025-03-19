@@ -49,7 +49,7 @@ def build_data_loader(
 
 
 class DataManager:
-
+    """数据管理器，用于加载数据集和构建数据加载器。"""
     def __init__(
         self,
         cfg,
