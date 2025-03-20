@@ -7,7 +7,7 @@ __all__ = ["Registry"]
 class Registry:
     """
     注册表类。
-    提供名称 -> 对象映射的注册表，以支持自定义模块。
+    提供（名称 -> 对象) 映射的注册表，以支持自定义模块。
 
     要创建一个注册表（例如一个骨干网络注册表）：
         BACKBONE_REGISTRY = Registry('BACKBONE')
@@ -40,6 +40,10 @@ class Registry:
         """ 注册装饰器
           obj 为 None: 作为装饰器使用
           obj 不为 None: 作为函数调用使用
+
+        参数:
+            obj: 待注册的对象 (实例化的类或函数)
+            force: 如果为 True，则强制注册，即使名称已经存在于 _obj_map 中
         """
         # 如果 obj 为 None，则作为装饰器使用
         if obj is None:
@@ -57,7 +61,12 @@ class Registry:
             self._do_register(name, obj, force=force)
 
     def get(self, name):
-        """ 获取被注册的对象 """
+        """ 获取被注册的对象 
+        参数:
+            name (str): 对象的名称
+        返回:
+            object: 名称对应的被注册的对象
+        """
         # 如果名称不在 _obj_map 中，则抛出 KeyError 异常
         if name not in self._obj_map: # _obj_map: 存储名称到对象的映射的字典
             raise KeyError(
@@ -68,5 +77,8 @@ class Registry:
         return self._obj_map[name]
 
     def registered_names(self):
-        """返回所有已注册的名称列表"""
+        """返回所有已注册的名称列表
+        返回:
+            list: 所有已注册的名称 (字符串) 列表
+        """
         return list(self._obj_map.keys())
