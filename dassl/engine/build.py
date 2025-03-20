@@ -9,4 +9,4 @@ def build_trainer(cfg):
     check_availability(cfg.TRAINER.NAME, avai_trainers) # 检查对应名称的训练器是否存在
     if cfg.VERBOSE: # 是否输出信息
         print("Loading trainer: {}".format(cfg.TRAINER.NAME))
-    return TRAINER_REGISTRY.get(cfg.TRAINER.NAME)(cfg) # 返回对应名称的训练器
+    return TRAINER_REGISTRY.get(cfg.TRAINER.NAME)(cfg) # 返回对应名称的训练器对象

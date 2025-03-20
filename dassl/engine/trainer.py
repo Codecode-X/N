@@ -20,7 +20,7 @@ from dassl.evaluation import build_evaluator
 
 
 class SimpleNet(nn.Module):
-    """一个简单的神经网络，由一个 CNN 骨干网络和一个可选的头部（如用于分类的 MLP）组成。"""
+    """一个简单的神经网络，由一个 CNN 骨干网络 和一个 可选的头部（如用于分类的 MLP）组成。"""
 
     def __init__(self, cfg, model_cfg, num_classes, **kwargs):
         super().__init__()
