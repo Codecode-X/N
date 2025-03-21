@@ -1,3 +1,6 @@
+"""
+使用 Logistic Regression（逻辑回归）对 Clip 提取的特征进行分类
+"""
 import numpy as np
 import os
 from sklearn.linear_model import LogisticRegression
