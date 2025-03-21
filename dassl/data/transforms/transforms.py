@@ -12,31 +12,33 @@ from torchvision.transforms.functional import InterpolationMode
 from .autoaugment import SVHNPolicy, CIFAR10Policy, ImageNetPolicy
 from .randaugment import RandAugment, RandAugment2, RandAugmentFixMatch
 
+# 定义可用的图像变换选项列表
 AVAI_CHOICES = [
-    "random_flip",
-    "random_resized_crop",
-    "normalize",
-    "instance_norm",
-    "random_crop",
-    "random_translation",
-    "center_crop",  # This has become a default operation during testing
-    "cutout",
-    "imagenet_policy",
-    "cifar10_policy",
-    "svhn_policy",
-    "randaugment",
-    "randaugment_fixmatch",
-    "randaugment2",
-    "gaussian_noise",
-    "colorjitter",
-    "randomgrayscale",
-    "gaussian_blur",
+    "random_flip",  # 随机水平翻转
+    "random_resized_crop",  # 随机调整大小并裁剪
+    "normalize",  # 图像归一化
+    "instance_norm",  # 实例归一化
+    "random_crop",  # 随机裁剪
+    "random_translation",  # 随机平移
+    "center_crop",  # 中心裁剪（测试时的默认操作）
+    "cutout",  # 随机遮挡图像部分区域
+    "imagenet_policy",  # ImageNet 数据增强策略
+    "cifar10_policy",  # CIFAR-10 数据增强策略
+    "svhn_policy",  # SVHN 数据增强策略
+    "randaugment",  # 随机增强
+    "randaugment_fixmatch",  # FixMatch 的随机增强
+    "randaugment2",  # 第二种随机增强
+    "gaussian_noise",  # 添加高斯噪声
+    "colorjitter",  # 调整图像的亮度、对比度、饱和度和色调
+    "randomgrayscale",  # 随机将图像转换为灰度
+    "gaussian_blur",  # 高斯模糊
 ]
 
+# 定义插值模式的映射字典
 INTERPOLATION_MODES = {
-    "bilinear": InterpolationMode.BILINEAR,
-    "bicubic": InterpolationMode.BICUBIC,
-    "nearest": InterpolationMode.NEAREST,
+    "bilinear": InterpolationMode.BILINEAR,  # 双线性插值
+    "bicubic": InterpolationMode.BICUBIC,  # 双三次插值
+    "nearest": InterpolationMode.NEAREST,  # 最近邻插值
 }
 
 
