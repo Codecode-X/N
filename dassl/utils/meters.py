@@ -53,7 +53,7 @@ class AverageMeter:
 
 
 class MetricMeter:
-    """存储一组指标的平均值和当前值。
+    """存储一组指标值。
 
     示例::
         >>> # 1. 创建 MetricMeter 实例
@@ -76,7 +76,7 @@ class MetricMeter:
     def update(self, input_dict):
         """ 更新指标值。
         参数:
-            input_dict (dict): 包含指标名称和值的字典，用于更新指标。
+            input_dict (dict): 包含各个指标的名称和值的字典，用于更新指标。
         """
         # 如果输入字典为空，则返回
         if input_dict is None:
