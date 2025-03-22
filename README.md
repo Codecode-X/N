@@ -64,17 +64,15 @@ CLIP推理过程是基于对比学习的，即找出与当前图片最相似的�
 **任务摘要**：完成token分类器的训练**数据采集**，完成一个**base模型的所有编码**。
 
 1. **`by: 奥利奥 & Ete` 数据采集工作 **：由于 Token 分类器的训练需要数据，数据行包括以下**6个字段**：
-   $$
-   i,n,m,S_\text{pn},L_\text{p},L_\text{n},S_\text{p},S_\text{n}
-   $$
+   $$i,n,m,S_\text{pn},L_\text{p},L_\text{n},S_\text{p},S_\text{n}$$
 
    - $i$：数据**行索引**。
    - $n,m$：分别表示**否定描述的个数（0,1,2）**和**肯定描述的个数（0~7）**。
-   - $S_\text{pn}$：一段包含 **$n$ 个否定描述**和 **$m$ 个肯定描述**的**描述性语句**，定义为：$S_\text{pn} = L_\text{n} \cup L_\text{p}$
-   - $L_\text{p}$：句子$S_\text{pn}$中包含的 **$m$ 个肯定描述列表**：$L_\text{p} = \{s_{\text{p}_1}, s_{\text{p}_2}, \dots, s_{\text{p}_m} \}, \quad |L_\text{p}| = m$
-   - $L_\text{n}$：句子$S_\text{pn}$中包含的 **$n$ 个否定描述列表**：$L_\text{n} = \{s_{\text{n}_1}, s_{\text{n}_2}, \dots, s_{\text{n}_n} \}, \quad |L_\text{n}| = n$
-   - $S_\text{p}$：**只保留 $m$ 个肯定描述的描述性语句**：$S_\text{p} = S_\text{pn} \setminus L_\text{n} = L_\text{p}$
-   - $S_\text{n}$：**只保留 $n$ 个否定描述的描述性语句**：$S_\text{n} = S_\text{pn} \setminus L_\text{p} = L_\text{n}$
+   - $S_\text{pn}$：一段包含 **$n$ 个否定描述**和 **$m$ 个肯定描述**的**描述性语句**，定义为: $S_\text{pn} = L_\text{n} \cup L_\text{p}$
+   - $L_\text{p}$：句子$S_\text{pn}$中包含的 **$m$ 个肯定描述列表**: $L_\text{p} = \{s_{\text{p}_1}, s_{\text{p}_2}, \dots, s_{\text{p}_m} \}, \quad |L_\text{p}| = m$
+   - $L_\text{n}$：句子$S_\text{pn}$中包含的 **$n$ 个否定描述列表**: $L_\text{n} = \{s_{\text{n}_1}, s_{\text{n}_2}, \dots, s_{\text{n}_n} \}, \quad |L_\text{n}| = n$
+   - $S_\text{p}$：**只保留 $m$ 个肯定描述的描述性语句**: $S_\text{p} = S_\text{pn} \setminus L_\text{n} = L_\text{p}$
+   - $S_\text{n}$：**只保留 $n$ 个否定描述的描述性语句**: $S_\text{n} = S_\text{pn} \setminus L_\text{p} = L_\text{n}$
 
    该部分数据可利用GPT等LLM工具或其他工具进行生成或采集，**要求:**
 
