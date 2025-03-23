@@ -23,10 +23,12 @@ OPTIM:
 
 TRAIN:
   PRINT_FREQ: 5
+  DO_EVAL: True # 训练时是否进行评估
 
 MODEL:
+  NAME: "NPCLIP" # 模型名称
   BACKBONE:
-    NAME: "ViT-B/16"
+    NAME: "ViT-B/16" # 骨干网络名称
 
 TRAINER:
   COOP:
