@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # custom config
-DATA=/path/to/datasets
+DATA="/root/autodl-tmp/"
 TRAINER=CoOp
 
 DATASET=$1
@@ -30,3 +30,5 @@ do
         DATASET.NUM_SHOTS ${SHOTS}
     fi
 done
+
+# 执行示例：bash scripts/coop/main.sh  caltech101  vit_b16_ep50_ctxv1 end 16 16 True
