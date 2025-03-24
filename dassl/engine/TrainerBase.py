@@ -42,7 +42,7 @@ class TrainerBase:
     * model_backward_and_update: 模型反向传播和更新，包括清零梯度、反向传播、更新模型参数。
     * update_lr: 调用学习率调度器的 step() 方法，更新 names 模型列表中的模型的学习率。
     * get_current_lr: 获取当前学习率。 
-    
+
     * train: 通用训练循环，但里面包含的子方法 (before_train、after_train、before_epoch、
              after_epoch、run_epoch(必实现)) 需由子类实现。
     
@@ -101,8 +101,7 @@ class TrainerBase:
         dm = DataManager(self.cfg) # 通过配置创建数据管理器
         self.dm = dm  # 保存数据管理器
 
-        self.train_loader_x = dm.train_loader_x # 有标签训练数据加载器
-        self.train_loader_u = dm.train_loader_u  # 无标签训练数据加载器 (可选，可以为 None
+        self.train_loader_x = dm.train_loader # 有标签训练数据加载器
         
         self.val_loader = dm.val_loader  # 验证数据加载器 (可选，可以为 None
         self.test_loader = dm.test_loader # 测试数据加载器

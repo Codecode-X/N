@@ -24,7 +24,7 @@ from datasets.imagenet_r import ImageNetR
 from dassl.utils import setup_logger, set_random_seed, collect_env_info
 from dassl.config import get_cfg_default
 from dassl.data.transforms import build_transform
-from dassl.data import DatasetWrapper
+from dassl.data import TransformedDataset
 
 import clip
 
@@ -130,7 +130,7 @@ def main(args):
 
     tfm_train = build_transform(cfg, is_train=False)
     data_loader = torch.utils.data.DataLoader(
-        DatasetWrapper(cfg, dataset_input, transform=tfm_train, is_train=False),
+        TransformedDataset(cfg, dataset_input, transform=tfm_train, is_train=False),
         batch_size=cfg.DATALOADER.TRAIN_X.BATCH_SIZE,
         sampler=None,
         shuffle=False,

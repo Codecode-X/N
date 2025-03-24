@@ -48,7 +48,7 @@ class DescribableTextures(DatasetBase):
         subsample = cfg.DATASET.SUBSAMPLE_CLASSES
         train, val, test = OxfordPets.subsample_classes(train, val, test, subsample=subsample)
 
-        super().__init__(train_x=train, val=val, test=test)
+        super().__init__(train=train, val=val, test=test)
 
     @staticmethod
     def read_and_split_data(image_dir, p_trn=0.5, p_val=0.2, ignored=[], new_cnames=None):

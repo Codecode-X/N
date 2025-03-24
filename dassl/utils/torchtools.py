@@ -9,6 +9,7 @@ from functools import partial
 from collections import OrderedDict
 import torch
 import torch.nn as nn
+import torchvision.transforms as T
 
 from .tools import mkdir_if_missing
 
@@ -21,6 +22,8 @@ __all__ = [
     "count_num_param", # 计算模型中的参数数量
     "load_pretrained_weights", # 加载预训练权重到模型
     "init_network_weights", # 初始化网络权重
+    "transform_image", # 对图像应用 K 次 tfm 增强 并返回结果
+    "image_to_tensor_pipeline" # 图像预处理转换管道
 ]
 
 def save_checkpoint(state, save_dir, is_best=False,
@@ -146,15 +149,6 @@ def resume_from_checkpoint(fdir, model, optimizer=None, scheduler=None):
     print("上一个 epoch: {}".format(start_epoch))
 
     return start_epoch
-
-def set_bn_to_eval(m):
-    r"""将BatchNorm层设置为评估模式。
-        1. 不更新 running mean 和 var
-        2. 缩放参数 scale 和 平移参数 shift 参数仍然可训练（独立于评估模式）
-    """
-    classname = m.__class__.__name__ # 获取类名
-    if classname.find("BatchNorm") != -1: # 如果匹配到了 BatchNorm
-        m.eval() # 设置为评估模式
 
 def open_all_layers(model):
     r"""打开模型中的所有层进行训练。
@@ -317,3 +311,59 @@ def init_network_weights(model, init_type="normal", gain=0.02):
                 nn.init.constant_(m.bias.data, 0.0)
 
     model.apply(_init_func)
+
+
+def transform_image(tfm_func, img0, K=1):
+    """
+    对图像应用 K 次 tfm 增强 并返回结果。
+
+    参数：
+    - tfm_func (callable): transform 函数。
+    - img0 (PIL.Image): 原始图像。
+    - K (int): 增强重复应用次数。
+
+    返回：
+    - 增强后的单个图像 (如果只有一个增强结果) img_list[0] || 增强后的图像列表 img_list
+    """
+    img_list = []  # 初始化图像列表
+
+    for k in range(K):  # 进行 K 次重复增强
+        tfm_img = tfm_func(img0) # 对图像应用 transform
+        img_list.append(tfm_img)
+
+    # 如果进行了多次增强，则返回增强后的图像列表；否则，返回增强后的单个图像
+    return img_list[0] if len(img_list) == 1 else img_list  
+
+
+def image_to_tensor_pipeline(interpolation_mode, size, normalize=None, pixel_mean=None, pixel_std=None):
+    """图像预处理转换管道。
+
+    参数：
+        - interpolation_mode (str): 插值模式。
+        - size (tuple): 调整图像大小。
+        - normalize (bool): 是否进行归一化。
+        - pixel_mean (list, optional): 图像归一化均值。
+        - pixel_std (list, optional): 图像归一化标准差。
+
+    返回：
+        - torchvision.transforms.Compose: 转换管道。
+
+    详细步骤：
+        1. 调整图像大小为 size，使用 interpolation_mode 插值模式。
+        2. 转换为张量。
+        3. 归一化（如果 normalize 为 True）。
+    """
+    to_tensor = []
+
+    # 调整图像大小为 size，使用 interpolation_mode 插值模式
+    to_tensor.append(T.Resize(size, interpolation=interpolation_mode))
+
+    # 转换为张量
+    to_tensor.append(T.ToTensor())
+
+    # 归一化
+    if normalize and pixel_mean and pixel_std: 
+        normalize = T.Normalize(mean=pixel_mean, std=pixel_std)
+        to_tensor.append(normalize)
+
+    return T.Compose(to_tensor)
