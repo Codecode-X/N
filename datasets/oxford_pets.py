@@ -51,7 +51,7 @@ class OxfordPets(DatasetBase):
         subsample = cfg.DATASET.SUBSAMPLE_CLASSES
         train, val, test = self.subsample_classes(train, val, test, subsample=subsample)
 
-        super().__init__(train_x=train, val=val, test=test)
+        super().__init__(train=train, val=val, test=test)
 
     def read_data(self, split_file):
         filepath = os.path.join(self.anno_dir, split_file)

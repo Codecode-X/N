@@ -1,1 +1,1 @@
-from .data_manager import DataManager, DatasetWrapper
+from .data_manager import DataManager, TransformedDataset

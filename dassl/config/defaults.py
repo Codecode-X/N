@@ -304,3 +304,7 @@ _C.TRAINER.FIXMATCH = CN()
 _C.TRAINER.FIXMATCH.WEIGHT_U = 1.0  # weight on the unlabeled loss
 _C.TRAINER.FIXMATCH.CONF_THRE = 0.95  # confidence threshold
 _C.TRAINER.FIXMATCH.STRONG_TRANSFORMS = ()
+
+
+
+print(_C)

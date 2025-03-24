@@ -26,7 +26,7 @@ class ImageNetV2(DatasetBase):
 
         data = self.read_data(classnames)
 
-        super().__init__(train_x=data, test=data)
+        super().__init__(train=data, test=data)
 
     def read_data(self, classnames):
         image_dir = self.image_dir
