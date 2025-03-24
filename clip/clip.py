@@ -39,52 +39,6 @@ _MODELS = {
     "ViT-L/14@336px": "https://openaipublic.azureedge.net/clip/models/3035c92b350959924f9f00213499208652fc7ea050643e8b385c2dac08641f02/ViT-L-14-336px.pt",
 }
 
-# 预训练 clip 模型下载函数
-def _download(url: str, root: str):
-    os.makedirs(root, exist_ok=True)
-    filename = os.path.basename(url)
-
-    expected_sha256 = url.split("/")[-2]
-    download_target = os.path.join(root, filename)
-
-    if os.path.exists(download_target) and not os.path.isfile(download_target):
-        raise RuntimeError(f"{download_target} exists and is not a regular file")
-
-    if os.path.isfile(download_target):
-        if hashlib.sha256(open(download_target, "rb").read()).hexdigest() == expected_sha256:
-            return download_target
-        else:
-            warnings.warn(f"{download_target} exists, but the SHA256 checksum does not match; re-downloading the file")
-
-    with urllib.request.urlopen(url) as source, open(download_target, "wb") as output:
-        with tqdm(total=int(source.info().get("Content-Length")), ncols=80, unit='iB', unit_scale=True, unit_divisor=1024) as loop:
-            while True:
-                buffer = source.read(8192)
-                if not buffer:
-                    break
-
-                output.write(buffer)
-                loop.update(len(buffer))
-
-    if hashlib.sha256(open(download_target, "rb").read()).hexdigest() != expected_sha256:
-        raise RuntimeError("Model has been downloaded but the SHA256 checksum does not not match")
-
-    return download_target
-
-
-def _convert_image_to_rgb(image):
-    return image.convert("RGB")
-
-# 数据转换处理
-def _transform(n_px):
-    return Compose([
-        # 将图像调整到 n_px*n_px 大小，并使用 双三次（BICUBIC）插值进行缩放
-        Resize(n_px, interpolation=BICUBIC), # 比 BILINEAR（双线性插值）更清晰锐利，减少模糊效果，比 NEAREST（最近邻插值）平滑，不会产生马赛克块状 
-        CenterCrop(n_px), # Resize(n_px) + CenterCrop(n_px) 先等比例缩放，再中心裁剪，避免变形
-        _convert_image_to_rgb,
-        ToTensor(),
-        Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
-    ])
 
 # 返回可用的 CLIP 模型名称
 def available_models() -> List[str]:
@@ -207,6 +161,73 @@ def load(name: str, device: Union[str, torch.device] = "cuda" if torch.cuda.is_a
             model.float()
 
         return model, _transform(model.input_resolution.item())
+
+
+# 预训练 clip 模型下载函数 (load 函数的辅助函数)
+def _download(url: str, root: str):
+    """
+    下载指定 URL 的文件到指定目录，并返回下载后的文件路径。
+       
+    参数：
+        - url：str，文件的 URL 地址。
+        - root：str，下载文件的目录路径。
+        
+    返回：
+        - str，下载后的文件路径。
+    """
+    os.makedirs(root, exist_ok=True)
+    filename = os.path.basename(url)
+
+    expected_sha256 = url.split("/")[-2]
+    download_target = os.path.join(root, filename)
+
+    if os.path.exists(download_target) and not os.path.isfile(download_target):
+        raise RuntimeError(f"{download_target} exists and is not a regular file")
+
+    if os.path.isfile(download_target):
+        if hashlib.sha256(open(download_target, "rb").read()).hexdigest() == expected_sha256:
+            return download_target
+        else:
+            warnings.warn(f"{download_target} exists, but the SHA256 checksum does not match; re-downloading the file")
+
+    with urllib.request.urlopen(url) as source, open(download_target, "wb") as output:
+        with tqdm(total=int(source.info().get("Content-Length")), ncols=80, unit='iB', unit_scale=True, unit_divisor=1024) as loop:
+            while True:
+                buffer = source.read(8192)
+                if not buffer:
+                    break
+
+                output.write(buffer)
+                loop.update(len(buffer))
+
+    if hashlib.sha256(open(download_target, "rb").read()).hexdigest() != expected_sha256:
+        raise RuntimeError("Model has been downloaded but the SHA256 checksum does not not match")
+
+    return download_target
+
+
+# 数据转换处理 (load 函数的辅助函数)
+def _transform(n_px):
+    """
+    创建一个 torchvision 的数据转换器，用于将 PIL 图像转换为模型输入所需的张量。
+
+    参数：
+        - n_px：int，图像的大小（宽度和高度）
+
+    返回：
+        - torchvision.transforms.Compose，一个数据转换器对象。
+    """
+    def _convert_image_to_rgb(image):
+        return image.convert("RGB")
+
+    return Compose([
+        # 将图像调整到 n_px*n_px 大小，并使用 双三次（BICUBIC）插值进行缩放
+        Resize(n_px, interpolation=BICUBIC), # 比 BILINEAR（双线性插值）更清晰锐利，减少模糊效果，比 NEAREST（最近邻插值）平滑，不会产生马赛克块状 
+        CenterCrop(n_px), # Resize(n_px) + CenterCrop(n_px) 先等比例缩放，再中心裁剪，避免变形
+        _convert_image_to_rgb,
+        ToTensor(),
+        Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
+    ])
 
 
 def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: bool = False) -> Union[torch.IntTensor, torch.LongTensor]:
