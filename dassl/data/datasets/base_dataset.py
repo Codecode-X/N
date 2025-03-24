@@ -9,53 +9,6 @@ import gdown
 from dassl.utils import check_isfile
 
 
-class Datum:
-    """数据实例类，定义了基本属性。
-
-    参数:
-        impath (str): 图像路径。
-        label (int): 类别标签。
-        domain (int): 域标签。
-        classname (str): 类别名称。
-    """
-
-    def __init__(self, impath="", label=0, domain=0, classname=""):
-        """初始化数据实例。"""
-        # 确保图像路径是字符串类型
-        assert isinstance(impath, str)
-        # 检查图像路径是否是有效文件
-        assert check_isfile(impath)
-
-        # 初始化图像路径
-        self._impath = impath
-        # 初始化类别标签
-        self._label = label
-        # 初始化域标签
-        self._domain = domain
-        # 初始化类别名称
-        self._classname = classname
-
-    @property
-    def impath(self):
-        """返回图像路径"""
-        return self._impath
-
-    @property
-    def label(self):
-        """返回类别标签"""
-        return self._label
-
-    @property
-    def domain(self):
-        """返回域标签"""
-        return self._domain
-
-    @property
-    def classname(self):
-        """返回类别名称"""
-        return self._classname
-
-
 class DatasetBase:
     """统一的数据集类，用于以下任务：
     1) 域适应
@@ -317,3 +270,50 @@ class DatasetBase:
             output[item.domain].append(item)
 
         return output
+
+
+class Datum:
+    """数据实例类，定义了基本属性。
+
+    参数:
+        impath (str): 图像路径。
+        label (int): 类别标签。
+        domain (int): 域标签。
+        classname (str): 类别名称。
+    """
+
+    def __init__(self, impath="", label=0, domain=0, classname=""):
+        """初始化数据实例。"""
+        # 确保图像路径是字符串类型
+        assert isinstance(impath, str)
+        # 检查图像路径是否是有效文件
+        assert check_isfile(impath)
+
+        # 初始化图像路径
+        self._impath = impath
+        # 初始化类别标签
+        self._label = label
+        # 初始化域标签
+        self._domain = domain
+        # 初始化类别名称
+        self._classname = classname
+
+    @property
+    def impath(self):
+        """返回图像路径"""
+        return self._impath
+
+    @property
+    def label(self):
+        """返回类别标签"""
+        return self._label
+
+    @property
+    def domain(self):
+        """返回域标签"""
+        return self._domain
+
+    @property
+    def classname(self):
+        """返回类别名称"""
+        return self._classname
