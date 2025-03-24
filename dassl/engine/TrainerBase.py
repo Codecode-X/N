@@ -42,12 +42,12 @@ class TrainerBase:
     * model_backward_and_update: 模型反向传播和更新，包括清零梯度、反向传播、更新模型参数。
     * update_lr: 调用学习率调度器的 step() 方法，更新 names 模型列表中的模型的学习率。
     * get_current_lr: 获取当前学习率。 
+    
     * train: 通用训练循环，但里面包含的子方法 (before_train、after_train、before_epoch、
              after_epoch、run_epoch(必实现)) 需由子类实现。
     
     -------子类可重写的方法（可选）-------
     * check_cfg: 检查配置中的某些变量是否正确设置。 (未实现)
-    * init_model: 初始化模型，如冻结模型的某些层，加载预训练权重等。 (未实现 - 冻结模型某些层)
 
     * before_train: 训练前的操作。
     * after_train: 训练后的操作。
@@ -59,7 +59,8 @@ class TrainerBase:
     * parse_batch_test: 解析测试批次。
     * model_inference: 模型推理。
 
-    -------需要子类实现的方法（必选）-------
+    -------需要子类重写的方法（必选）-------
+    * init_model: 初始化模型，如冻结模型的某些层，加载预训练权重等。 (未实现 - 冻结模型某些层)
     * forward_backward: 前向传播和反向传播。
     """
 
@@ -107,7 +108,6 @@ class TrainerBase:
         self.test_loader = dm.test_loader # 测试数据加载器
 
         self.num_classes = dm.num_classes # 类别数
-        self.num_source_domains = dm.num_source_domains # 源域数
         self.lab2cname = dm.lab2cname  # 类别名称字典 {label: classname}
 
         # 构建并注册模型，优化器，学习率调度器；并初始化模型
@@ -471,57 +471,6 @@ class TrainerBase:
         """
         pass
 
-    def init_model(self, cfg):
-        """
-        初始化模型（可选子类实现）。
-        主要包括：
-        * 构建模型
-        * 加载预训练权重
-        * 冻结模型某些层
-        * 将模型移动到设备
-        * 将模型调整为精度混合训练
-        * 将模型部署到多个 GPU 上
-        * 为整个模型或部分模块构建优化器和学习率调度器，并注册
-        
-        参数：
-            * cfg: 配置
-
-        返回：
-            * model: 模型
-            * optim: 优化器
-            * sched: 学习率调度器
-        """
-        
-        # 构建模型
-        self.model = build_model(cfg) # 构建模型
-        print("模型参数数量：", count_num_param(self.model))
-        
-        # 给模型载入预训练权重 (如果配置了预训练权重)
-        if cfg.MODEL.INIT_WEIGHTS: 
-            load_pretrained_weights(self.model, cfg.MODEL.INIT_WEIGHTS)  # 加载预训练权重
-
-        # 冻结模型某些层 (如果配置了冻结层)
-        pass  # 未实现
-        
-        # 将模型移动到设备
-        self.model.to(self.device)
-        
-        # 将模型调整为精度混合训练，以减少显存占用 (如果配置了精度混合训练)
-        self.scaler = GradScaler() if cfg.TRAINER.COOP.PREC == "amp" else None
-
-        # 将模型部署到多个 GPU 上 (如果有多个 GPU)
-        device_count = torch.cuda.device_count()
-        if device_count > 1:
-            print(f"检测到多个 GPU (n_gpus={device_count}), 使用所有 GPU!")
-            self.model = nn.DataParallel(self.model)
-
-        # 为 整个模型 或 部分模块 (例如 head) 构建优化器和学习率调度器，并注册
-        self.optim = build_optimizer(self.model, cfg.OPTIM)  # 构建优化器
-        self.sched = build_lr_scheduler(self.optim, cfg.OPTIM)  # 构建学习率调度器
-        self.register_model(cfg.MODEL.NAME, self.model, self.optim, self.sched) # 注册模型
-
-        return self.model, self.optim, self.sched
-
     def before_train(self):
         """
         训练前的操作。 (可选子类实现)
@@ -730,13 +679,11 @@ class TrainerBase:
         """
         input = batch["img"]  # 获取图像
         label = batch["label"]  # 获取标签
-        domain = batch["domain"]  # 获取域标签
 
         input = input.to(self.device)  # 将图像移动到设备
         label = label.to(self.device)  # 将标签移动到设备
-        domain = domain.to(self.device)  # 将域标签移动到设备
 
-        return input, label, domain  # 返回图像、标签和域标签
+        return input, label  # 返回图像、标签
 
 
     def parse_batch_test(self, batch):
@@ -756,6 +703,56 @@ class TrainerBase:
         此处直接调用模型，返回模型输出。
         """
         return self.model(input) # 直接调用模型
+    
+    def init_model(self, cfg):
+        """
+        初始化模型（子类需要重写，仅提供示例）。
+        主要包括：
+        * 构建模型
+        * 加载预训练权重
+        * 冻结模型某些层
+        * 将模型移动到设备
+        * 将模型调整为精度混合训练
+        * 将模型部署到多个 GPU 上
+        * 为整个模型或部分模块构建优化器和学习率调度器，并注册
+        
+        参数：
+            * cfg: 配置
+
+        返回：
+            * model: 模型
+            * optim: 优化器
+            * sched: 学习率调度器
+        """
+        # 构建模型
+        self.model = build_model(cfg) # 构建模型
+        print("模型参数数量：", count_num_param(self.model))
+        
+        # 给模型载入预训练权重 (如果配置了预训练权重)
+        if cfg.MODEL.INIT_WEIGHTS: 
+            load_pretrained_weights(self.model, cfg.MODEL.INIT_WEIGHTS)  # 加载预训练权重
+
+        # 冻结模型某些层 (如果配置了冻结层)
+        pass  # 未实现
+        
+        # 将模型移动到设备
+        self.model.to(self.device)
+        
+        # 将模型调整为精度混合训练，以减少显存占用 (如果配置了精度混合训练)
+        self.scaler = GradScaler() if cfg.TRAINER.COOP.PREC == "amp" else None
+
+        # 将模型部署到多个 GPU 上 (如果有多个 GPU)
+        device_count = torch.cuda.device_count()
+        if device_count > 1:
+            print(f"检测到多个 GPU (n_gpus={device_count}), 使用所有 GPU!")
+            self.model = nn.DataParallel(self.model)
+
+        # 为 整个模型 或 部分模块 (例如 head) 构建优化器和学习率调度器，并注册
+        self.optim = build_optimizer(self.model, cfg.OPTIM)  # 构建优化器
+        self.sched = build_lr_scheduler(self.optim, cfg.OPTIM)  # 构建学习率调度器
+        self.register_model(cfg.MODEL.NAME, self.model, self.optim, self.sched) # 注册模型
+
+        return self.model, self.optim, self.sched
 
     def forward_backward(self, batch):
         """

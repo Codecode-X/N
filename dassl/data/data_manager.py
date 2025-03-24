@@ -10,47 +10,6 @@ from .samplers import build_sampler
 from .transforms import INTERPOLATION_MODES, build_transform
 
 
-def build_data_loader(cfg, sampler_type="SequentialSampler", data_source=None, batch_size=64, 
-                      n_domain=0, n_ins=2, tfm=None, is_train=True, dataset_wrapper=None):
-    """构建数据加载器。
-    参数：
-        cfg (CfgNode): 配置。
-        sampler_type (str): 采样器类型。
-        data_source (list): 数据源。
-        batch_size (int): 批大小。
-        n_domain (int): 域数量。
-        n_ins (int): 每个类别的实例数量。
-        tfm (list): 数据增强。
-        is_train (bool): 是否是训练模式。
-        dataset_wrapper (DatasetWrapper): 数据集包装器。"""
-    
-    # 构建采样器
-    sampler = build_sampler(
-        sampler_type,
-        cfg=cfg,
-        data_source=data_source,
-        batch_size=batch_size,
-        n_domain=n_domain,
-        n_ins=n_ins
-    )
-
-    if dataset_wrapper is None:
-        dataset_wrapper = DatasetWrapper # 默认数据集包装器
-
-    # 构建数据加载器
-    data_loader = torch.utils.data.DataLoader(
-        dataset_wrapper(cfg, data_source, transform=tfm, is_train=is_train), # 经过数据集包装器处理的数据集
-        batch_size=batch_size, 
-        sampler=sampler, # 采样器
-        num_workers=cfg.DATALOADER.NUM_WORKERS,
-        drop_last=(is_train and len(data_source) >= batch_size), # 只有在 训练模式下 且 数据源的长度大于等于批大小时 才丢弃最后一个批次
-        pin_memory=(torch.cuda.is_available() and cfg.USE_CUDA) # 只有在 CUDA 可用且使用 CUDA 时才将数据存储在固定内存中
-    )
-    assert len(data_loader) > 0
-
-    return data_loader
-
-
 class DataManager:
     """数据管理器，用于加载数据集和构建数据加载器。
         参数：
@@ -176,14 +135,11 @@ class DataManager:
     def show_dataset_summary(self, cfg):
         """打印数据集摘要信息。"""
         dataset_name = cfg.DATASET.NAME  # 数据集名称
-        source_domains = cfg.DATASET.SOURCE_DOMAINS  # 源域
         target_domains = cfg.DATASET.TARGET_DOMAINS  # 目标域
 
         # 构建摘要表格
         table = []
         table.append(["数据集", dataset_name])
-        if source_domains:
-            table.append(["源域", source_domains])
         if target_domains:
             table.append(["目标域", target_domains])
         table.append(["类别数量", f"{self.num_classes:,}"])
@@ -196,6 +152,48 @@ class DataManager:
 
         # 打印表格
         print(tabulate(table))
+
+
+def build_data_loader(cfg, sampler_type="SequentialSampler", data_source=None, batch_size=64, 
+                      n_domain=0, n_ins=2, tfm=None, is_train=True, dataset_wrapper=None):
+    """构建数据加载器。
+    参数：
+        cfg (CfgNode): 配置。
+        sampler_type (str): 采样器类型。
+        data_source (list): 数据源。
+        batch_size (int): 批大小。
+        n_domain (int): 域数量。
+        n_ins (int): 每个类别的实例数量。
+        tfm (list): 数据增强。
+        is_train (bool): 是否是训练模式。
+        dataset_wrapper (DatasetWrapper): 数据集包装器。"""
+    
+    # 构建采样器
+    sampler = build_sampler(
+        sampler_type,
+        cfg=cfg,
+        data_source=data_source,
+        batch_size=batch_size,
+        n_domain=n_domain,
+        n_ins=n_ins
+    )
+
+    if dataset_wrapper is None:
+        dataset_wrapper = DatasetWrapper # 默认数据集包装器
+
+    # 构建数据加载器
+    data_loader = torch.utils.data.DataLoader(
+        dataset_wrapper(cfg, data_source, transform=tfm, is_train=is_train), # 经过数据集包装器处理的数据集
+        batch_size=batch_size, 
+        sampler=sampler, # 采样器
+        num_workers=cfg.DATALOADER.NUM_WORKERS,
+        drop_last=(is_train and len(data_source) >= batch_size), # 只有在 训练模式下 且 数据源的长度大于等于批大小时 才丢弃最后一个批次
+        pin_memory=(torch.cuda.is_available() and cfg.USE_CUDA) # 只有在 CUDA 可用且使用 CUDA 时才将数据存储在固定内存中
+    )
+    assert len(data_loader) > 0
+
+    return data_loader
+
 
 
 class DatasetWrapper(TorchDataset):
