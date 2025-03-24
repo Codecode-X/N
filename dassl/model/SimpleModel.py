@@ -7,6 +7,7 @@ class SimpleNet(ModelBase):
     """一个简单的神经网络，由一个 CNN 骨干网络 和一个 可选的头部（如用于分类的 MLP）组成。"""
 
     def __init__(self, cfg, model_cfg, num_classes, **kwargs):
+        self.num_classes = num_classes
         super().__init__()
         # 构建骨干网络
         self.net = nn.Sequential(
@@ -20,11 +21,12 @@ class SimpleNet(ModelBase):
         )
 
     def forward(self, x, return_feature=False):
+        """前向传播。"""
         # 前向传播，通过骨干网络
         y = self.net(x)
         # 返回输出
         return y
     
-    @property
-    def fdim(self):
-        return 128
+    def build_model(self):
+        """构建模型。"""
+        super().build_model() # 直接调用父类的方法

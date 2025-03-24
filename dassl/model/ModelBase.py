@@ -7,11 +7,6 @@ class ModelBase(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-
-    @property
-    def fdim(self):
-        """返回头部网络的输出特征维度"""
-        return self._fdim
     
     def forward(self, x, return_feature=False):
         """
@@ -24,3 +19,7 @@ class ModelBase(nn.Module):
             (可选) torch.Tensor: 特征 [batch, ...]
         """
         raise NotImplementedError
+    
+    def build_model(self):
+        """构建模型。(可选)"""
+        pass
