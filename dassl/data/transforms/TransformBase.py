@@ -12,7 +12,7 @@ class TransformBase:
     - __repr__：返回变换的名称
     """
 
-    def __init__(self):
+    def __init__(self, cfg):
         self.transform = lambda x: x # 恒等变换
 
     def __call__(self, img):

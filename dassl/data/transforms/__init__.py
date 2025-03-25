@@ -8,3 +8,5 @@ from .GaussianNoise import GaussianNoise
 from .InstanceNormalization import InstanceNormalization
 from .Random2DTranslation import Random2DTranslation
 from .Normalize import Normalize
+
+from .TransformClipVisual import TransformClipVisual  # 用于 CLIP 模型的图像编码器的数据增强
