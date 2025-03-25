@@ -38,12 +38,14 @@ class Registry:
 
     def register(self, obj=None, force=False):
         """ 注册装饰器
-          obj 为 None: 作为装饰器使用
-          obj 不为 None: 作为函数调用使用
 
         参数:
-            obj: 待注册的对象 (实例化的类或函数)
-            force: 如果为 True，则强制注册，即使名称已经存在于 _obj_map 中
+            - obj: 待注册的对象 (实例化的类或函数)
+            - force: 如果为 True，则强制注册，即使名称已经存在于 _obj_map 中
+        作用:
+            - obj 为 None: 作为装饰器使用
+            - obj 不为 None: 作为函数调用使用
+        
         """
         # 如果 obj 为 None，则作为装饰器使用
         if obj is None:
