@@ -154,16 +154,17 @@ class DataManager:
 
 def _build_data_loader(cfg, sampler, data_source=None, batch_size=64, tfm=None, is_train=True, dataset_transform=None):
     """构建数据加载器。
+    
     参数：
-        cfg (CfgNode): 配置。
-        sampler (Sampler): 采样器。
-        data_source (list): 数据源。
-        batch_size (int): 批大小。
-        tfm (list): 数据增强。
-        is_train (bool): 是否是训练模式。
-        dataset_transform (TransformedDataset): 数据转换器 | 转换为 tensor, 数据增强等操作。
+        - cfg (CfgNode): 配置。
+        - sampler (Sampler): 采样器。
+        - data_source (list): 数据源。
+        - batch_size (int): 批大小。
+        - tfm (list): 数据增强。
+        - is_train (bool): 是否是训练模式。
+        - dataset_transform (TransformeWrapper): 数据转换器 | 转换为 tensor, 数据增强等操作。
     返回：
-        DataLoader: 数据加载器。
+        - DataLoader: 数据加载器。
 
     主要步骤：
         1. 通过 torch.utils.data.DataLoader 根据 数据转换器，数据源，批大小，采样器 构建数据加载器。
@@ -172,7 +173,7 @@ def _build_data_loader(cfg, sampler, data_source=None, batch_size=64, tfm=None, 
 
     # 数据转换器
     if dataset_transform is None:
-        dataset_transform = TransformedDataset # 默认
+        dataset_transform = TransformeWrapper # 默认
 
     # 构建数据加载器
     data_loader = torch.utils.data.DataLoader(
@@ -189,9 +190,9 @@ def _build_data_loader(cfg, sampler, data_source=None, batch_size=64, tfm=None, 
 
 
 
-class TransformedDataset(TorchDataset):
+class TransformeWrapper(TorchDataset):
     """
-    数据集转换器，用于对数据集进行 转换 和 增强 操作。
+    数据集转换包装器，用于对数据集进行 转换 和 增强 操作。
     
     参数：
         - cfg (CfgNode): 配置。
@@ -207,7 +208,7 @@ class TransformedDataset(TorchDataset):
 
     def __init__(self, cfg, data_source, transform=None, is_train=False):
         """ 
-        初始化数据集包装器。
+        初始化数据集转换包装器。
         
         主要步骤：
             1. 初始化属性，并获取相关配置信息。
