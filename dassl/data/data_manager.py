@@ -5,7 +5,7 @@ from torch.utils.data import Dataset as TorchDataset
 from dassl.utils import read_image, transform_image, image_to_tensor_pipeline
 from .datasets import build_dataset
 from .samplers import build_train_sampler, build_test_sampler
-from .transforms import INTERPOLATION_MODES, build_transform
+from .transforms import build_train_transform, build_test_transform
 
 
 class DataManager:
@@ -54,13 +54,13 @@ class DataManager:
 
         # ---构建数据增强---
         if custom_tfm_train is None: # 构建训练数据增强
-            tfm_train = build_transform(cfg, is_train=True)  # 使用配置默认的训练数据增强
+            tfm_train = build_train_transform(cfg)  # 使用配置默认的训练数据增强
         else:
             print("* 使用自定义训练数据增强")
             tfm_train = custom_tfm_train  # 使用自定义的训练数据增强
         
         if custom_tfm_test is None: # 构建测试数据增强
-            tfm_test = build_transform(cfg, is_train=False)  # 使用配置默认的测试数据增强
+            tfm_test = build_test_transform(cfg)  # 使用配置默认的测试数据增强
         else:
             print("* 使用自定义测试数据增强")
             tfm_test = custom_tfm_test  # 使用自定义的测试数据增强

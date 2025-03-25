@@ -1,7 +1,7 @@
+from dassl.data.transforms import TRANSFORM_REGISTRY
+from .TransformBase import TransformBase
 """
-Credit to
-1) https://github.com/ildoonet/pytorch-randaugment
-2) https://github.com/kakaobrain/fast-autoaugment
+Source: https://github.com/DeepVoltaire/AutoAugment
 """
 import numpy as np
 import random
@@ -11,13 +11,14 @@ import PIL.ImageDraw
 import PIL.ImageEnhance
 from PIL import Image
 
+__all__ = ["RandomIntensityAugment", "ProbabilisticAugment"]
 
-class RandAugment:
+
+@TRANSFORM_REGISTRY.register()
+class RandomIntensityAugment(TransformBase):
     """
-    随机数据增强 1。
-    对从 randaugment_list 中选择的 n 个操作，每个操作的强度随机选择。
-    
-    参数：
+    从预定义的增强操作列表中随机选择数量 n 的操作，并且随机选择其强度。    
+    属性：
         - n (int): 操作数量。
         - m (int): 操作强度。
         
@@ -29,10 +30,13 @@ class RandAugment:
         2. 对每个操作，从其强度范围中随机选择一个强度值。
         3. 对输入图像应用所选的操作。
     """
-    def __init__(self, n=2, m=10):
-        assert 0 <= m <= 30
-        self.n = n
-        self.m = m
+    def __init__(self, cfg):
+        self.n = cfg.INPUT.RandomIntensityAugment.n \
+            if hasattr(cfg.INPUT, 'RandomIntensityAugment') else 2
+        self.m = cfg.INPUT.RandomIntensityAugment.m \
+            if hasattr(cfg.INPUT, 'RandomIntensityAugment') else 10
+        assert 0 <= self.m <= 30
+
         self.augment_list = [
             (AutoContrast, 0, 1),
             (Equalize, 0, 1),
@@ -61,13 +65,12 @@ class RandAugment:
 
         return img
 
-
-class RandAugment2:
+@TRANSFORM_REGISTRY.register()
+class ProbabilisticAugment(TransformBase):
     """
-    随机数据增强 2。
-    对从 randaugment_list2 中选择的 n 个操作，每个操作以概率 p 应用。
+    从预定义的增强操作列表中随机选择数量 n 的操作，每个操作以概率 p 应用。
 
-    参数：
+    属性：
         - n (int): 操作数量。
         - p (float): 操作概率。
 
@@ -80,9 +83,12 @@ class RandAugment2:
         3. 对输入图像应用所选的操作。
     """
 
-    def __init__(self, n=2, p=0.6):
-        self.n = n
-        self.p = p
+    def __init__(self, cfg):
+        self.n = cfg.INPUT.ProbabilisticAugment.n \
+            if hasattr(cfg.INPUT, 'ProbabilisticAugment') else 2
+        self.p = cfg.INPUT.ProbabilisticAugment.p \
+            if hasattr(cfg.INPUT, 'ProbabilisticAugment') else 0.6
+        
         self.augment_list = [
             (AutoContrast, 0, 1),
             (Brightness, 0.1, 1.9),
@@ -112,55 +118,9 @@ class RandAugment2:
             img = op(img, val)
 
         return img
-
-
-class RandAugmentFixMatch:
-    """
-    随机数据增强 3。
-    对从 fixmatch_list 中选择的 n 个操作，每个操作的强度随机选择。
-
-    参数：
-        - n (int): 操作数量。
-        
-    主要功能：
-        - 对输入图像应用随机数据增强。
-
-    主要步骤：
-        1. 从 fixmatch_list 操作列表中随机选择 n 个操作。
-        2. 对每个操作，从其强度范围中随机选择一个强度值。
-        3. 对输入图像应用所选的操作。
-    """
-
-    def __init__(self, n=2):
-        self.n = n
-        self.augment_list = [
-            (AutoContrast, 0, 1),
-            (Brightness, 0.05, 0.95),
-            (Color, 0.05, 0.95),
-            (Contrast, 0.05, 0.95),
-            (Equalize, 0, 1),
-            (Identity, 0, 1),
-            (Posterize, 4, 8),
-            (Rotate, -30, 30),
-            (Sharpness, 0.05, 0.95),
-            (ShearX, -0.3, 0.3),
-            (ShearY, -0.3, 0.3),
-            (Solarize, 0, 256),
-            (TranslateX, -0.3, 0.3),
-            (TranslateY, -0.3, 0.3),
-        ]
-
-    def __call__(self, img):
-        ops = random.choices(self.augment_list, k=self.n)
-
-        for op, minval, maxval in ops:
-            m = random.random()
-            val = m * (maxval-minval) + minval
-            img = op(img, val)
-
-        return img
     
 
+# ----------辅助函数----------
 def ShearX(img, v):
     assert -0.3 <= v <= 0.3
     if random.random() > 0.5:
