@@ -12,7 +12,7 @@ from dassl.utils import load_checkpoint
 from dassl.optim import build_optimizer, build_lr_scheduler
 import os.path as osp
 
-
+# TODO：CLIP 的 transform 数据预处理还没加入
 class TrainerCLIP(TrainerBase):
 
     def check_cfg(self, cfg): # 检查配置文件中的 PREC 字段是否为合法值

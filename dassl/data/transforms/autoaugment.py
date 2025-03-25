@@ -7,7 +7,7 @@ from PIL import Image, ImageOps, ImageEnhance
 
 
 class ImageNetPolicy:
-    """Randomly choose one of the best 24 Sub-policies on ImageNet.
+    """从 ImageNet 上的 25 个最佳子策略中随机选择一个。
 
     Example:
         >>> policy = ImageNetPolicy()
@@ -58,7 +58,7 @@ class ImageNetPolicy:
 
 
 class CIFAR10Policy:
-    """Randomly choose one of the best 25 Sub-policies on CIFAR10.
+    """从 CIFAR10 上的 25 个最佳子策略中随机选择一个。
 
     Example:
         >>> policy = CIFAR10Policy()
@@ -109,7 +109,7 @@ class CIFAR10Policy:
 
 
 class SVHNPolicy:
-    """Randomly choose one of the best 25 Sub-policies on SVHN.
+    """从 SVHN 上的 25 个最佳子策略中随机选择一个。
 
     Example:
         >>> policy = SVHNPolicy()
@@ -160,34 +160,45 @@ class SVHNPolicy:
 
 
 class SubPolicy(object):
+    """
+    子策略。
+    
+    参数：
+        - p1 (float): 第一个操作的概率。
+        - operation1 (str): 第一个操作的名称。
+        - magnitude_idx1 (int): 第一个操作的幅度索引。
 
-    def __init__(
-        self,
-        p1,
-        operation1,
-        magnitude_idx1,
-        p2,
-        operation2,
-        magnitude_idx2,
-        fillcolor=(128, 128, 128),
-    ):
+        - p2 (float): 第二个操作的概率。
+        - operation2 (str): 第二个操作的名称。
+        - magnitude_idx2 (int): 第二个操作的幅度索引。
+
+        - fillcolor (tuple): 填充颜色。
+
+    Example:
+        >>> policy = SubPolicy(0.8, "rotate", 8, 0.2, "color", 3)
+        >>> transformed = policy(image)
+    """
+
+    def __init__(self, p1, operation1, magnitude_idx1, p2, operation2, magnitude_idx2, fillcolor=(128, 128, 128)):
+        # 定义每种操作的范围
         ranges = {
-            "shearX": np.linspace(0, 0.3, 10),
-            "shearY": np.linspace(0, 0.3, 10),
-            "translateX": np.linspace(0, 150 / 331, 10),
-            "translateY": np.linspace(0, 150 / 331, 10),
-            "rotate": np.linspace(0, 30, 10),
-            "color": np.linspace(0.0, 0.9, 10),
-            "posterize": np.round(np.linspace(8, 4, 10), 0).astype(np.int),
-            "solarize": np.linspace(256, 0, 10),
-            "contrast": np.linspace(0.0, 0.9, 10),
-            "sharpness": np.linspace(0.0, 0.9, 10),
-            "brightness": np.linspace(0.0, 0.9, 10),
-            "autocontrast": [0] * 10,
-            "equalize": [0] * 10,
-            "invert": [0] * 10,
+            "shearX": np.linspace(0, 0.3, 10),  # (图像沿 X 轴倾斜)
+            "shearY": np.linspace(0, 0.3, 10),  # (图像沿 Y 轴倾斜)
+            "translateX": np.linspace(0, 150 / 331, 10),  # (图像沿 X 轴平移)
+            "translateY": np.linspace(0, 150 / 331, 10),  # (图像沿 Y 轴平移)
+            "rotate": np.linspace(0, 30, 10),  # (图像旋转)
+            "color": np.linspace(0.0, 0.9, 10),  # (调整图像颜色)
+            "posterize": np.round(np.linspace(8, 4, 10), 0).astype(np.int),  # (减少图像颜色位数)
+            "solarize": np.linspace(256, 0, 10),  # (反转图像高于阈值的像素值)
+            "contrast": np.linspace(0.0, 0.9, 10),  # (调整图像对比度)
+            "sharpness": np.linspace(0.0, 0.9, 10),  # (调整图像锐度)
+            "brightness": np.linspace(0.0, 0.9, 10),  # (调整图像亮度)
+            "autocontrast": [0] * 10,  # (自动调整图像对比度)
+            "equalize": [0] * 10,  # (均衡图像直方图)
+            "invert": [0] * 10,  # (反转图像颜色)
         }
 
+        # 定义带填充颜色的旋转操作
         # from https://stackoverflow.com/questions/5252170/specify-image-filling-color-when-rotating-in-python-with-pil-and-setting-expand
         def rotate_with_fill(img, magnitude):
             rot = img.convert("RGBA").rotate(magnitude)
@@ -195,6 +206,7 @@ class SubPolicy(object):
                 rot, Image.new("RGBA", rot.size, (128, ) * 4), rot
             ).convert(img.mode)
 
+        # 定义每种操作对应的函数
         func = {
             "shearX":
             lambda img, magnitude: img.transform(
@@ -258,6 +270,7 @@ class SubPolicy(object):
             lambda img, magnitude: ImageOps.invert(img),
         }
 
+        # 初始化子策略的参数
         self.p1 = p1
         self.operation1 = func[operation1]
         self.magnitude1 = ranges[operation1][magnitude_idx1]
@@ -266,8 +279,10 @@ class SubPolicy(object):
         self.magnitude2 = ranges[operation2][magnitude_idx2]
 
     def __call__(self, img):
+        # 按照概率 p1 应用第一个操作
         if random.random() < self.p1:
             img = self.operation1(img, self.magnitude1)
+        # 按照概率 p2 应用第二个操作
         if random.random() < self.p2:
             img = self.operation2(img, self.magnitude2)
         return img

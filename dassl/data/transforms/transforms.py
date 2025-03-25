@@ -174,7 +174,7 @@ class GaussianNoise:
         noise = torch.randn(img.size()) * self.std + self.mean
         return img + noise
 
-
+# TODO 待重构
 def build_transform(cfg, is_train=True, choices=None):
     """Build transformation function.
 
@@ -277,14 +277,7 @@ def _build_transform_train(cfg, choices, target_size, normalize):
             f"+ color jitter (brightness={b_}, "
             f"contrast={c_}, saturation={s_}, hue={h_})"
         )
-        tfm_train += [
-            ColorJitter(
-                brightness=b_,
-                contrast=c_,
-                saturation=s_,
-                hue=h_,
-            )
-        ]
+        tfm_train += [ColorJitter(brightness=b_, contrast=c_, saturation=s_, hue=h_)]
 
     if "randomgrayscale" in choices:
         print("+ random gray scale")
@@ -295,6 +288,7 @@ def _build_transform_train(cfg, choices, target_size, normalize):
         gb_k, gb_p = cfg.INPUT.GB_K, cfg.INPUT.GB_P
         tfm_train += [RandomApply([GaussianBlur(gb_k)], p=gb_p)]
 
+    # 转换为 torch 张量，范围 [0, 1]
     print("+ to torch tensor of range [0, 1]")
     tfm_train += [ToTensor()]
 

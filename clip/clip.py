@@ -207,12 +207,12 @@ def _download(url: str, root: str):
 
 
 # 数据转换处理 (load 函数的辅助函数)
-def _transform(n_px):
+def _transform(input_size):
     """
     创建一个 torchvision 的数据转换器，用于将 PIL 图像转换为模型输入所需的张量。
 
     参数：
-        - n_px：int，图像的大小（宽度和高度）
+        - input_size：int，图像的大小（宽度和高度）
 
     返回：
         - torchvision.transforms.Compose，一个数据转换器对象。
@@ -222,8 +222,8 @@ def _transform(n_px):
 
     return Compose([
         # 将图像调整到 n_px*n_px 大小，并使用 双三次（BICUBIC）插值进行缩放
-        Resize(n_px, interpolation=BICUBIC), # 比 BILINEAR（双线性插值）更清晰锐利，减少模糊效果，比 NEAREST（最近邻插值）平滑，不会产生马赛克块状 
-        CenterCrop(n_px), # Resize(n_px) + CenterCrop(n_px) 先等比例缩放，再中心裁剪，避免变形
+        Resize(input_size, interpolation=BICUBIC), # 比 BILINEAR（双线性插值）更清晰锐利，减少模糊效果，比 NEAREST（最近邻插值）平滑，不会产生马赛克块状 
+        CenterCrop(input_size), # Resize(n_px) + CenterCrop(n_px) 先等比例缩放，再中心裁剪，避免变形
         _convert_image_to_rgb,
         ToTensor(),
         Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
