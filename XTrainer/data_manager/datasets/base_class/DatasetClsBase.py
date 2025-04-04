@@ -53,7 +53,7 @@ class DatasetClsBase(DatasetBase):
 
         配置
             - 当前读取：
-                - image_dir (str): cfg.DATASET.IMAGE_DIR: 图像目录。
+                - image_dir (str): cfg.DATASET.IMAGE_DIR: 图像目录。 例如：/root/autodl-tmp/caltech-101/101_ObjectCategories
 
             - 父类读取：
                 - dataset_dir (str): cfg.DATASET.DATASET_DIR: 数据集目录。
@@ -271,7 +271,7 @@ class Datum:
         classname (str): 类别名称。
     """
 
-    def __init__(self, impath="", label=0, domain=0, classname=""):
+    def __init__(self, impath="", label=0, classname=""):
         """初始化数据实例。"""
         # 确保图像路径是字符串类型
         assert isinstance(impath, str)

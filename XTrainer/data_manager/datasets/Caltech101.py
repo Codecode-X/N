@@ -1,7 +1,7 @@
 import os
 import random
 from .build import DATASET_REGISTRY
-from .DatasetClsBase import DatasetClsBase, Datum
+from .base_class.DatasetClsBase import DatasetClsBase, Datum
 from utils import listdir_nohidden
 
 

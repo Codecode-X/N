@@ -1,7 +1,7 @@
 import os
-from .build import DATASET_REGISTRY
+from ..build import DATASET_REGISTRY
 import pickle
-from utils import mkdir_if_missing
+from utils import mkdir_if_missing, set_random_seed
 
 @DATASET_REGISTRY.register()
 class DatasetBase:
@@ -60,6 +60,7 @@ class DatasetBase:
         # ---读取配置---
         self.num_shots = cfg.DATASET.NUM_SHOTS  # 获取少样本数量
         self.seed = cfg.SEED  # 获取随机种子
+        set_random_seed(self.seed)
         self.p_trn, self.p_val, self.p_tst = cfg.DATASET.SPLIT  # 获取训练、验证和测试集比例
         assert self.p_trn + self.p_val + self.p_tst == 1  # 断言训练、验证和测试集比例之和为 1
         self.dataset_dir = cfg.DATASET.DATASET_DIR  # 获取数据集目录，例如：/root/autodl-tmp/caltech-101
