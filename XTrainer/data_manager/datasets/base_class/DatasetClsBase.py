@@ -1,6 +1,6 @@
 import random
 from collections import defaultdict
-from .build import DATASET_REGISTRY
+from ..build import DATASET_REGISTRY
 from .DatasetBase import DatasetBase
 from utils import read_json, write_json
 import os

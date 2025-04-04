@@ -3,9 +3,7 @@ from collections import defaultdict
 from ..build import DATASET_REGISTRY
 from .DatasetBase import DatasetBase
 from utils import read_json, write_json
-import os
 from utils import check_isfile
-import pandas as pd
 
 @DATASET_REGISTRY.register()
 class DatasetMCQBase(DatasetBase):
