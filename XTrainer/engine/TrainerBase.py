@@ -107,8 +107,6 @@ class TrainerBase:
         self.val_loader = dm.val_loader  # 验证数据加载器 (可选，可以为 None
         self.test_loader = dm.test_loader # 测试数据加载器
 
-        self.num_classes = dm.num_classes # 类别数
-        self.lab2cname = dm.lab2cname  # 类别名称字典 {label: classname}
 
         # 构建并注册模型，优化器，学习率调度器；并初始化模型
         print("构建模型，优化器，学习率调度器...")
@@ -116,7 +114,7 @@ class TrainerBase:
 
         # 构建评估器
         print("构建评估器...")
-        self.evaluator = build_evaluator(cfg, lab2cname=self.lab2cname)  # 构建评估器
+        self.evaluator = build_evaluator(cfg, dm)  # 构建评估器
         
         
 

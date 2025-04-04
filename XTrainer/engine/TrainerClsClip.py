@@ -12,8 +12,8 @@ from lr_scheduler import build_lr_scheduler
 from .build import TRAINER_REGISTRY
 
 @TRAINER_REGISTRY.register()
-class TrainerClip(TrainerBase):
-
+class TrainerClsClip(TrainerBase):
+    """Clip 处理分类任务的 Trainer 类。"""
     def check_cfg(self, cfg): # 检查配置文件中的 PREC 字段是否为合法值
         """ (实现父类的方法) 检查配置文件中的 PREC 字段是否为合法值。"""
         assert cfg.TRAINER.PREC in ["fp16", "fp32", "amp"]
@@ -41,7 +41,7 @@ class TrainerClip(TrainerBase):
         7. 返回模型、优化器和调度器
         """
         # 构建模型
-        assert cfg.MODEL.NAME == "Clip", f"TrainerClip 只支持 Clip 模型，但 cfg.MODEL.NAME = {cfg.MODEL.NAME}"
+        assert cfg.MODEL.NAME == "Clip", f"TrainerClsClip 只支持 Clip 模型，但 cfg.MODEL.NAME = {cfg.MODEL.NAME}"
         self.clip_model = build_model(cfg) # 构建模型 (此处 CLIP 模型提供了预训练模型的载入)
         print("模型参数数量：", count_num_param(self.clip_model))
 

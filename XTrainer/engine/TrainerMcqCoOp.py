@@ -1,4 +1,4 @@
-from .TrainerCLIP import TrainerClip
+from .TrainerClsCoOp import TrainerClsCoOp
 from model import build_model
 from utils import count_num_param, load_checkpoint
 from torch.cuda.amp import GradScaler
@@ -14,12 +14,12 @@ import os.path as osp
 
 
 @TRAINER_REGISTRY.register()
-class TrainerCoOpCLIP(TrainerClip):
-
+class TrainerMcqCoOp(TrainerClsCoOp):
+    """CoOp 处理 MCQ 任务的 Trainer 类。"""
     def init_model(self, cfg):
         """
         (实现父类的方法) 初始化模型。
-        -> 只训练图像编码器示例
+        -> 只训练 Prompt生成器 示例
 
         参数：
             cfg (CfgNode): 配置。
@@ -39,7 +39,7 @@ class TrainerCoOpCLIP(TrainerClip):
         7. 返回模型、优化器和调度器
         """
         # 构建模型
-        assert cfg.MODEL.NAME == "CoOpClip", f"TrainerCoOpClip 只支持 CoOpClip 模型，但 cfg.MODEL.NAME = {cfg.MODEL.NAME}"
+        assert cfg.MODEL.NAME == "CoOp", f"TrainerClsCoOp 只支持 CoOp 模型，但 cfg.MODEL.NAME = {cfg.MODEL.NAME}"
         self.CoOp_model = build_model(cfg) # 构建模型 (此处 CLIP 模型提供了预训练模型的载入)
         print("模型参数数量：", count_num_param(self.CoOp_model))
 

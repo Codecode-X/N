@@ -23,7 +23,7 @@
 ### 基础配置
 | 配置项                        | 类型 | 示例          | 说明                                                         |
 | ----------------------------- | ---- | ------------- | ------------------------------------------------------------ |
-| **cfg.TRAINER.NAME**          | str  | "TrainerClip" | 训练器类名（如`TrainerClip`）                                |
+| **cfg.TRAINER.NAME**          | str  | "TrainerClsClip" | 训练器类名（如`TrainerClsClip`）                                |
 | **cfg.TRAINER.PREC**          | str  | "amp"         | 训练精度：<br>`fp32`-全精度，`fp16`-半精度，`amp`-自动混合精度（显存优化） |
 | **cfg.TRAINER.FROZEN** | bool | False         | 冻结基础网络层（仅训练分类头）                               |
 
@@ -154,7 +154,7 @@
 | **Clip** |                             |      |                 | 经典对比学习模型           |
 | ├─       | **cfg.MODEL.pretrained**    | str  | "ViT-B/16"      | Clip 的预训练模型名         |
 | └─       | **cfg.MODEL.download_root** | str  | "~/.cache/clip" | Clip 预训练权重下载保存目录 |
-| **CoOpClip** |  |  |  |  |
+| **CoOp** |  |  |  |  |
 | ├─ | **cfg.MODEL.pretrained** | str | "ViT-B/16" | Clip 的预训练模型名 |
 | ├─ | **cfg.MODEL.download_root** | str | "~/.cache/clip" | Clip 预训练权重下载保存目录 |
 | ├─ | **cfg.MODEL.init_ctx** | str | "a photo of a" | promp 中的初始上下文 |

@@ -20,12 +20,15 @@ class DataManager:
         - dataset_wrapper (DatasetWrapper): 数据集包装器。
 
     属性：
-        - num_classes (int): 类别数量。
-        - lab2cname (dict): 类别到名称的映射。
         - dataset (DatasetBase): 数据集。
         - train_loader (DataLoader): 训练数据加载器。
         - val_loader (DataLoader): 验证数据加载器。
         - test_loader (DataLoader): 测试数据加载器。 
+        
+        - CLS分类任务
+            - num_classes (int): 类别数量。
+            - lab2cname (dict): 类别到名称的映射。
+        
 
     方法：
         - show_dataset_summary: 打印数据集摘要信息。
@@ -98,10 +101,6 @@ class DataManager:
             is_train=False,  # 测试模式
             dataset_transform=dataset_transform # 数据集转换器，用于对数据集进行转换和增强
         )
-
-        # ---记录属性：类别数量、类别到名称的映射---
-        self._num_classes = dataset.num_classes  # 类别数量
-        self._lab2cname = dataset.lab2cname  # 类别到名称的映射
         
         # ---记录对象：数据集、训练数据加载器、验证数据加载器、测试数据加载器---
         self.dataset = dataset # 数据集
@@ -112,15 +111,6 @@ class DataManager:
         if cfg.VERBOSE:  # 如果配置中启用了详细信息打印
             self.show_dataset_summary(cfg)
 
-    @property
-    def num_classes(self):
-        """返回类别数量。"""
-        return self._num_classes
-
-    @property
-    def lab2cname(self):
-        """返回类别到名称的映射。"""
-        return self._lab2cname
 
     def show_dataset_summary(self, cfg):
         """打印数据集摘要信息。"""
@@ -129,8 +119,7 @@ class DataManager:
         # 构建摘要表格
         table = []
         table.append(["数据集", dataset_name])
-        table.append(["类别数量", f"{self.num_classes:,}"])
-        table.append(["有标签训练数据", f"{len(self.dataset.train):,}"])
+        table.append(["训练数据", f"{len(self.dataset.train):,}"])
         if self.dataset.val:
             table.append(["验证数据", f"{len(self.dataset.val):,}"])
         table.append(["测试数据", f"{len(self.dataset.test):,}"])

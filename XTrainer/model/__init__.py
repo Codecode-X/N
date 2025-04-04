@@ -6,4 +6,4 @@ from .SimpleModel import SimpleNet
 
 from .Clip import Clip
 
-from .CoOpClip import CoOpClip
+from .CoOp import CoOp

@@ -10,24 +10,25 @@ from .EvaluatorBase import EvaluatorBase
 class EvaluatorClassification(EvaluatorBase):
     """分类任务的评估器。"""
 
-    def __init__(self, cfg, lab2cname=None, **kwargs):
+    def __init__(self, cfg, dm):
         """ 初始化分类评估器。
         参数:
-            cfg (CfgNode): 配置。
-            lab2cname (dict): 标签到类名的映射。
+            - cfg (CfgNode): 配置。
+            - dm (Dataset): 数据集管理器。
         
         属性:
-            lab2cname (dict): 标签到类名的映射。
-            correct (int): 正确预测的数量。
-            total (int): 总数量。
-            y_true (list): 真实标签。
-            y_pred (list): 预测标签。
-            per_class (bool): 是否评估每个类别的结果。
-            per_class_res (dict): 每个类别的结果。
-            calc_cmat (bool): 是否计算混淆矩阵。
+            - lab2cname (dict): 标签到类名的映射。
+            - correct (int): 正确预测的数量。
+            - total (int): 总数量。
+            - y_true (list): 真实标签。
+            - y_pred (list): 预测标签。
+            - per_class (bool): 是否评估每个类别的结果。
+            - per_class_res (dict): 每个类别的结果。
+            - calc_cmat (bool): 是否计算混淆矩阵。
         """
-        super().__init__(cfg)
-        self.lab2cname = lab2cname # 标签到类名的映射
+        super().__init__(cfg, dm)
+        self.lab2cname = dm.lab2cname  # 标签到类名的映射 {label: classname}
+
         self.correct = 0 # 正确预测的数量
         self.total = 0 # 总数量
         

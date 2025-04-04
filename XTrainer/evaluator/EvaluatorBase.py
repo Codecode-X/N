@@ -12,8 +12,16 @@ class EvaluatorBase:
         - evaluate：计算评估结果并返回。
     """
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, dm):
+        """ 
+        初始化评估器。
+        
+        参数:
+            - cfg (CfgNode): 配置。
+            - dm (Dataset): 数据集管理器。
+        """
         self.cfg = cfg
+        self.dm = dm
 
     def reset(self):
         """重置评估器状态。"""
