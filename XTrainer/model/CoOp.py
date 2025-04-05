@@ -1,8 +1,11 @@
 from .Clip import Clip, tokenize
+from utils import SimpleTokenizer as Tokenizer
 from torch import nn
 import torch
 from .build import MODEL_REGISTRY
 from .ModelBase import ModelBase
+
+_tokenizer = Tokenizer() # 初始化分词器
 
 @MODEL_REGISTRY.register()
 class CoOp(ModelBase):
@@ -42,7 +45,6 @@ class CoOp(ModelBase):
 
         # 提示学习 - 通过训练器调用 init_promptLearner 初始化
         self.pptLearner = None  # 提示学习器
-        self.eot_indices = None  # 每个类别的 prompt 的结束符位置
 
     def init_promptLearner(self, pptLearner, cls_list:list, task_mode:str):
         """
@@ -56,45 +58,32 @@ class CoOp(ModelBase):
             - pptLearner (PromptLearner): 提示学习器对象
             - cls_list (list): 类别/选项文本列表 | [num_classes] | ['pagoda', 'panda', ..., 'stegosaurus', 'stop_sign']
             - task_mode (str): 任务模式，"CLS" 或 "MCQ"
-        
-        主要步骤：
-            1. 初始化一个 PromptLearner 对象 self.pptLearner，用于学习提示信息
-            2. 获取每个类别的 prompt 的结束符位置 eot_indices，保存至 self.eot_indices
         """
         print("正在初始化 PromptLearner...")
 
-        """获取通用可学习的上下文向量 ctx"""
         self.pptLearner = pptLearner  # 提示学习器对象
-        n_ctx = self.pptLearner.n_ctx  # 上下文词数量
-        ctx = self.pptLearner.ctx  # 获取通用可学习的上下文向量 ctx | shape: (n_ctx, dim)
 
-        """构造 每个类别的 prompt ([SOS] + 上下文向量 ctx(可学习) + 类别名 + 句号 + [EOS])"""
-        tokenized_prompts = []
-        eot_indices = []
+        suffixs = []  # 存储每个类别的后缀
+        eos_indices = []  # 存储每个类别的后缀中的EOS的索引
         for cls in cls_list:
-            prompt, eot_indice = self.pptLearner.construct_prompt(ctx, cls)
-            tokenized_prompts.append(tokenize(prompt))
-            eot_indices.append(eot_indice)
+            suffix, eos_indice = self.pptLearner.construct_suffix(cls) # suffix: Torch.tensor shape: (1, suffix_len, dim) ; eos_indice: int
+            suffixs.append(suffix)
+            eos_indices.append(eos_indice)
 
-        tokenized_prompts = torch.cat(tokenized_prompts, dim=0).to(self.device)  # 所有类别的 tokenized prompt | shape: (n_cls, context_len)
-        eot_indices = torch.tensor(eot_indices, dtype=torch.long, device=self.device)  # 每个类别的 prompt 的结束符位置 | shape: (n_cls,)
+        suffixs = torch.cat(suffixs, dim=0)  # 包含每个类别的suffix | Torch.tensor shape: (n_cls, suffix_len, dim)
+        eos_indices = torch.tensor(eos_indices, dtype=torch.long, device=self.device)  # 每个类别的 prompt 的结束符位置 | shape: (n_cls,)
 
-        with torch.no_grad():
-            ctx_embedding = self.token_embedding(tokenized_prompts).type(self.dtype)  # 得到 tokenized_prompts 的嵌入表示 | shape: (n_cls, context_len, dim)
-        
-        # 得到 pptLearner 的 token_prefix 和 token_suffix 
+        # 将 suffixs 和 eos_indices 赋值给 self.pptLearner
         if task_mode == "CLS":
             # 静态注册buffer（持久化保存），节省每次重复计算带来的开销
-            self.pptLearner.register_buffer("token_prefix", ctx_embedding[:, :1, :]) # [SOS] token | shape: (n_cls, 1, dim)
-            self.pptLearner.register_buffer("token_suffix", ctx_embedding[:, 1+n_ctx:, :]) # 类别名 + [EOS] token | shape: (n_cls, *, dim)
+            self.pptLearner.register_buffer("suffixs", suffixs) # ' ' + 类别名 + '.' + [EOS] + '...' | shape: (n_cls, suffix_len, dim)
+            return None
         elif task_mode == "MCQ":
             # 动态存储为实例属性（非持久化），每次前向传播时计算
-            self.pptLearner.token_prefix = ctx_embedding[:, :1, :].to(self.device) # [SOS] token | shape: (n_cls, 1, dim)
-            self.pptLearner.token_suffix = ctx_embedding[:, 1+n_ctx:, :].to(self.device) # 类别名 + [EOS] token | shape: (n_cls, *, dim)
+            self.pptLearner.suffixs = suffixs # ' ' + 类别名 + '.' + [EOS] + '...' | shape: (n_cls, suffix_len, dim)
         else:
             raise ValueError(f"未知任务模式: {task_mode}")
-
-        self.eot_indices = eot_indices  # 每个类别的 prompt 的结束符位置
+        
 
     def forward(self, image, return_feature=False):
         """ 
@@ -125,9 +114,9 @@ class CoOp(ModelBase):
         t = self.ln_final(t).type(self.dtype) # (n_ctx, batch_size, width) -> (batch_size, n_ctx, width)
         # 获取文本编码特征
         batch_indices = torch.arange(t.shape[0])
-        EOT = t[batch_indices, self.eot_indices]
+        EOS = t[batch_indices, self.eos_indices]
         # 线性投影得到文本特征
-        text_features = EOT @ self.text_projection
+        text_features = EOS @ self.text_projection
         # ---计算 图像 和 文本 间的 余弦相似度---
         logit_scale = self.logit_scale.exp() # 温度参数 τ 的倒数
         logits_per_image = logit_scale * image_features @ text_features.t() # image->text 相似度 | [batch, num_classes]
@@ -141,14 +130,14 @@ class CoOp(ModelBase):
 class PromptLearner(nn.Module):
     """ 
     提示学习器：用学习所有类别通用的上下文词ctx来生成每个类别的提示信息
-    
-    参数：
-        - cfg: 配置文件，包含模型的超参数和训练设置
-        - classnames: 类别名称列表，用于生成提示信息
-        - clip_model: 实例化的 CLIP 模型对象
 
-    配置：
-        - cfg.MODEL.init_ctx: 初始化的上下文词，例如 "a photo of a"
+    包含属性:
+        - init_ctx_text(str): 初始的上下文词文本
+        - n_ctx(int): 初始的上下文词文本的 words 数量
+        - prompt的组成 (prefixs + ctx + suffixs) :
+            - ctx: 可训练参数 上下文向量 ctx | torch.tensor | (n_ctx, dim)
+            - prefixs: prompt的前缀: [SOS] | torch.tensor | (n_cls, 1, dim)
+            - suffixs: prompt的后缀: " " + 类别名 + "." + [EOS] + '...'  | torch.tensor | (n_cls, *, dim)
     """
     def __init__(self, cfg, clip_model):
         """
@@ -159,77 +148,97 @@ class PromptLearner(nn.Module):
             - classnames: 类别名称列表，用于生成提示信息 | 如 ['pagoda', 'panda', ..., 'stegosaurus', 'stop_sign']
             - clip_model: 实例化的 CLIP 模型对象
         
-        主要步骤：
-        1. 读取参数和配置
-        2. 初始化上下文前缀词和嵌入向量 | 上下文前缀词为所有类别通用
-        3. 构造每个类别的完整的提示文本 -> [SOS] + 上下文向量 ctx(可学习) + 类别名 + 句号 + [EOS]
-        4. 注册需持久化保存的张量 token_prefix 和 token_suffix
-        5. 将上下文向量 learnable_ctx 设为可训练参数
-        6. 记录每一类的提示文本的结尾 EOT 索引位置 eot_indices
+        配置：
+        - cfg.MODEL.init_ctx: 初始化的上下文词，例如 "a photo of a"
+        
         """
         super().__init__()
-        # 读取参数
+        # 初始化参数
         dtype = clip_model.dtype  # CLIP 模型的数据类型
         clip_imsize = clip_model.image_encoder.input_resolution # CLIP 模型的输入图像尺寸
+        
         # 读取配置
-        ctx_init = cfg.MODEL.init_ctx  # 是否使用预设的上下文词 | 如 "a photo of a" | 所有类别通用的上下文词
+        self.init_ctx_text = cfg.MODEL.init_ctx  # 预设的上下文词 (str) | 如 "a photo of a" | 所有类别通用的上下文词
         cfg_imsize = cfg.INPUT.SIZE # 配置文件中设定的输入图像尺寸
         assert cfg_imsize == clip_imsize, f"cfg_imsize ({cfg_imsize}) 必须等于 clip_imsize ({clip_imsize})" # 确保输入尺寸匹配
-
-        """初始化 上下文前缀词 以及其 嵌入向量"""
-        ctx_init = ctx_init.replace("_", " ")  # 将下划线替换为空格
-        self.n_ctx = len(ctx_init.split(" "))  # 重新计算上下文词数量
-        tokenized_ctx = tokenize(ctx_init)  # 将文字形式的 ctx_init 分词编码为 token | shape: (1, context_len=77)
-        with torch.no_grad():
-            tokenized_ctx = tokenized_ctx.to(clip_model.device)
-            ctx_embedding = clip_model.token_embedding(tokenized_ctx).type(dtype)  # 获取嵌入表示 (1, context_len, embedding_dim)
-        ctx_vectors = ctx_embedding[0, 1:1+self.n_ctx, :]  # 提取上下文嵌入向量 | 1:1+n_ctx: 索引 0 位置对应 [SOS] | shape: (n_ctx, dim)
-        print(f'初始上下文向量："{ctx_init}"')
-        print(f"上下文 token 数为 (tokens): {self.n_ctx}")
         
-        # 将 所有类别通用的 上下文向量 ctx 设为 可训练参数
-        self.ctx = nn.Parameter(ctx_vectors) # shape: (n_ctx, dim)
+        # 将初始上下文词文本 init_ctx_text (str) 转为 可训练参数 上下文向量 ctx (Torch.tensor)
+        init_ctx_text = self.init_ctx_text.replace("_", " ")  # 将下划线替换为空格
+        self.n_ctx = len(init_ctx_text.split(" "))  # 上下文词包含的 words 数量 | 例如 "a photo of a" -> 4
+        init_ctx_token = _tokenizer.encode(init_ctx_text) # token 列表 | list<int>
+        init_ctx_token_tensor = torch.tensor(init_ctx_token, dtype=torch.long).unsqueeze(0).to(clip_model.device)  # shape: (1, n_ctx)
+        with torch.no_grad():
+            ctx_vectors = clip_model.token_embedding(init_ctx_token_tensor).type(dtype)  # shape: (1, n_ctx, dim)
+        ctx_vectors = ctx_vectors.squeeze(0)  # 去掉 batch 维度，变为 shape: (n_ctx, dim)
+        self.ctx = nn.Parameter(ctx_vectors) # (Torch.tensor) shape: (n_ctx, dim)
 
-        # 待初始化参数 | 需要用 init_promptLearner 初始化赋值
-        self.token_prefix = None  # [SOS] token | shape: (n_cls, 1, dim)
-        self.token_suffix = None  # 类别名 + [EOS] token | shape: (n_cls, *, dim)
+        # prompt 前缀 self.prefixs -> <SOS> 的 嵌入表示向量 sot_embedding (Torch.tensor)
+        sos_token = _tokenizer.encoder["<|startoftext|>"]  # token (int)
+        sos_tensor = torch.tensor([sos_token], dtype=torch.long).to(clip_model.device)  # shape: (1,)
+        with torch.no_grad():
+            SOS = clip_model.token_embedding(sos_tensor).type(dtype)  # (Torch.tensor) shape: (1, dim)
+        self.prefixs = SOS.unsqueeze(0).expand(self.n_cls, -1, -1)  # [SOS] | torch.tensor | shape: (n_cls, 1, dim)
+        self.register_buffer('prefixs', self.prefixs)  # 注册 prefixs 为缓冲区，表示固定的、不参与训练的张量，节省显存
+        
+        # prompt 后缀 suffixs | 待外部调用 construct_suffix 进行 赋值 或 register
+        self.suffixs = None  # 类别名 + [EOS] token | torch.tensor | shape: (n_cls, *, dim) 
 
-    def construct_prompt(self, ctx, cls):
+    def construct_suffix(self, cls):
         """
-        构造 prompt 文本 
-
-        构造的 prompt 文本格式为：[SOS] + 上下文 + 类别名 + 句号 + [EOS]
-        例如：ctx_init = "a photo of a" + " " + cls + "." + [EOS]，其中 [EOS] 是结束符
+        构造 prompt 中 关于cls类别的 后缀部分 suffix | Torch.tensor (*, dim)
+        - 完整的 prompt 组成为：[SOS] + 上下文ctx + " " + 类别名 + "." + [EOS] + '...'
+            - suffix 为 < " " + 类别名 + "." + [EOS] + '...' >
+                - '...' 为0填充，以保证 prompt 的 长度统一为 context_length (Clip默认为77)
         
         参数：
-            - ctx (str): 上下文文本，例如 "a photo of a"
             - cls (str): 类别名称，例如 "sleeping_dog"
 
         返回：
-            - prompt (str): 完整的 prompt 文本，例如 "a photo of a sleeping dog."
-            - eot_indice (int): 每个类别的 prompt 的结束符位置索引
+            - suffix (Torch.tensor): prompt 中 类别相关的 后缀部分 | Torch.tensor | shape: (1, *, dim)
+            - eos_indice (int): 每个类别的 prompt 的结束符 [EOS] 在 完整prompt 中的 位置索引 | int
         """
-        cls = cls.replace("_", " ")  # 处理类别/选项名称中的"_"
-        prompt = ctx + " " + cls + "." # 生成 prompt 文本（ctx_init + ' ' + 类别/choice + 句号）
-        tokenized_prompt = tokenize(prompt)  # 将文字形式的 prompt 分词编码为 token | shape: (1, context_len=77)
-        eot_indice = tokenized_prompt.argmax(dim=-1)  # 获取 tokenized_prompt 的 [EOS] token 的 索引 | shape: (1,)
-        return prompt, eot_indice
+        cls_text = " " + cls.replace("_", " ") + "."  # (str) 预处理类别名称，替换下划线为空格，并添加句号
+        
+        # 使用全局的_tokenizer进行分词
+        eos_token = _tokenizer.encoder["<|endoftext|>"]
+        cls_tokens = _tokenizer.encode(cls_text)
+        
+        # 计算目标长度
+        target_length = 77 - 1 - self.n_ctx  # 77 - SOT(1) - ctx长度(n_ctx)
+        max_cls_length = target_length - 1   # 为EOS保留一个位置
+        
+        # 截断类别名token以避免溢出
+        cls_tokens = cls_tokens[:max_cls_length]
+        
+        # 组合token并添加填充
+        tokens = cls_tokens + [eos_token]
+        pad_length = target_length - len(tokens)
+        tokens += [0] * pad_length  # 用0填充剩余位置
+        
+        # 转换为张量并移至对应设备
+        token_tensor = torch.tensor(tokens, dtype=torch.long).to(self.ctx.device)
+        
+        # 获取嵌入向量
+        with torch.no_grad():
+            embeddings = self.clip_model.token_embedding(token_tensor).type(self.ctx.dtype)
+        
+        # 计算EOS在prompt中的位置
+        eos_in_suffix = len(cls_tokens)
+        eos_indice = 1 + self.n_ctx + eos_in_suffix  # 1(SOT) + n_ctx(ctx长度) + 在suffix中的位置
+        
+        # 调整形状以匹配后续拼接
+        suffix = embeddings.unsqueeze(0)  # shape: (1, *, dim)
+
+        return suffix, eos_indice  # 所有类别的 suffix 构成 self.suffixs
 
     def forward(self):
-        learnable_ctx = self.ctx  # 取出可学习(通用)上下文向量 | shape: (n_ctx, dim)
-        learnable_ctxs = learnable_ctx.unsqueeze(0).expand(self.n_cls, -1, -1)  # 扩展维度 | shape: (n_cls, n_ctx, dim)
-
-        # 每个类别的 prompt 的 prefix 和 suffix
-        prefixs = self.token_prefix  # [SOS]
-        suffixs = self.token_suffix  # 包括 类别名 和 [EOS]
-        
-        # 类别名称放在结尾（论文实验显示"end"效果最好）
+        # 构造promt | 类别名称放在结尾（论文实验显示"end"效果最好）
         prompts = torch.cat(
             [
-                prefixs,  # (n_cls, 1, dim) [SOS] | shape: (n_cls, 1, dim)
-                learnable_ctxs,  # (n_cls, n_ctx, dim) 上下文 | shape: (n_cls, n_ctx, dim)
-                suffixs,  # (n_cls, *, dim) 包括 类别名+[EOS] | shape: (n_cls, *, dim)
+                self.prefixs,  # (n_cls, 1, dim) [SOS] | shape: (n_cls, 1, dim)
+                self.ctx.unsqueeze(0).expand(self.n_cls, -1, -1),  # (n_cls, n_ctx, dim) 上下文 | shape: (n_cls, n_ctx, dim)
+                self.suffixs,  # (n_cls, *, dim) 包括 类别名+[EOS] | shape: (n_cls, *, dim)
             ],
             dim=1,
         )
-        return prompts  # [SOS] + " " + 上下文 + 类别名 + "." + [EOS] | shape: (n_cls, *, dim)
+        return prompts  # [SOS] + 可学习上下文 + (" "+类别名+".") + [EOS] | Torch.tensor | shape: (n_cls, *, dim)

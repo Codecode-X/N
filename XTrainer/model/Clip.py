@@ -444,7 +444,11 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
     sot_token = _tokenizer.encoder["<|startoftext|>"]
     eot_token = _tokenizer.encoder["<|endoftext|>"]
     # 对每个文本进行编码，并添加起始和结束标记 | 文本 "Hello world" -> [sot_token, tokenized("Hello"), tokenized("world"), eot_token]
-    all_tokens = [[sot_token] + _tokenizer.encode(text) + [eot_token] for text in texts]
+    all_tokens = []
+    for text in texts:
+        text_token = _tokenizer.encode(text) # text的token列表
+        token = [sot_token] + text_token + [eot_token]  # 列表相加
+        all_tokens.append(token)
     
     # 创建一个形状为 (文本数量，context_length) 的张量，初始值为 0（填充用）
     if version.parse(torch.__version__) < version.parse("1.8.0"):
