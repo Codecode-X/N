@@ -1,4 +1,4 @@
-from .TrainerClsCoOp import TrainerClsCoOp
+from .base_class.TrainerMcqBase import TrainerMcqBase
 from model import build_model
 from utils import count_num_param, load_checkpoint
 from torch.cuda.amp import GradScaler
@@ -11,11 +11,14 @@ from optimizer import build_optimizer
 from lr_scheduler import build_lr_scheduler
 from .build import TRAINER_REGISTRY
 import os.path as osp
+from model.CoOp import PromptLearner
+import tqdm
 
 
 @TRAINER_REGISTRY.register()
-class TrainerMcqCoOp(TrainerClsCoOp):
+class TrainerMcqCoOp(TrainerMcqBase):
     """CoOp 处理 MCQ 任务的 Trainer 类。"""
+
     def init_model(self, cfg):
         """
         (实现父类的方法) 初始化模型。
@@ -24,10 +27,17 @@ class TrainerMcqCoOp(TrainerClsCoOp):
         参数：
             cfg (CfgNode): 配置。
 
+        类包含的属性：
+            - CoOp_model (nn.Module): CoOp 模型。
+            - pptLearner (PromptLearner): 提示学习器。
+            - scaler (GradScaler): 自动混合精度训练的缩放器。(可选)
+            - optim (Optimizer): 优化器。
+            - sched (LRScheduler): 学习率调度器。
+
         返回：
-            model (nn.Module): 模型。
-            optim (Optimizer): 优化器。
-            sched (LRScheduler): 学习率调度器。
+            - model (nn.Module): 模型。
+            - optim (Optimizer): 优化器。
+            - sched (LRScheduler): 学习率调度器。
 
         主要步骤：
         1. 构建模型
@@ -52,11 +62,9 @@ class TrainerMcqCoOp(TrainerClsCoOp):
         # 将模型移动到设备
         self.CoOp_model.to(self.device)
 
-        # 设置模型的文本标签，初始化提示学习器
-        sorted_labels = sorted(self.lab2cname.items(), key=lambda x: x[0]) # 将文本标签按照 label 从小到大排序，方便模型预测结果与 label 进行对齐
-        label_texts = [item[1] for item in sorted_labels]  # 文本标签 tensor | [num_classes]
-        print("从小到大排序后的数据集文本标签：", label_texts)
-        self.CoOp_model.init_promptLearner(label_texts) # 初始化提示学习器
+        # 初始化提示学习器，并注册到CoOp_model中，用于学习提示信息
+        self.task_type = cfg.TASK_TYPE # "CLS"分类；"MCQ"多选
+        self.pptLearner = PromptLearner(cfg, self.CoOp_model)
 
         # 将模型调整为精度混合训练，以减少显存占用 (如果配置了精度混合训练)
         self.scaler = GradScaler() if cfg.TRAINER.PREC == "amp" else None
@@ -85,29 +93,21 @@ class TrainerMcqCoOp(TrainerClsCoOp):
         """
         (实现父类的方法) 前向传播和反向传播。
         """
-        image, label = self.parse_batch_train(batch)  # 解析训练批次数据，获取图像和标签
-        assert image is not None and label is not None, "forward_backward() 中 parse_batch_train 解析到的图像和标签不能为空"
+        image, num_choices, choices, correct_answer, correct_answer_type = self.parse_batch_train(batch)  # 解析训练批次数据，获取图像和标签
+        assert image is not None and num_choices > 1, "forward_backward() 中 parse_batch_train 解析到的图像为空或者num_choices<=1"
 
-        prec = self.cfg.TRAINER.PREC  # 配置的精度
-        if prec == "amp":  # 自动混合精度训练
-            with autocast():
-                # Clip 需要传入 图像 和 文本 (初始化模型时已经加载了每个类别的文本特征)。
-                # 图像-image: [batch, 3, 224, 224]
-                output = self.CoOp_model(image) # 模型预测 -> output: [batch, num_classes]
-                loss = F.cross_entropy(output, label)
-            self.optim.zero_grad()
-            self.scaler.scale(loss).backward()
-            self.scaler.step(self.optim)
-            self.scaler.update()
-        else:  # 默认 fp16
-            output = self.CoOp_model(image) # 模型预测
-            loss = F.cross_entropy(output, label)  # 计算损失  
-            self.model_backward_and_update(loss)  # 反向传播
+        self.CoOp_model.init_promptLearner(cls_list=choices, task_mode=self.task_type) # 根据choices初始化提示学习器的文本prompt
+        label = torch.tensor(correct_answer, dtype=torch.long, device=self.device) # [batch] -> 正确答案索引
+        
+        # 图像-image: [batch, 3, 224, 224]
+        logits = self.CoOp_model(image) # [batch, num_classes] -> 模型预测的各个类别的置信度
+        loss = F.cross_entropy(logits, label)  # 计算损失  
+        self.model_backward_and_update(loss)  # 反向传播
 
         # 需要记录的 loss 日志
         loss_summary = {  
             "loss": loss.item(),
-            "acc": compute_accuracy(output, label)[0].item(),
+            "acc": compute_accuracy(logits, label)[0].item(),
         }
 
         # 到阶段自动更新学习率
@@ -115,7 +115,60 @@ class TrainerMcqCoOp(TrainerClsCoOp):
             self.update_lr()
 
         return loss_summary
+    
+    @torch.no_grad()
+    def test(self, split=None):
+        """
+        测试 (需要子基类根据任务特点重写)。 
 
+        主要步骤：
+            1. 设置模型模式为 eval，重置评估器。
+            2. 确定测试集（val or test，默认为测试集）。
+            3. 初始化统计计数器。
+            4. 开始测试。
+            5. 模型推理结果分析。
+                - 计算总体准确率。
+                - 计算每种类型的准确率。
+                - 找出最常见的错误答案类型。
+                - 计算每种错误答案类型的百分比。
+            6. 返回包含所有计算指标的字典。
+        """
+
+        # --------设置模型模式为 eval, 重置评估器--------
+        self.set_model_mode("eval")
+        self.evaluator.reset() # 重置评估器
+
+        # --------确定测试集（val or test，默认为测试集）--------
+        if split is None: # 如果 split 为 None，则使用配置中的测试集
+            split = self.cfg.TEST.SPLIT 
+        if split == "val" and self.val_loader is not None: 
+            data_loader = self.val_loader
+        else:
+            split = "test"
+            data_loader = self.test_loader
+        print(f"在 *{split}* 集上测试")
+
+        # --------开始测试--------
+        for batch_idx, batch in enumerate(tqdm(data_loader)): # 遍历数据加载器
+            image, num_choices, choices, correct_answer, correct_answer_type = self.parse_batch_train(batch)  # 解析训练批次数据，获取图像和标签
+            assert image is not None and num_choices > 1, "forward_backward() 中 parse_batch_train 解析到的图像为空或者num_choices<=1"
+            
+            self.CoOp_model.init_promptLearner(cls_list=choices, task_mode=self.task_type) # 根据choices初始化提示学习器的文本prompt            
+            # 图像-image: [batch, 3, 224, 224]
+            logits = self.CoOp_model(image) # [batch, num_classes] -> 模型预测的各个类别的置信度
+            
+            # 获取预测的答案索引，并进行评估
+            logits = torch.argmax(logits, dim=1)
+            labels = torch.tensor(correct_answer, dtype=torch.long, device=self.device) # [batch] -> 正确答案索引
+            self.evaluator.process(logits, labels, correct_answer, correct_answer_type) # 评估器评估模型输出和标签
+            
+        # --------模型推理结果分析--------
+        results = self.evaluator.evaluate() # 使用 evaluator 对结果进行评估，并将结果记录在 tensorboard
+        for k, v in results.items(): 
+            tag = f"{split}/{k}"
+            self.write_scalar(tag, v, self.epoch) # 记录到 tensorboard
+
+        return list(results.values())[0] # 返回第一个值：accuracy
 
     def load_model(self, directory, epoch=None):
         """
@@ -153,16 +206,14 @@ class TrainerMcqCoOp(TrainerClsCoOp):
             checkpoint = load_checkpoint(model_path) # 加载检查点
             state_dict = checkpoint["state_dict"] # 获取状态字典
             epoch = checkpoint["epoch"] # 获取 epoch
+            state_dict['prefixs'] = state_dict['token_prefix']
+            state_dict['suffixs'] = state_dict['token_suffix']
 
             try:
                 self._models[name].load_state_dict(state_dict) # 加载模型状态字典
             except RuntimeError as e:
                 if "size mismatch" in str(e):
-                    print(f"Warning: {e}. 预训练模型的num_classes和当前模型的num_classes不匹配，尝试裁剪预训练模型的token_prefix和token_suffix")
-                    # 裁剪 token_prefix 和 token_suffix
-                    state_dict["token_prefix"] = state_dict["token_prefix"][:self._models[name].token_prefix.shape[0]]  # 裁剪成 [1000, 1, 512]->[num_classes, 1, 512] 都是一样的前缀和后缀
-                    state_dict["token_suffix"] = state_dict["token_suffix"][:self._models[name].token_prefix.shape[0]]  # 裁剪成 [1000, 1, 512]->[num_classes, 72, 512]
-                    self._models[name].load_state_dict(state_dict) # 加载模型状态字典
+                    print(f"Warning: {e}. 预训练模型和当前模型的num_classes不匹配，请不要使用其他数据集的预训练权重！")
                 else:
                     raise e
         

@@ -212,13 +212,13 @@
 
 | 配置项                 | 类型 | 示例                      | 说明       |
 | ---------------------- | ---- | ------------------------- | ---------- |
-| **cfg.EVALUATOR.NAME** | str  | "EvaluatorClassification" | 评估器类名 |
+| **cfg.EVALUATOR.NAME** | str  | "EvaluatorCls" | 评估器类名 |
 
 ### 特定评估器配置
 
 | 优化器                  | 配置项                  | 类型 | 示例 | 说明                   |
 | ----------------------- | ----------------------- | ---- | ---- | ---------------------- |
-| EvaluatorClassification |                         |      |      | 分类任务评估器         |
+| EvaluatorCls |                         |      |      | 分类任务评估器         |
 | ├─                      | cfg.EVALUATOR.per_class | bool | True | 是否评估每个类别的结果 |
 | └─                      | cfg.EVALUATOR.calc_cmat | bool | True | 是否计算混淆矩阵       |
 

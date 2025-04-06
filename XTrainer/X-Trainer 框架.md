@@ -42,7 +42,7 @@ def __init__(self, cfg):
 dm = DataManager(self.cfg) # 通过配置创建数据管理器
 self.dm = dm  # 保存数据管理器
 
-self.train_loader_x = dm.train_loader_x # 有标签训练数据加载器
+self.train_loader = dm.train_loader # 有标签训练数据加载器
 self.train_loader_u = dm.train_loader_u  # 无标签训练数据加载器 (可选，可以为 None
 
 self.val_loader = dm.val_loader  # 验证数据加载器 (可选，可以为 None
@@ -107,7 +107,7 @@ self.evaluator = build_evaluator(cfg, lab2cname=self.lab2cname)
         * 设置模型为训练模式
         * 初始化度量器：损失度量器、批次时间度量器、数据加载时间度量器
         * 开始迭代
-            — 遍历有标签数据集 train_loader_x
+            — 遍历有标签数据集 train_loader
             — 前向和反向传播，获取损失
             — 打印日志 (epoch、batch、时间、数据加载时间、损失、学习率、剩余时间)
         """

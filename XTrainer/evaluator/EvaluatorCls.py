@@ -7,7 +7,7 @@ from .build import EVALUATOR_REGISTRY
 from .EvaluatorBase import EvaluatorBase
 
 @EVALUATOR_REGISTRY.register()
-class EvaluatorClassification(EvaluatorBase):
+class EvaluatorCls(EvaluatorBase):
     """分类任务的评估器。"""
 
     def __init__(self, cfg, dm):
@@ -38,7 +38,7 @@ class EvaluatorClassification(EvaluatorBase):
         self.per_class = cfg.EVALUATOR.per_class # 是否评估每个类别的结果
         self.per_class_res = None # 每个类别的结果
         if self.per_class: # 是否评估每个类别的结果
-            assert lab2cname is not None
+            assert self.lab2cname is not None
             self.per_class_res = defaultdict(list) # 用于记录每个类别的结果的字典
         
         self.calc_cmat = cfg.EVALUATOR.calc_cmat # 是否计算混淆矩阵

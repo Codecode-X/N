@@ -95,7 +95,7 @@ LR_SCHEDULER:
 
 # ===================== 评估器配置 (evaluator) =====================
 EVALUATOR:
-  NAME: "EvaluatorClassification"  # 评估器类型，适用于分类任务
+  NAME: "EvaluatorCls"  # 评估器类型，适用于分类任务
   per_class: True  # 是否评估每个类别的结果
   calc_cmat: True  # 是否计算混淆矩阵
 

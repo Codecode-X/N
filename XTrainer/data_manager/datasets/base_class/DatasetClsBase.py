@@ -279,11 +279,11 @@ class Datum:
         assert check_isfile(impath)
 
         # 初始化图像路径
-        self._impath = impath
+        self._impath = impath # str
         # 初始化类别标签
-        self._label = label
+        self._label = label # int
         # 初始化类别名称
-        self._classname = classname
+        self._classname = classname # str
 
     @property
     def impath(self):

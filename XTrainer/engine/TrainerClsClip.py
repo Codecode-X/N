@@ -1,4 +1,4 @@
-from .TrainerBase import TrainerBase
+from .base_class.TrainerClsBase import TrainerClsBase
 from model import build_model
 from utils import count_num_param
 from torch.cuda.amp import GradScaler
@@ -12,7 +12,7 @@ from lr_scheduler import build_lr_scheduler
 from .build import TRAINER_REGISTRY
 
 @TRAINER_REGISTRY.register()
-class TrainerClsClip(TrainerBase):
+class TrainerClsClip(TrainerClsBase):
     """Clip 处理分类任务的 Trainer 类。"""
     def check_cfg(self, cfg): # 检查配置文件中的 PREC 字段是否为合法值
         """ (实现父类的方法) 检查配置文件中的 PREC 字段是否为合法值。"""
@@ -27,9 +27,15 @@ class TrainerClsClip(TrainerBase):
             cfg (CfgNode): 配置。
 
         返回：
-            model (nn.Module): 模型。
-            optim (Optimizer): 优化器。
-            sched (LRScheduler): 学习率调度器。
+            - model (nn.Module): 模型。
+            - optim (Optimizer): 优化器。
+            - sched (LRScheduler): 学习率调度器。
+
+        类包含的属性：
+            - clip_model (nn.Module): Clip 模型。
+            - scaler (GradScaler): 自动混合精度训练的缩放器。(可选)
+            - optim (Optimizer): 优化器。
+            - sched (LRScheduler): 学习率调度器。
 
         主要步骤：
         1. 构建模型

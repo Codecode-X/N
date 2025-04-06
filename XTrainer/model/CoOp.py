@@ -4,6 +4,7 @@ from torch import nn
 import torch
 from .build import MODEL_REGISTRY
 from .ModelBase import ModelBase
+import warnings
 
 _tokenizer = Tokenizer() # 初始化分词器
 
@@ -44,9 +45,18 @@ class CoOp(ModelBase):
         self.cfg = cfg  # 配置文件
 
         # 提示学习 - 通过训练器调用 init_promptLearner 初始化
-        self.pptLearner = None  # 提示学习器
+        self._pptLearner = None  # 提示学习器
 
-    def init_promptLearner(self, pptLearner, cls_list:list, task_mode:str):
+    def register_promptLearner(self, pptLearner):
+        """
+        注册提示学习器
+        
+        参数：
+            pptLearner (PromptLearner): 提示学习器对象
+        """
+        self._pptLearner = pptLearner
+
+    def init_promptLearner(self, cls_list:list, task_mode:str, pptLearner=None):
         """
         初始化提示学习器
         
@@ -55,18 +65,24 @@ class CoOp(ModelBase):
             - MCQ任务：在每次前向传播前，动态生成每个样本的文本标签，初始化提示学习器
         
         参数：
-            - pptLearner (PromptLearner): 提示学习器对象
             - cls_list (list): 类别/选项文本列表 | [num_classes] | ['pagoda', 'panda', ..., 'stegosaurus', 'stop_sign']
             - task_mode (str): 任务模式，"CLS" 或 "MCQ"
+            - pptLearner (PromptLearner): 提示学习器对象
         """
         print("正在初始化 PromptLearner...")
-
-        self.pptLearner = pptLearner  # 提示学习器对象
-
+        if self._pptLearner is None:
+            if pptLearner is not None:
+                self.register_promptLearner(pptLearner) # 注册提示学习器
+            else:
+                raise ValueError("CoOp 的 提示学习器 pptLearner 为 None！")
+        else:
+            if pptLearner is not None:
+                warnings.warn("CoOp 的 提示学习器 pptLearner 已经存在，此处将忽略传入的 pptLearner 对象！")
+        
         suffixs = []  # 存储每个类别的后缀
         eos_indices = []  # 存储每个类别的后缀中的EOS的索引
         for cls in cls_list:
-            suffix, eos_indice = self.pptLearner.construct_suffix(cls) # suffix: Torch.tensor shape: (1, suffix_len, dim) ; eos_indice: int
+            suffix, eos_indice = self._pptLearner.construct_suffix(cls) # suffix: Torch.tensor shape: (1, suffix_len, dim) ; eos_indice: int
             suffixs.append(suffix)
             eos_indices.append(eos_indice)
 
@@ -76,11 +92,10 @@ class CoOp(ModelBase):
         # 将 suffixs 和 eos_indices 赋值给 self.pptLearner
         if task_mode == "CLS":
             # 静态注册buffer（持久化保存），节省每次重复计算带来的开销
-            self.pptLearner.register_buffer("suffixs", suffixs) # ' ' + 类别名 + '.' + [EOS] + '...' | shape: (n_cls, suffix_len, dim)
-            return None
+            self._pptLearner.register_buffer("suffixs", suffixs) # ' ' + 类别名 + '.' + [EOS] + '...' | shape: (n_cls, suffix_len, dim)
         elif task_mode == "MCQ":
             # 动态存储为实例属性（非持久化），每次前向传播时计算
-            self.pptLearner.suffixs = suffixs # ' ' + 类别名 + '.' + [EOS] + '...' | shape: (n_cls, suffix_len, dim)
+            self._pptLearner.suffixs = suffixs # ' ' + 类别名 + '.' + [EOS] + '...' | shape: (n_cls, suffix_len, dim)
         else:
             raise ValueError(f"未知任务模式: {task_mode}")
         
@@ -103,7 +118,7 @@ class CoOp(ModelBase):
         # ---编码图像特征---
         image_features = self.image_encoder(image.type(self.dtype))  
         # ---生成 prompt---
-        prompts = self.pptLearner() # 获取学习到的每个类别的 prompt
+        prompts = self._pptLearner() # 获取学习到的每个类别的 prompt
         # ---编码文本特征---
         # 可训练的 prompts + 可训练的位置嵌入
         t = prompts + self.positional_embedding.type(self.dtype)
@@ -153,6 +168,9 @@ class PromptLearner(nn.Module):
         
         """
         super().__init__()
+        # 将当前实例绑定到 CLIP 模型上
+        clip_model.register_promptLearner(self)  # 将当前实例绑定到 CLIP 模型上
+        
         # 初始化参数
         dtype = clip_model.dtype  # CLIP 模型的数据类型
         clip_imsize = clip_model.image_encoder.input_resolution # CLIP 模型的输入图像尺寸

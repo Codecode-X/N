@@ -26,9 +26,16 @@ class TrainerClsCoOp(TrainerClsClip):
             cfg (CfgNode): 配置。
 
         返回：
-            model (nn.Module): 模型。
+            CoOp_model (nn.Module): CoOp 模型。
             optim (Optimizer): 优化器。
             sched (LRScheduler): 学习率调度器。
+
+        类包含的属性：
+            - CoOp_model (nn.Module): CoOp 模型。
+            - pptLearner (PromptLearner): 提示学习器。
+            - scaler (GradScaler): 自动混合精度训练的缩放器。(可选)
+            - optim (Optimizer): 优化器。
+            - sched (LRScheduler): 学习率调度器。
 
         主要步骤：
         1. 构建模型
@@ -57,8 +64,8 @@ class TrainerClsCoOp(TrainerClsClip):
         sorted_labels = sorted(self.lab2cname.items(), key=lambda x: x[0]) # 将文本标签按照 label 从小到大排序，方便模型预测结果与 label 进行对齐
         label_texts = [item[1] for item in sorted_labels]  # 文本标签 tensor | [num_classes]
         print("从小到大排序后的数据集文本标签：", label_texts)
-        pptLearner = PromptLearner(cfg, self.CoOp_model)  # 初始化一个 PromptLearner 对象，用于学习提示信息
-        self.CoOp_model.init_promptLearner(pptLearner, label_texts, cfg.TASK_TYPE) # 初始化提示学习器
+        self.pptLearner = PromptLearner(cfg, self.CoOp_model)  # 初始化一个 PromptLearner 对象，并注册到CoOp_model中，用于学习提示信息
+        self.CoOp_model.init_promptLearner(cls_list=label_texts, task_mode=cfg.TASK_TYPE) # 初始化提示学习器
 
         # 将模型调整为精度混合训练，以减少显存占用 (如果配置了精度混合训练)
         self.scaler = GradScaler() if cfg.TRAINER.PREC == "amp" else None
@@ -70,9 +77,9 @@ class TrainerClsCoOp(TrainerClsClip):
             self.CoOp_model = nn.DataParallel(self.CoOp_model)
 
         # 构建 PromptLearner 并注册 -> 示例：优化器只优化 CLIP 的 PromptLearner
-        self.optim = build_optimizer(pptLearner, cfg)
+        self.optim = build_optimizer(self.pptLearner, cfg)
         self.sched = build_lr_scheduler(cfg, self.optim)
-        self.register_model("CLIP_promptLearner", pptLearner, self.optim, self.sched)
+        self.register_model("CLIP_promptLearner", self.pptLearner, self.optim, self.sched)
 
         # 给 promptLearner 载入 提示学习器 的预训练权重 (如果配置了 预训练权重) - 请仅使用相同数据集的预训练权重，否则没有意义
         if cfg.MODEL.INIT_WEIGHTS_PATH: 

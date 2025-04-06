@@ -17,7 +17,7 @@ from model import build_model
 from utils import (count_num_param, mkdir_if_missing, load_pretrained_weights)
 from evaluator import build_evaluator
 from utils import (MetricMeter, AverageMeter)
-from .build import TRAINER_REGISTRY
+from ..build import TRAINER_REGISTRY
 
 @TRAINER_REGISTRY.register()
 class TrainerBase:
@@ -55,10 +55,12 @@ class TrainerBase:
     * before_epoch: 每个 epoch 前的操作。 (未实现) 
     * after_epoch: 每个 epoch 后的操作。
     * run_epoch: 执行每个 epoch 的训练。
+    * model_inference: 模型推理。
+
+    -------需要子基类重写的方法（必选）-------
     * test: 测试方法。
     * parse_batch_train: 解析训练批次。
     * parse_batch_test: 解析测试批次。
-    * model_inference: 模型推理。
 
     -------需要子类重写的方法（必选）-------
     * init_model: 初始化模型，如冻结模型的某些层，加载预训练权重等。 (未实现 - 冻结模型某些层)
@@ -102,7 +104,7 @@ class TrainerBase:
         dm = DataManager(self.cfg) # 通过配置创建数据管理器
         self.dm = dm  # 保存数据管理器
 
-        self.train_loader_x = dm.train_loader # 有标签训练数据加载器
+        self.train_loader = dm.train_loader # 有标签训练数据加载器
         
         self.val_loader = dm.val_loader  # 验证数据加载器 (可选，可以为 None
         self.test_loader = dm.test_loader # 测试数据加载器
@@ -545,7 +547,7 @@ class TrainerBase:
         # 根据条件保存模型
         if need_eval:
             # 如果每个 epoch 后都验证，则进行验证，并保存验证性能最好的模型
-            curr_result = self.test(split="val")  # TODO：是否有输出验证结果
+            curr_result = self.test(split="val")
             assert curr_result is not None, "验证结果为 None"
             is_best = curr_result > self.best_result
             if is_best:
@@ -570,7 +572,7 @@ class TrainerBase:
         * 设置模型为训练模式
         * 初始化度量器：损失度量器、批次时间度量器、数据加载时间度量器
         * 开始迭代
-            — 遍历有标签数据集 train_loader_x
+            — 遍历有标签数据集 train_loader
             — 前向和反向传播，获取损失
             — 打印日志 (epoch、batch、时间、数据加载时间、损失、学习率、剩余时间)
         """
@@ -584,9 +586,9 @@ class TrainerBase:
         data_time = AverageMeter()  # 初始化数据加载时间度量器
 
         # 开始迭代
-        self.num_batches = len(self.train_loader_x)  # 获取有标签数据集的批次数
+        self.num_batches = len(self.train_loader)  # 获取有标签数据集的批次数
         end = time.time()
-        for self.batch_idx, batch in enumerate(self.train_loader_x): # 遍历有标签数据集 train_loader_x
+        for self.batch_idx, batch in enumerate(self.train_loader): # 遍历有标签数据集 train_loader
             data_time.update(time.time() - end)  # 更新数据加载时间度量器，记录一个批次的数据加载时间
             
             # 前向和反向传播，获取损失
@@ -620,86 +622,18 @@ class TrainerBase:
                 self.write_scalar("train/" + name, meter.avg, n_iter)  # 记录损失到 TensorBoard
             self.write_scalar("train/lr", self.get_current_lr(), n_iter)  # 记录学习率到 TensorBoard
             end = time.time()
-
-    @torch.no_grad()
-    def test(self, split=None):
-        """
-        测试。 (子类可重写)
-
-        主要包括：
-        * 设置模型模式为 eval, 重置评估器
-        * 确定测试集 (val or test, 默认为测试集)
-        * 开始测试
-            - 遍历数据加载器
-            - 解析测试批次，获取输入和标签 - self.parse_batch_test(batch)
-            - 模型推理 - self.model_inference(input)
-            - 评估器评估模型输出和标签 - self.evaluator.process(output, label)
-        * 使用 evaluator 对结果进行评估，并将结果记录在 tensorboard
-        * 返回结果 (此处为 accuracy)
-        """
         
-        self.set_model_mode("eval")
-        self.evaluator.reset() # 重置评估器
-
-        # 确定测试集（val or test，默认为测试集）
-        if split is None: # 如果 split 为 None，则使用配置中的测试集
-            split = self.cfg.TEST.SPLIT 
-        if split == "val" and self.val_loader is not None: 
-            data_loader = self.val_loader
-        else:
-            split = "test"
-            data_loader = self.test_loader
-        print(f"在 *{split}* 集上测试")
-
-        # 开始测试
-        for batch_idx, batch in enumerate(tqdm(data_loader)): # 遍历数据加载器
-            input, label = self.parse_batch_test(batch) # 解析测试批次，获取输入和标签
-            output = self.model_inference(input) # 模型推理
-            self.evaluator.process(output, label) # 评估器评估模型输出和标签
-
-        # 使用 evaluator 对结果进行评估，并将结果记录在 tensorboard
-        results = self.evaluator.evaluate() 
-        for k, v in results.items(): 
-            tag = f"{split}/{k}"
-            self.write_scalar(tag, v, self.epoch)
-
-        return list(results.values())[0] # 返回第一个值：accuracy
-
-    def parse_batch_train(self, batch):
-        """
-        解析训练批次。 (子类可重写)
-        此处直接从 batch 字典中获取输入图像、类别标签和域标签。
-        """
-        input = batch["img"]  # 获取图像
-        label = batch["label"]  # 获取标签
-
-        input = input.to(self.device)  # 将图像移动到设备
-        label = label.to(self.device)  # 将标签移动到设备
-
-        return input, label  # 返回图像、标签
-
-
-    def parse_batch_test(self, batch):
-        """
-        解析测试批次。 (子类可重写)   
-        此处直接从 batch 字典中获取输入和标签。
-        """
-        input = batch["img"]
-        label = batch["label"]
-        input = input.to(self.device)
-        label = label.to(self.device)
-        return input, label
     
     def model_inference(self, input):
         """
         模型推理。 (子类可重写)  
-        此处直接调用模型，返回模型输出。
+        返回解析得到的batch字典中的数据，例如分类问题的输入图像和类别标签。
         """
         return self.model(input) # 直接调用模型
     
     def init_model(self, cfg):
         """
-        初始化模型（子类需要重写，仅提供示例）。
+        初始化模型（需要子基类根据任务特点实现，此处仅提供示例）。
         主要包括：
         * 构建模型
         * 加载预训练权重
@@ -746,10 +680,50 @@ class TrainerBase:
         self.register_model(cfg.MODEL.NAME, self.model, self.optim, self.sched) # 注册模型
 
         return self.model, self.optim, self.sched
+    
+    def parse_batch_train(self, batch):
+        """
+        解析训练批次。 (需要子基类根据任务特点实现)
+        返回解析得到的batch字典中的数据，例如分类问题的输入图像和类别标签。
+        
+        参数：
+            - batch (dict): 批次数据字典，包含批次数据的输入和标签等信息。
+        """
+        raise NotImplementedError("parse_batch_train()方法未实现，需要子基类根据任务特点重写")
+
+
+    def parse_batch_test(self, batch):
+        """
+        解析测试批次。 (需要子基类根据任务特点实现)  
+        返回解析得到的batch字典中的数据，例如分类问题的输入图像和类别标签。
+        
+        参数：
+            - batch (dict): 批次数据字典，包含批次数据的输入和标签等信息。
+        """
+        raise NotImplementedError("parse_batch_test()方法未实现，需要子基类根据任务特点重写")
+    
+    @torch.no_grad()
+    def test(self, split=None):
+        """
+        测试。 (需要子基类根据任务特点重写)
+
+        主要包括：
+        * 设置模型模式为 eval, 重置评估器
+        * 确定测试集 (val or test, 默认为测试集)
+        * 开始测试
+            - 遍历数据加载器
+            - 解析测试批次，获取输入和GT
+            - 模型推理
+            - 评估器评估模型输出和GT
+        * 使用 evaluator 对结果进行评估，并将结果记录在 tensorboard
+        * 返回结果 (此处为 accuracy)
+        """
+        raise NotImplementedError("test()方法未实现，需要子基类根据任务特点重写")
+    
 
     def forward_backward(self, batch):
         """
-        前向传播和反向传播。 (需要子类实现)
+        前向传播和反向传播。 (需要子类根据任务特点实现)
         未实现
         """
-        raise NotImplementedError
+        raise NotImplementedError("forward_backward()方法未实现，需要子类根据模型特点重写")

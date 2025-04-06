@@ -196,6 +196,7 @@ class TransformeWrapper(TorchDataset):
         self.is_train = is_train  # 是否是训练模式
         # 获取相关配置信息
         self.cfg = cfg  # 配置
+        self.task_type = cfg.TASK_TYPE # "CLS"分类；"MCQ"多选
         self.k_tfm = cfg.DATALOADER.K_TRANSFORMS if is_train else 1 # 增强次数 | 如果是训练模式，获取数据增强次数；测试模式下默认为 1
         self.return_img0 = cfg.DATALOADER.RETURN_IMG0  # 是否记录未增强的原始图像 | 默认为 False
 
@@ -229,12 +230,22 @@ class TransformeWrapper(TorchDataset):
         item = self.data_source[idx]  # 获取数据项
 
         # 初始化输出字典
-        output = {
-            "label": item.label,  # 类别标签
-            "impath": item.impath,  # 图像路径
-            "index": idx,  # 索引
-        }
-
+        if self.task_type == 'CLS':
+            output = {
+                "index": idx,  # 索引
+                "impath": item.impath,  # 图像路径 | str
+                "label": item.label,  # 类别标签 | int
+            }
+        elif self.task_type == 'MCQ':
+            output = {
+                "index": idx,  # 索引 | int
+                "impath": item.impath,  # 图像路径 | str
+                "num_choices": item.num_choices,  # 选项数量 | int
+                "choices": item.choices,  # 选项 | list[str]
+                "correct_answer": item.correct_answer,  # 正确答案索引 | int
+                "correct_answer_type": item.correct_answer_type,  # 正确答案类型 | str
+            }
+        # 读取图像并转换为 tensor，存入输出字典 output
         img0 = read_image(item.impath)  # 原始图像
         # 如果提供了 transform, 则对图像进行增强；否则，返回无任何处理的原始图像
         if self.transform is not None:  
