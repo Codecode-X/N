@@ -8,9 +8,10 @@
 
 | 配置项             | 类型 | 示例值     | 说明                                       |
 | ------------------ | ---- | ---------- | ------------------------------------------ |
+| **cfg.TASK_TYPE**  | str  | "CLS"      | "CLS"分类；"MCQ"多选；"RETRIEVAL"检索      |
 | **cfg.VERBOSE**    | bool | True       | 启用详细日志输出（如训练进度、指标等）     |
 | **cfg.SEED**       | int  | 42         | 全局随机种子，确保实验可复现性             |
-| **cfg.USE_CUDA**   | bool | True       | 自动检测并使用可用 GPU 加速计算              |
+| **cfg.USE_CUDA**   | bool | True       | 自动检测并使用可用 GPU 加速计算            |
 | **cfg.OUTPUT_DIR** | str  | "./output" | 输出目录（存储日志/模型/评估结果）         |
 | **cfg.RESUME**     | str  | ""         | 断点续训路径（需包含`checkpoint.pth`文件） |
 
@@ -23,7 +24,7 @@
 ### 基础配置
 | 配置项                        | 类型 | 示例          | 说明                                                         |
 | ----------------------------- | ---- | ------------- | ------------------------------------------------------------ |
-| **cfg.TRAINER.NAME**          | str  | "TrainerClsClip" | 训练器类名（如`TrainerClsClip`）                                |
+| **cfg.TRAINER.NAME**          | str  | "TrainerClsClip" | 训练器类名（如`TrainerClip`）                                |
 | **cfg.TRAINER.PREC**          | str  | "amp"         | 训练精度：<br>`fp32`-全精度，`fp16`-半精度，`amp`-自动混合精度（显存优化） |
 | **cfg.TRAINER.FROZEN** | bool | False         | 冻结基础网络层（仅训练分类头）                               |
 
@@ -154,7 +155,7 @@
 | **Clip** |                             |      |                 | 经典对比学习模型           |
 | ├─       | **cfg.MODEL.pretrained**    | str  | "ViT-B/16"      | Clip 的预训练模型名         |
 | └─       | **cfg.MODEL.download_root** | str  | "~/.cache/clip" | Clip 预训练权重下载保存目录 |
-| **CoOp** |  |  |  |  |
+| **CoOpClip** |  |  |  |  |
 | ├─ | **cfg.MODEL.pretrained** | str | "ViT-B/16" | Clip 的预训练模型名 |
 | ├─ | **cfg.MODEL.download_root** | str | "~/.cache/clip" | Clip 预训练权重下载保存目录 |
 | ├─ | **cfg.MODEL.init_ctx** | str | "a photo of a" | promp 中的初始上下文 |
@@ -212,13 +213,13 @@
 
 | 配置项                 | 类型 | 示例                      | 说明       |
 | ---------------------- | ---- | ------------------------- | ---------- |
-| **cfg.EVALUATOR.NAME** | str  | "EvaluatorCls" | 评估器类名 |
+| **cfg.EVALUATOR.NAME** | str  | "EvaluatorClassification" | 评估器类名 |
 
 ### 特定评估器配置
 
 | 优化器                  | 配置项                  | 类型 | 示例 | 说明                   |
 | ----------------------- | ----------------------- | ---- | ---- | ---------------------- |
-| EvaluatorCls |                         |      |      | 分类任务评估器         |
+| EvaluatorClassification |                         |      |      | 分类任务评估器         |
 | ├─                      | cfg.EVALUATOR.per_class | bool | True | 是否评估每个类别的结果 |
 | └─                      | cfg.EVALUATOR.calc_cmat | bool | True | 是否计算混淆矩阵       |
 
