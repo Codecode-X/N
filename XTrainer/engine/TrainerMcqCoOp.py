@@ -94,92 +94,171 @@ class TrainerMcqCoOp(TrainerMcqBase):
         """
         image, num_choices, choices, correct_answer, correct_answer_type = self.parse_batch_train(batch)  # 解析训练批次数据，获取图像和标签
         choices = list(zip(*choices))  # 将 (num_choices=4, batchsize=n) 转换为 (batch_size=n, num_choices=4) 格式
-
-        # 逐batch计算损失并累积
-        total_loss = 0 
-        total_accuracy = 0
-        for idx in range(len(choices)):  # 遍历每个样本
-            # 对每个样本逐个初始化提示学习器
-            self.CoOp_model.init_promptLearner(cls_list=choices[idx], task_mode=self.task_type)  # 根据当前样本的choices初始化提示学习器的文本prompt
-            label = torch.tensor(correct_answer[idx], dtype=torch.long, device=self.device).unsqueeze(0)  # 获取当前样本的正确答案索引
-            # 图像-image: [batch, 3, 224, 224]
-            logits = self.CoOp_model(image[idx:idx+1])  # 逐个样本传入模型进行预测，注意切片方式保持batch维度 [1, 3, 224, 224]
-            # 计算当前样本的损失
-            loss = F.cross_entropy(logits, label)  # 计算损失  
-            # 累加损失、准确率
-            total_loss += loss
-            total_accuracy += compute_accuracy(logits, label)[0].item()
+        # ===============并行化==================
         
-        # 反向传播在整个 mini-batch 上完成
-        total_loss /= len(choices)  # 取平均损失
-        total_accuracy /= len(choices)  # 计算平均准确率
-        print(f"当前批次平均损失：{total_loss:.4f}，平均准确率：{total_accuracy:.4f}")
-        self.model_backward_and_update(total_loss)  # 对整个 mini-batch 进行反向传播
-
-        # 需要记录的 loss 日志
-        loss_summary = {  
-            "loss": loss.item(),
-            "acc": compute_accuracy(logits, label)[0].item(),
-        }
-
-        # 到阶段自动更新学习率
+        # 批量初始化提示学习器
+        self.CoOp_model.batch_init_prompt_learner(choices)
+        
+        # 准备标签
+        labels = torch.tensor(correct_answer, dtype=torch.long, device=self.device)
+        
+        # 批量前向计算
+        logits = self.CoOp_model(image)  # 输入整个batch [B, C, H, W]
+        
+        # 计算损失
+        loss = F.cross_entropy(logits, labels)
+        
+        # 反向传播
+        self.model_backward_and_update(loss)
+        
+        # 计算准确率
+        acc = compute_accuracy(logits, labels)[0].item()
+        
+        # 日志记录
+        loss_summary = {"loss": loss.item(), "acc": acc}
+        
+        # 学习率更新
         if (self.batch_idx + 1) == self.num_batches:
             self.update_lr()
-
+        
         return loss_summary
+
+
+        # ======================================
+        # # 逐batch计算损失并累积
+        # total_loss = 0 
+        # total_accuracy = 0
+        # for idx in range(len(choices)):  # 遍历每个样本
+        #     # 对每个样本逐个初始化提示学习器
+        #     self.CoOp_model.init_promptLearner(cls_list=choices[idx], task_mode=self.task_type)  # 根据当前样本的choices初始化提示学习器的文本prompt
+        #     label = torch.tensor(correct_answer[idx], dtype=torch.long, device=self.device).unsqueeze(0)  # 获取当前样本的正确答案索引
+        #     # 图像-image: [batch, 3, 224, 224]
+        #     logits = self.CoOp_model(image[idx:idx+1])  # 逐个样本传入模型进行预测，注意切片方式保持batch维度 [1, 3, 224, 224]
+        #     # 计算当前样本的损失
+        #     loss = F.cross_entropy(logits, label)  # 计算损失  
+        #     # 累加损失、准确率
+        #     total_loss += loss
+        #     total_accuracy += compute_accuracy(logits, label)[0].item()
+        
+        # # 反向传播在整个 mini-batch 上完成
+        # total_loss /= len(choices)  # 取平均损失
+        # total_accuracy /= len(choices)  # 计算平均准确率
+        # print(f"当前批次平均损失：{total_loss:.4f}，平均准确率：{total_accuracy:.4f}")
+        # self.model_backward_and_update(total_loss)  # 对整个 mini-batch 进行反向传播
+
+        # # 需要记录的 loss 日志
+        # loss_summary = {  
+        #     "loss": loss.item(),
+        #     "acc": compute_accuracy(logits, label)[0].item(),
+        # }
+
+        # # 到阶段自动更新学习率
+        # if (self.batch_idx + 1) == self.num_batches:
+        #     self.update_lr()
+
+        # return loss_summary
     
+    # ====================================================
+
     @torch.no_grad()
     def test(self, split=None):
         """
-        测试 (需要子基类根据任务特点重写)。 
-
-        主要步骤：
-            1. 设置模型模式为 eval，重置评估器。
-            2. 确定测试集（val or test，默认为测试集）。
-            3. 初始化统计计数器。
-            4. 开始测试。
-            5. 模型推理结果分析。
-                - 计算总体准确率。
-                - 计算每种类型的准确率。
-                - 找出最常见的错误答案类型。
-                - 计算每种错误答案类型的百分比。
-            6. 返回包含所有计算指标的字典。
+        适配批量处理的测试方法
+        
+        主要改进点：
+        1. 批量初始化提示学习器
+        2. 支持动态选项数量
+        3. 兼容不同批大小的维度处理
         """
-
-        # --------设置模型模式为 eval, 重置评估器--------
+        # --------初始化设置--------
         self.set_model_mode("eval")
-        self.evaluator.reset() # 重置评估器
-
-        # --------确定测试集（val or test，默认为测试集）--------
-        if split is None: # 如果 split 为 None，则使用配置中的测试集
-            split = self.cfg.TEST.SPLIT 
-        if split == "val" and self.val_loader is not None: 
-            data_loader = self.val_loader
-        else:
-            split = "test"
-            data_loader = self.test_loader
+        self.evaluator.reset()
+        
+        # --------确定测试集--------
+        split = split or self.cfg.TEST.SPLIT
+        data_loader = self.val_loader if split == "val" else self.test_loader
         print(f"在 *{split}* 集上测试")
 
-        # --------开始测试--------
-        for batch_idx, batch in enumerate(tqdm(data_loader)): # 遍历数据加载器
-            image, num_choices, choices, correct_answer, correct_answer_type = self.parse_batch_train(batch)  # 解析训练批次数据，获取图像和标签
+        # --------批量测试流程--------
+        for batch_idx, batch in enumerate(tqdm(data_loader)):
+            # 解析批次数据（适配新维度）
+            image, num_choices, choices, correct_answer, correct_answer_type = self.parse_batch_test(batch)
             
-            self.CoOp_model.init_promptLearner(cls_list=choices, task_mode=self.task_type) # 根据choices初始化提示学习器的文本prompt            
-            # 图像-image: [batch, 3, 224, 224]
-            logits = self.CoOp_model(image) # [batch, num_classes] -> 模型预测的各个类别的置信度
+            # 转换choices格式为 [batch_size, num_choices]
+            batch_choices = [list(per_sample) for per_sample in zip(*choices)] if isinstance(choices[0], (list, tuple)) else choices
             
-            # 获取预测的答案索引，并进行评估
-            logits = torch.argmax(logits, dim=1)
-            labels = torch.tensor(correct_answer, dtype=torch.long, device=self.device) # [batch] -> 正确答案索引
-            self.evaluator.process(logits, labels, correct_answer, correct_answer_type) # 评估器评估模型输出和标签
+            # 批量初始化提示学习器
+            self.CoOp_model.batch_init_prompt_learner(batch_choices)
             
-        # --------模型推理结果分析--------
-        results = self.evaluator.evaluate() # 使用 evaluator 对结果进行评估，并将结果记录在 tensorboard
-        for k, v in results.items(): 
-            tag = f"{split}/{k}"
-            self.write_scalar(tag, v, self.epoch) # 记录到 tensorboard
+            # 模型推理 [batch_size, num_choices]
+            logits = self.CoOp_model(image) # [batch_size, num_choices]=[100, 4]
+            
+            # 评估器处理（需支持批量统计）
+            self.evaluator.process(
+                logits=logits, # [batch_size]=[100]
+                correct_answer=correct_answer, # [batch_size]=[100]
+                correct_answer_type=correct_answer_type
+            )
 
-        return list(results.values())[0] # 返回第一个值：accuracy
+        # --------结果分析与记录--------
+        results = self.evaluator.evaluate()
+        for metric, value in results.items():
+            self.write_scalar(f"{split}/{metric}", value, self.epoch)
+        
+        return results["total_accuracy"]
+
+
+
+
+    # ====================================================
+
+    # @torch.no_grad()
+    # def test(self, split=None):
+    #     """
+    #     测试 (需要子基类根据任务特点重写)。 
+
+    #     主要步骤：
+    #         1. 设置模型模式为 eval，重置评估器。
+    #         2. 确定测试集（val or test，默认为测试集）。
+    #         3. 初始化统计计数器。
+    #         4. 开始测试。
+    #         5. 模型推理结果分析。
+    #             - 计算总体准确率。
+    #             - 计算每种类型的准确率。
+    #             - 找出最常见的错误答案类型。
+    #             - 计算每种错误答案类型的百分比。
+    #         6. 返回包含所有计算指标的字典。
+    #     """
+
+    #     # --------设置模型模式为 eval, 重置评估器--------
+    #     self.set_model_mode("eval")
+    #     self.evaluator.reset() # 重置评估器
+
+    #     # --------确定测试集（val or test，默认为测试集）--------
+    #     split = split or self.cfg.TEST.SPLIT
+    #     data_loader = self.val_loader if split == "val" else self.test_loader
+    #     print(f"在 *{split}* 集上测试")
+
+    #     # --------开始测试--------
+    #     for batch_idx, batch in enumerate(tqdm(data_loader)): # 遍历数据加载器
+    #         image, num_choices, choices, correct_answer, correct_answer_type = self.parse_batch_train(batch)  # 解析训练批次数据，获取图像和标签
+            
+    #         self.CoOp_model.init_promptLearner(cls_list=choices, task_mode=self.task_type) # 根据choices初始化提示学习器的文本prompt            
+    #         # 图像-image: [batch, 3, 224, 224]
+    #         logits = self.CoOp_model(image) # [batch, num_classes] -> 模型预测的各个类别的置信度
+            
+    #         # 获取预测的答案索引，并进行评估
+    #         logits = torch.argmax(logits, dim=1)
+    #         labels = torch.tensor(correct_answer, dtype=torch.long, device=self.device) # [batch] -> 正确答案索引
+    #         self.evaluator.process(logits, labels, correct_answer, correct_answer_type) # 评估器评估模型输出和标签
+            
+    #     # --------模型推理结果分析--------
+    #     results = self.evaluator.evaluate() # 使用 evaluator 对结果进行评估，并将结果记录在 tensorboard
+    #     for k, v in results.items(): 
+    #         tag = f"{split}/{k}"
+    #         self.write_scalar(tag, v, self.epoch) # 记录到 tensorboard
+
+    #     return list(results.values())[0] # 返回第一个值：accuracy
 
     def load_model(self, directory, epoch=None):
         """
@@ -217,8 +296,6 @@ class TrainerMcqCoOp(TrainerMcqBase):
             checkpoint = load_checkpoint(model_path) # 加载检查点
             state_dict = checkpoint["state_dict"] # 获取状态字典
             epoch = checkpoint["epoch"] # 获取 epoch
-            state_dict['prefixs'] = state_dict['token_prefix']
-            state_dict['suffixs'] = state_dict['token_suffix']
 
             try:
                 self._models[name].load_state_dict(state_dict) # 加载模型状态字典

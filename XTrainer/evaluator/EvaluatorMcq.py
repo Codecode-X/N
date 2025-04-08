@@ -1,3 +1,4 @@
+import torch
 from .build import EVALUATOR_REGISTRY
 from .EvaluatorBase import EvaluatorBase
 from collections import OrderedDict, defaultdict
@@ -34,6 +35,7 @@ class EvaluatorMcq(EvaluatorBase):
             raise ValueError(f"Invalid split: {split}. Must be 'val' or 'test'.")
 
         if "syn" in self.cfg.DATASET.NAME.lower(): # 根据是否为合成数据集，映射错误答案索引到答案类型
+            print("=> Evaluating on synthetic dataset")
             self.wrong_answer_to_type = {0: 'positive', 1: 'hybrid', 2: 'hybrid', 3: 'negative'}
         else:
             self.wrong_answer_to_type = {1: 'hybrid', 2: 'positive', 3: 'negative'}
@@ -70,29 +72,35 @@ class EvaluatorMcq(EvaluatorBase):
             'hybrid': {'positive': 0, 'negative': 0, 'hybrid': 0}
         }
 
-    def process(self, logits, labels, correct_answer, correct_answer_type):
+    def process(self, logits, correct_answer, correct_answer_type):
         """处理模型输出和真实标签。
         参数：
-            logits (torch.Tensor): 模型输出 [batch, num_classes]
-            labels (torch.LongTensor): 真实标签 [batch]
+            - logits (torch.Tensor): 模型输出 [batch, num_classes]
+            - labels (torch.LongTensor): 真实标签 [batch]
+            - correct_answer (torch.LongTensor): 正确答案索引 [batch]
+            - correct_answer_type (list<str>): 正确答案类型 (batch)
         """
         # 计算当前批次的正确预测数
-        correct_predictions = (logits == labels).sum().item()
+        preds = logits.argmax(dim=1).cpu().numpy() # [batch_size]=[100]
+        labels = torch.tensor(correct_answer, dtype=torch.long).cpu().numpy() # [batch_size]=[100]
+        correct_predictions = (preds == labels).sum().item()
+        
         # 累加正确答案计数
-        correct_answers_sum += correct_predictions
+        self.correct_answers_sum += correct_predictions
 
         # 更新每种答案类型的计数并跟踪预测
         batch_size = logits.size(0)
         for i in range(batch_size):
             answer_type = correct_answer_type[i]  # 当前问题的答案类型
             self.total_questions_by_type[answer_type] += 1
-            if logits[i] == correct_answer[i]:
+            
+            if preds[i] == correct_answer[i]: # 如果预测正确
                 self.correct_answers_by_type[answer_type] += 1
                 self.predictions_by_type[answer_type] += 1
-            else:
-                # 获取错误答案的类型
-                wrong_answer_type = self.wrong_answer_to_type[logits[i].item()]
-                self.wrong_answer_counts[logits[i].item()] += 1
+            else: # 如果预测错误
+                wrong_answer_idx = preds[i] # 获取错误答案的类型
+                wrong_answer_type = self.wrong_answer_to_type.get(wrong_answer_idx, "unknown_type")
+                self.wrong_answer_counts[wrong_answer_idx] += 1
                 self.predictions_by_type[wrong_answer_type] += 1
                 self.wrong_answers_by_question_type[answer_type][wrong_answer_type] += 1
     

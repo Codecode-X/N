@@ -154,7 +154,11 @@ class TrainerBase:
         if self._writer is None:
             pass # 如果 writer 未初始化，则不执行任何操作
         else:
-            self._writer.add_scalar(tag, scalar_value, global_step)  # 写入标量值
+            try:
+                scalar_value = float(scalar_value)
+                self._writer.add_scalar(tag, scalar_value, global_step)
+            except (ValueError, TypeError):
+                print(f"[Warning] Tried to log non-numeric scalar: {tag} = {scalar_value}")
     
 
     def register_model(self, name="model", model=None, optim=None, sched=None):

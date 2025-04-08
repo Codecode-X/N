@@ -21,7 +21,7 @@ TRAIN:
   NO_TEST: False  # 训练完成后跳过测试阶段
   CHECKPOINT_FREQ: 5  # 模型保存频率（单位：epoch）
   PRINT_FREQ: 5  # 训练日志打印间隔（单位：batch）
-  MAX_EPOCH: 10  # 最大训练轮次（单位：epoch）
+  MAX_EPOCH: 1  # 最大训练轮次（单位：epoch）
 
 # 测试流程
 TEST:
