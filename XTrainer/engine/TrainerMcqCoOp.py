@@ -12,7 +12,7 @@ from lr_scheduler import build_lr_scheduler
 from .build import TRAINER_REGISTRY
 import os.path as osp
 from model.CoOp import PromptLearner
-import tqdm
+from tqdm import tqdm
 
 
 @TRAINER_REGISTRY.register()
@@ -107,7 +107,7 @@ class TrainerMcqCoOp(TrainerMcqBase):
             # 计算当前样本的损失
             loss = F.cross_entropy(logits, label)  # 计算损失  
             # 累加损失、准确率
-            total_loss += loss.item()
+            total_loss += loss
             total_accuracy += compute_accuracy(logits, label)[0].item()
         
         # 反向传播在整个 mini-batch 上完成
@@ -163,7 +163,6 @@ class TrainerMcqCoOp(TrainerMcqBase):
         # --------开始测试--------
         for batch_idx, batch in enumerate(tqdm(data_loader)): # 遍历数据加载器
             image, num_choices, choices, correct_answer, correct_answer_type = self.parse_batch_train(batch)  # 解析训练批次数据，获取图像和标签
-            assert image is not None and num_choices > 1, "forward_backward() 中 parse_batch_train 解析到的图像为空或者num_choices<=1"
             
             self.CoOp_model.init_promptLearner(cls_list=choices, task_mode=self.task_type) # 根据choices初始化提示学习器的文本prompt            
             # 图像-image: [batch, 3, 224, 224]
