@@ -8,7 +8,6 @@ import numpy as np
 import datetime
 import torch
 import torch.nn as nn
-from tqdm import tqdm
 from data_manager import DataManager
 from torch.cuda.amp import GradScaler
 from optimizer import build_optimizer
@@ -343,7 +342,7 @@ class TrainerBase:
             * names: 需要设置的模型名称列表
         """
         names = self.get_model_names(names)  # 获取所有模型名称
-        
+        print(f"Set model mode to {mode} for {names}") # 打印设置的模式和模型名称
         # 遍历所有模型名称，设置模型模式
         for name in names:
             if mode == "train":

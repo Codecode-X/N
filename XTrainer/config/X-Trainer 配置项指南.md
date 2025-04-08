@@ -93,7 +93,7 @@
 
 | 配置项                    | 类型 | 示例                | 说明               |
 | ------------------------- | ---- | ------------------- | ------------------ |
-| **cfg.SAMPLER.TRAIN_SP ** | str  | "RandomSampler"     | 训练数据采样器类名 |
+| **cfg.SAMPLER.TRAIN_SP** | str  | "RandomSampler"     | 训练数据采样器类名 |
 | **cfg.SAMPLER.TEST_SP**   | str  | "SequentialSampler" | 测试数据采样器类名 |
 
 ----
@@ -219,9 +219,9 @@
 
 | 优化器                  | 配置项                  | 类型 | 示例 | 说明                   |
 | ----------------------- | ----------------------- | ---- | ---- | ---------------------- |
-| EvaluatorClassification |                         |      |      | 分类任务评估器         |
-| ├─                      | cfg.EVALUATOR.per_class | bool | True | 是否评估每个类别的结果 |
-| └─                      | cfg.EVALUATOR.calc_cmat | bool | True | 是否计算混淆矩阵       |
+| **EvaluatorClassification** |                         |      |      | 分类任务评估器         |
+| ├─                      | **cfg.EVALUATOR.per_class** | bool | True | 是否评估每个类别的结果 |
+| └─                      | **cfg.EVALUATOR.calc_cmat** | bool | True | 是否计算混淆矩阵       |
 
 ----
 

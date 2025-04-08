@@ -28,6 +28,8 @@ class DataManager:
         - CLS分类任务
             - num_classes (int): 类别数量。
             - lab2cname (dict): 类别到名称的映射。
+        - MCQ多选任务
+            - num_choices (int): 选项数量。
         
 
     方法：
@@ -54,6 +56,11 @@ class DataManager:
         """
         # ---构建数据集对象---
         dataset = build_dataset(cfg)
+        if cfg.TASK_TYPE == "CLS":  # 分类任务
+            self.num_classes = dataset.num_classes  # 类别数量
+            self.lab2cname = dataset.lab2cname  # 类别到名称的映射
+        elif cfg.TASK_TYPE == "MCQ":  # 多选任务
+            self.num_choices = dataset.num_choices  # 选项数量
 
         # ---构建数据增强---
         if custom_tfm_train is None: # 构建训练数据增强

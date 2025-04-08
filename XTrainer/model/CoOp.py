@@ -82,12 +82,11 @@ class CoOp(ModelBase):
         suffixs = []  # 存储每个类别的后缀
         eos_indices = []  # 存储每个类别的后缀中的EOS的索引
         for cls in cls_list:
-            suffix, eos_indice = self._pptLearner.construct_suffix(cls) # suffix: Torch.tensor shape: (1, suffix_len, dim) ; eos_indice: int
+            suffix, eos_indice = self._pptLearner.construct_suffix(cls, clip_model=self) # suffix: Torch.tensor shape: (1, suffix_len, dim) ; eos_indice: int
             suffixs.append(suffix)
             eos_indices.append(eos_indice)
-
         suffixs = torch.cat(suffixs, dim=0)  # 包含每个类别的suffix | Torch.tensor shape: (n_cls, suffix_len, dim)
-        eos_indices = torch.tensor(eos_indices, dtype=torch.long, device=self.device)  # 每个类别的 prompt 的结束符位置 | shape: (n_cls,)
+        self.eos_indices = torch.tensor(eos_indices, dtype=torch.long, device=self.device)  # 每个类别的 prompt 的结束符位置 | shape: (n_cls,)
 
         # 将 suffixs 和 eos_indices 赋值给 self.pptLearner
         if task_mode == "CLS":
@@ -154,7 +153,7 @@ class PromptLearner(nn.Module):
             - prefixs: prompt的前缀: [SOS] | torch.tensor | (n_cls, 1, dim)
             - suffixs: prompt的后缀: " " + 类别名 + "." + [EOS] + '...'  | torch.tensor | (n_cls, *, dim)
     """
-    def __init__(self, cfg, clip_model):
+    def __init__(self, cfg, clip_model, n_cls):
         """
         初始化提示学习器
 
@@ -162,6 +161,7 @@ class PromptLearner(nn.Module):
             - cfg: 配置文件，包含模型的超参数和训练设置
             - classnames: 类别名称列表，用于生成提示信息 | 如 ['pagoda', 'panda', ..., 'stegosaurus', 'stop_sign']
             - clip_model: 实例化的 CLIP 模型对象
+            - n_cls: 类别数量
         
         配置：
         - cfg.MODEL.init_ctx: 初始化的上下文词，例如 "a photo of a"
@@ -169,12 +169,15 @@ class PromptLearner(nn.Module):
         """
         super().__init__()
         # 将当前实例绑定到 CLIP 模型上
+        self.device = clip_model.device  # CLIP 模型的设备
+        self.dtype = clip_model.dtype  # CLIP 模型的数据类型
         clip_model.register_promptLearner(self)  # 将当前实例绑定到 CLIP 模型上
         
         # 初始化参数
         dtype = clip_model.dtype  # CLIP 模型的数据类型
         clip_imsize = clip_model.image_encoder.input_resolution # CLIP 模型的输入图像尺寸
-        
+        self.n_cls = n_cls  # 类别数量
+
         # 读取配置
         self.init_ctx_text = cfg.MODEL.init_ctx  # 预设的上下文词 (str) | 如 "a photo of a" | 所有类别通用的上下文词
         cfg_imsize = cfg.INPUT.SIZE # 配置文件中设定的输入图像尺寸
@@ -182,7 +185,7 @@ class PromptLearner(nn.Module):
         
         # 将初始上下文词文本 init_ctx_text (str) 转为 可训练参数 上下文向量 ctx (Torch.tensor)
         init_ctx_text = self.init_ctx_text.replace("_", " ")  # 将下划线替换为空格
-        self.n_ctx = len(init_ctx_text.split(" "))  # 上下文词包含的 words 数量 | 例如 "a photo of a" -> 4
+        self.n_ctx = len(init_ctx_text.split(" "))  # 上下文词包含的 token 数量 | 例如 "a photo of a" -> 4
         init_ctx_token = _tokenizer.encode(init_ctx_text) # token 列表 | list<int>
         init_ctx_token_tensor = torch.tensor(init_ctx_token, dtype=torch.long).unsqueeze(0).to(clip_model.device)  # shape: (1, n_ctx)
         with torch.no_grad():
@@ -195,14 +198,15 @@ class PromptLearner(nn.Module):
         sos_tensor = torch.tensor([sos_token], dtype=torch.long).to(clip_model.device)  # shape: (1,)
         with torch.no_grad():
             SOS = clip_model.token_embedding(sos_tensor).type(dtype)  # (Torch.tensor) shape: (1, dim)
-        self.prefixs = SOS.unsqueeze(0).expand(self.n_cls, -1, -1)  # [SOS] | torch.tensor | shape: (n_cls, 1, dim)
-        self.register_buffer('prefixs', self.prefixs)  # 注册 prefixs 为缓冲区，表示固定的、不参与训练的张量，节省显存
+        prefixs_buffer = SOS.unsqueeze(0).expand(self.n_cls, -1, -1)  # [SOS] | torch.tensor | shape: (n_cls, 1, dim)
+        self.register_buffer('prefixs', prefixs_buffer)  # 注册 prefixs 为缓冲区，表示固定的、不参与训练的张量，节省显存
         
         # prompt 后缀 suffixs | 待外部调用 construct_suffix 进行 赋值 或 register
-        self.suffixs = None  # 类别名 + [EOS] token | torch.tensor | shape: (n_cls, *, dim) 
+        # self.suffixs = None  # 类别名 + [EOS] token | torch.tensor | shape: (n_cls, *, dim) | 直接使用register_buffer 进行注册
 
-    def construct_suffix(self, cls):
+    def construct_suffix(self, cls, clip_model):
         """
+        (由外部调用)
         构造 prompt 中 关于cls类别的 后缀部分 suffix | Torch.tensor (*, dim)
         - 完整的 prompt 组成为：[SOS] + 上下文ctx + " " + 类别名 + "." + [EOS] + '...'
             - suffix 为 < " " + 类别名 + "." + [EOS] + '...' >
@@ -234,11 +238,11 @@ class PromptLearner(nn.Module):
         tokens += [0] * pad_length  # 用0填充剩余位置
         
         # 转换为张量并移至对应设备
-        token_tensor = torch.tensor(tokens, dtype=torch.long).to(self.ctx.device)
+        token_tensor = torch.tensor(tokens, dtype=torch.long).to(self.device)
         
         # 获取嵌入向量
         with torch.no_grad():
-            embeddings = self.clip_model.token_embedding(token_tensor).type(self.ctx.dtype)
+            embeddings = clip_model.token_embedding(token_tensor).type(self.dtype)
         
         # 计算EOS在prompt中的位置
         eos_in_suffix = len(cls_tokens)

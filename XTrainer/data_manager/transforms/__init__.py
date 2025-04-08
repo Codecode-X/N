@@ -1,6 +1,6 @@
 from .build import TRANSFORM_REGISTRY, build_train_transform, build_test_transform
 
-from .TransformBase import TransformBase
+from .base_class.TransformBase import TransformBase
 from .AutoAugment import ImageNetPolicy, CIFAR10Policy, SVHNPolicy, SubPolicy
 from .RandomAugment import RandomIntensityAugment, ProbabilisticAugment
 from .Cutout import Cutout

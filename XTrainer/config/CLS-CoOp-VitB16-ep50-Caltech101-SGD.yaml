@@ -7,12 +7,13 @@ SEED: 42  # 全局随机种子，确保实验可复现性
 USE_CUDA: True  # 自动检测并使用可用 GPU 加速计算
 OUTPUT_DIR: "./output"  # 输出目录（存储日志/模型/评估结果）
 RESUME: ""  # 断点续训路径（需包含`checkpoint.pth`文件）
+TASK_TYPE: "CLS"  # 任务类型：CLS（分类）、MCQ（多选题）
 
 # ===================== 训练引擎配置 (Engine) =====================
 TRAINER:
-  NAME: "TrainerClsClip"  # 训练器类名
-  PREC: "fp32"  # 训练精度：fp32、fp16、amp（自动混合精度）
-  FROZEN: True  # 冻结文本编码器
+  NAME: "TrainerClsCoOp"  # 训练器类名
+  PREC: "fp16"  # 训练精度：fp32、fp16、amp（自动混合精度）
+  FROZEN: False  # 冻结文本编码器
 
 # 训练流程
 TRAIN:
@@ -64,8 +65,7 @@ INPUT:
   AFTER_TOTENSOR_TRANSFORMS: []
 
   # 特定模型增强策略
-  StandardNoAugTransform: 
-    norm: True  # 是否标准化图像
+  StandardNoAugTransform: None # 标准无增强转换器
 
   # 是否在最后归一化图像
   NORMALIZE: True  # 是否归一化图像
@@ -74,11 +74,13 @@ INPUT:
 
 # ===================== 模型配置 (Model) =====================
 MODEL:
-  NAME: "Clip"  # 模型类名
+  NAME: "CoOp"  # 模型类名
+  # INIT_WEIGHTS_PATH: "/root/NP-CLIP/X-Trainer/output/pptlearner_imagenet_pretrained"  # prompt_learner 的imagenet预训练权重(可选) - 请仅使用相同数据集的预训练权重，否则没有意义
   
   # 特定 Clip 模型配置
   pretrained: "ViT-B/16"  # 预训练模型名称（如 ViT-B/16）
   download_root: "~/.cache/clip"  # 预训练模型下载目录
+  init_ctx: "a photo of a" # 上下文提示词（用于 CoOp）
 
 # ===================== 学习率策略配置 (LR) =====================
 
@@ -88,10 +90,10 @@ LR_SCHEDULER:
 
   # 学习率预热器
   WARMUP:
-    NAME: "LinearWarmupScheduler" # 预热器类名
+    NAME: "ConstantWarmupScheduler" # 预热器类名
     WARMUP_RECOUNT: True # 是否在预热结束后重置周期
-    EPOCHS: 5 # 预热轮数
-    MIN_LR: 1e-6  # 最小学习率
+    EPOCHS: 1 # 预热轮数
+    CONS_LR: 1e-5 # 常熟学习率
 
 
 # ===================== 评估器配置 (evaluator) =====================
@@ -104,25 +106,14 @@ EVALUATOR:
 
 # ===================== 优化器配置 (Optimizer) =====================
 OPTIMIZER:
-  NAME: "AdamW"  # 优化器类名
-  LR: 1e-4  # 学习率
+  NAME: "SGD"  # 优化器类名
+  LR: 0.002  # 学习率
 
-  # 特定于 Adam 优化器的参数
-  betas: [0.9, 0.999]  # Adam 优化器的 beta 参数
-  weight_decay: 0.01  # 权重衰减（L2 正则化）
-  eps: 1e-8  # Adam 优化器的 epsilon 参数
-  amsgrad: False  # 是否使用 AMSGrad 变体
-  warmup_steps: 0  # 学习率预热步数
-
-# OPTIMIZER:
-#   NAME: "SGD"  # 优化器类名
-#   LR: 0.002  # 学习率
-
-#   # 特定于 SGD 优化器的参数
-#   momentum: 0.9  # 动量
-#   weight_decay: 0.0005  # 权重衰减（L2 正则化）
-#   dampening: 0.0  # 阻尼
-#   nesterov: False  # 是否使用 Nesterov 动量
+  # 特定于 SGD 优化器的参数
+  momentum: 0.9  # 动量
+  weight_decay: 0.0005  # 权重衰减（L2 正则化）
+  dampening: 0.0  # 阻尼
+  nesterov: False  # 是否使用 Nesterov 动量
 
 
 # ===================== 使用说明 ========================

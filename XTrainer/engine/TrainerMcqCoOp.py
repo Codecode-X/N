@@ -64,7 +64,7 @@ class TrainerMcqCoOp(TrainerMcqBase):
 
         # 初始化提示学习器，并注册到CoOp_model中，用于学习提示信息
         self.task_type = cfg.TASK_TYPE # "CLS"分类；"MCQ"多选
-        self.pptLearner = PromptLearner(cfg, self.CoOp_model)
+        self.pptLearner = PromptLearner(cfg, self.CoOp_model, self.task_type, n_cls=cfg.DATASET.NUM_CHOICES) # 提示学习器
 
         # 将模型调整为精度混合训练，以减少显存占用 (如果配置了精度混合训练)
         self.scaler = GradScaler() if cfg.TRAINER.PREC == "amp" else None

@@ -1,7 +1,7 @@
 from ..build import TRAINER_REGISTRY
 from .TrainerBase import TrainerBase
 import torch
-import tqdm
+from tqdm import tqdm
 
 @TRAINER_REGISTRY.register()
 class TrainerClsBase(TrainerBase):

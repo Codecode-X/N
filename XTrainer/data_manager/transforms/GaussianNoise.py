@@ -1,5 +1,5 @@
 from data_manager.transforms import TRANSFORM_REGISTRY
-from .TransformBase import TransformBase
+from .base_class.TransformBase import TransformBase
 import random
 import torch
 
