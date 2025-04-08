@@ -1,6 +1,7 @@
 from .Clip import Clip, tokenize
 from utils import SimpleTokenizer as Tokenizer
 from torch import nn
+import torch.nn.functional as F
 import torch
 from .build import MODEL_REGISTRY
 from .ModelBase import ModelBase
@@ -69,7 +70,6 @@ class CoOp(ModelBase):
             - task_mode (str): 任务模式，"CLS" 或 "MCQ"
             - pptLearner (PromptLearner): 提示学习器对象
         """
-        print("正在初始化 PromptLearner...")
         if self._pptLearner is None:
             if pptLearner is not None:
                 self.register_promptLearner(pptLearner) # 注册提示学习器
@@ -97,7 +97,15 @@ class CoOp(ModelBase):
             self._pptLearner.suffixs = suffixs # ' ' + 类别名 + '.' + [EOS] + '...' | shape: (n_cls, suffix_len, dim)
         else:
             raise ValueError(f"未知任务模式: {task_mode}")
-        
+
+    @property
+    def pptLearner(self):
+        """
+        提示学习器属性
+        """
+        if self._pptLearner is None:
+            raise ValueError("CoOp 的 提示学习器 pptLearner 为 None！")
+        return self._pptLearner    
 
     def forward(self, image, return_feature=False):
         """ 
@@ -115,7 +123,7 @@ class CoOp(ModelBase):
             5. 返回与图像最相似的文本提示词对应的类别作为结果
         """
         # ---编码图像特征---
-        image_features = self.image_encoder(image.type(self.dtype))  
+        image_features = self.image_encoder(image.type(self.dtype)) 
         # ---生成 prompt---
         prompts = self._pptLearner() # 获取学习到的每个类别的 prompt
         # ---编码文本特征---
@@ -131,6 +139,10 @@ class CoOp(ModelBase):
         EOS = t[batch_indices, self.eos_indices]
         # 线性投影得到文本特征
         text_features = EOS @ self.text_projection
+        # 归一化图像和文本特征 | dim=-1 表示在特征维度上进行归一化 p=2 表示使用 L2 范数进行归一化
+        # print(f"图像特征：{image_features.shape}，文本特征：{text_features.shape}") # 图像特征：torch.Size([32, 512])，文本特征：torch.Size([100, 512])
+        image_features = F.normalize(image_features, p=2, dim=-1)
+        text_features = F.normalize(text_features, p=2, dim=-1)
         # ---计算 图像 和 文本 间的 余弦相似度---
         logit_scale = self.logit_scale.exp() # 温度参数 τ 的倒数
         logits_per_image = logit_scale * image_features @ text_features.t() # image->text 相似度 | [batch, num_classes]
@@ -209,7 +221,7 @@ class PromptLearner(nn.Module):
         (由外部调用)
         构造 prompt 中 关于cls类别的 后缀部分 suffix | Torch.tensor (*, dim)
         - 完整的 prompt 组成为：[SOS] + 上下文ctx + " " + 类别名 + "." + [EOS] + '...'
-            - suffix 为 < " " + 类别名 + "." + [EOS] + '...' >
+            - suffix 为 < 类别名 + [EOS] + '...' >
                 - '...' 为0填充，以保证 prompt 的 长度统一为 context_length (Clip默认为77)
         
         参数：
@@ -219,8 +231,7 @@ class PromptLearner(nn.Module):
             - suffix (Torch.tensor): prompt 中 类别相关的 后缀部分 | Torch.tensor | shape: (1, *, dim)
             - eos_indice (int): 每个类别的 prompt 的结束符 [EOS] 在 完整prompt 中的 位置索引 | int
         """
-        cls_text = " " + cls.replace("_", " ") + "."  # (str) 预处理类别名称，替换下划线为空格，并添加句号
-        
+        cls_text = cls.replace("_", " ")  # (str) 预处理类别名称，替换下划线为空格，并添加句号
         # 使用全局的_tokenizer进行分词
         eos_token = _tokenizer.encoder["<|endoftext|>"]
         cls_tokens = _tokenizer.encode(cls_text)

@@ -6,7 +6,7 @@ from utils import read_json, write_json
 from utils import check_isfile
 
 @DATASET_REGISTRY.register()
-class DatasetMCQBase(DatasetBase):
+class DatasetMcqBase(DatasetBase):
     """
     MCQ数据集类的基类。
     继承自 DatasetBase 类。

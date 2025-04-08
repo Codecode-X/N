@@ -1,9 +1,9 @@
 from .build import DATASET_REGISTRY
-from .base_class.DatasetMCQBase import DatasetMCQBase, MCQDatum
+from .base_class.DatasetMcqBase import DatasetMcqBase, MCQDatum
 import pandas as pd
 
 @DATASET_REGISTRY.register()
-class CocoMCQ(DatasetMCQBase):
+class CocoMcq(DatasetMcqBase):
     """
     CocoMCQ 数据集类。
     继承自 DatasetMCQBase 类。
@@ -26,7 +26,6 @@ class CocoMCQ(DatasetMCQBase):
                 - p_tst (float): 测试集比例。
                 - dataset_dir (str): 数据集目录。
             - csv_file (str): cfg.DATASET.CSV_FILE: 标注文件路径 | 例如：/root/autodl-tmp/NegBench/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv
-            - image_dir (str): cfg.DATASET.IMAGE_DIR: 图像目录。 例如：/root/autodl-tmp/coco/images
             - num_choices (int): cfg.DATASET.NUM_CHOICES: 答案选项数量。 例如：4
         - 当前读取：None
 

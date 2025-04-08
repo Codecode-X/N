@@ -65,7 +65,7 @@ class TrainerClsCoOp(TrainerClsClip):
         label_texts = [item[1] for item in sorted_labels]  # 文本标签 tensor | [num_classes]
         print("从小到大排序后的数据集文本标签：", label_texts)
         self.pptLearner = PromptLearner(cfg, self.CoOp_model, n_cls=len(label_texts))  # 初始化一个 PromptLearner 对象，并注册到CoOp_model中，用于学习提示信息
-        self.CoOp_model.init_promptLearner(cls_list=label_texts, task_mode=cfg.TASK_TYPE) # 初始化提示学习器
+        self.CoOp_model.init_promptLearner(cls_list=label_texts, task_mode=self.task_type) # 初始化提示学习器
 
         # 将模型调整为精度混合训练，以减少显存占用 (如果配置了精度混合训练)
         self.scaler = GradScaler() if cfg.TRAINER.PREC == "amp" else None

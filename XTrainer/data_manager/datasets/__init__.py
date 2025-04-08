@@ -5,7 +5,7 @@ from .build import DATASET_REGISTRY, build_dataset
 from .Caltech101 import Caltech101 
 
 # -------MCQ数据集-------
-from .CocoMCQ import CocoMCQ
+from .CocoMcq import CocoMcq
 
 # -------Retrieval数据集-------
 from .CocoRetrieval import CocoRetrieval

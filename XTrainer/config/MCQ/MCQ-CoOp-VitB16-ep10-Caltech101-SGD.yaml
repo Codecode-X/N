@@ -7,13 +7,13 @@ SEED: 42  # 全局随机种子，确保实验可复现性
 USE_CUDA: True  # 自动检测并使用可用 GPU 加速计算
 OUTPUT_DIR: "./output"  # 输出目录（存储日志/模型/评估结果）
 RESUME: ""  # 断点续训路径（需包含`checkpoint.pth`文件）
-TASK_TYPE: "CLS"  # 任务类型：CLS（分类）、MCQ（多选题）
+TASK_TYPE: "MCQ"  # 任务类型：CLS（分类）、MCQ（多选题）
 
 # ===================== 训练引擎配置 (Engine) =====================
 TRAINER:
-  NAME: "TrainerClsCoOp"  # 训练器类名
+  NAME: "TrainerMcqCoOp"  # 训练器类名
   PREC: "fp16"  # 训练精度：fp32、fp16、amp（自动混合精度）
-  FROZEN: False  # 冻结文本编码器
+  FROZEN: True  # 冻结clip编码器
 
 # 训练流程
 TRAIN:
@@ -21,7 +21,7 @@ TRAIN:
   NO_TEST: False  # 训练完成后跳过测试阶段
   CHECKPOINT_FREQ: 5  # 模型保存频率（单位：epoch）
   PRINT_FREQ: 5  # 训练日志打印间隔（单位：batch）
-  MAX_EPOCH: 50  # 最大训练轮次（单位：epoch）
+  MAX_EPOCH: 10  # 最大训练轮次（单位：epoch）
 
 # 测试流程
 TEST:
@@ -31,17 +31,19 @@ TEST:
 # ===================== 数据管理配置 (Data) ===================== 
 # 数据集
 DATASET:
-  NAME: "Caltech101"  # 数据集类名
-  DATASET_DIR: "/root/autodl-tmp/caltech-101"  # 数据集根目录
+  NAME: "CocoMcq"  # 数据集类名
+  DATASET_DIR: "/root/NP-CLIP/NegBench/data/images/MCQ"  # 数据集根目录
   SPLIT: [0.7, 0.1, 0.2]  # 训练/验证/测试集划分比例
   NUM_SHOTS: -1  # 每类样本数：-1=全量，0=零样本，≥1=小样本学习
-  IMAGE_DIR: "/root/autodl-tmp/caltech-101/101_ObjectCategories"  # 图像目录 - 分类数据集基础配置
+
+  CSV_FILE: "/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv" # 多选题数据集的 CSV 文件路径
+  NUM_CHOICES: 4 # 多选题选项数（如 4 表示 A/B/C/D 四个选项）
 
 # 数据加载
 DATALOADER:
   BATCH_SIZE_TRAIN: 32  # 训练批大小
   BATCH_SIZE_TEST: 100  # 测试批大小
-  NUM_WORKERS: 4  # 数据加载并行进程数（建议=CPU 核心数）
+  NUM_WORKERS: 1  # 数据加载并行进程数（建议=CPU 核心数）
   K_TRANSFORMS: 1  # 每种增强在原始图像上（横向）重复应用次数
   RETURN_IMG0: False  # 是否返回原始未增强图像（用于可视化或对比学习）
 
@@ -98,7 +100,7 @@ LR_SCHEDULER:
 
 # ===================== 评估器配置 (evaluator) =====================
 EVALUATOR:
-  NAME: "EvaluatorCls"  # 评估器类型，适用于分类任务
+  NAME: "EvaluatorMcq"  # 评估器类型，适用于MCQ
   per_class: True  # 是否评估每个类别的结果
   calc_cmat: True  # 是否计算混淆矩阵
 
@@ -117,4 +119,4 @@ OPTIMIZER:
 
 
 # ===================== 使用说明 ========================
-# 完整配置文档参考：https://github.com/Codecode-X/X-Trainer/wiki
+# 完整配置文档参考：https://github.com/Codecode-X/X-Trainer/X-Trainer 配置项指南.md

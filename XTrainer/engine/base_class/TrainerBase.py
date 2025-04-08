@@ -89,6 +89,7 @@ class TrainerBase:
         self.best_result = -np.inf  # 初始化最佳结果
         self.start_epoch = self.epoch = 0
         # 读取配置信息
+        self.task_type = cfg.TASK_TYPE # "CLS"分类；"MCQ"多选
         self.max_epoch = cfg.TRAIN.MAX_EPOCH
         self.output_dir = cfg.OUTPUT_DIR  # 输出目录
         self.cfg = cfg
@@ -370,6 +371,10 @@ class TrainerBase:
             2. 反向传播 (检查 loss 是否为有限值，如果不是有限值，抛出异常)
             3. 更新模型参数 (调用优化器的 step() 方法)
         """
+        # 检查输入合法性，如果 loss 不是 Tensor，则转为 Tensor
+        if not isinstance(loss, torch.Tensor):
+            loss = torch.tensor(loss, dtype=torch.float32, device=self.device)
+
         # ------清零梯度------
         names = self.get_model_names(names)  # 获取所有模型名称
         for name in names:

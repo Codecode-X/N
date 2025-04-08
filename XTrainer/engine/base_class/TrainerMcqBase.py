@@ -58,6 +58,13 @@ class TrainerMcqBase(TrainerBase):
         * test: 测试方法。
     """
 
+    def __init__(self, cfg):
+        # 读取额外配置
+        self.num_choices = int(cfg.DATASET.NUM_CHOICES)
+
+        # 调用父类构造方法
+        super().__init__(cfg)  
+
     def parse_batch_train(self, batch):
         """
         (实现父类的方法) 解析分类任务训练批次。 
@@ -70,15 +77,17 @@ class TrainerMcqBase(TrainerBase):
         返回：
             - input (Tensor): 输入图像 | [batch, 3, 224, 224]。
             - num_choices (Tensor): 答案选项数量 | [batch]。
-            - choices (Tensor): 所有答案选项文本 | [batch, num_choices]。
+            - choices (list<list<str>>): 所有答案选项文本 | (batch, num_choices)。
             - correct_answer (Tensor): 正确答案选项的索引 | [batch]。
-            - correct_answer_type (Tensor): 正确答案选项的类型 | [batch]。 
+            - correct_answer_type (list<str>): 正确答案选项的类型 | (batch)。 
         """
         input = batch["img"].to(self.device)  # 获取一个批次的图像 | [batch, 3, 224, 224]
         num_choices = batch["num_choices"].to(self.device) # 获取答案选项数量 | [batch]
-        choices = batch["choices"].to(self.device) # 获取所有答案选项文本 | [batch, num_choices]
         correct_answer = batch["correct_answer"].to(self.device) # 获取正确答案选项的索引 | [batch]
-        correct_answer_type = batch["correct_answer_type"].to(self.device) # 获取正确答案选项的类型 | [batch]
+        
+        choices = batch["choices"] # 获取所有答案选项文本 | (batch, num_choices) | DataLoader 不会自动转换字符串
+        correct_answer_type = batch["correct_answer_type"] # 获取正确答案选项的类型 | (batch)
+        
         return input, num_choices, choices, correct_answer, correct_answer_type
 
     def parse_batch_test(self, batch):
@@ -93,17 +102,19 @@ class TrainerMcqBase(TrainerBase):
         返回：
             - input (Tensor): 输入图像 | [batch, 3, 224, 224]。
             - num_choices (Tensor): 答案选项数量 | [batch]。
-            - choices (Tensor): 所有答案选项文本 | [batch, num_choices]。
+            - choices (list<list<str>>): 所有答案选项文本 | (batch, num_choices)。
             - correct_answer (Tensor): 正确答案选项的索引 | [batch]。
-            - correct_answer_type (Tensor): 正确答案选项的类型 | [batch]。 
+            - correct_answer_type (list<str>): 正确答案选项的类型 | (batch)。 
         """
         input = batch["img"].to(self.device)  # 获取一个批次的图像 | [batch, 3, 224, 224]
         num_choices = batch["num_choices"].to(self.device) # 获取答案选项数量 | [batch]
-        choices = batch["choices"].to(self.device) # 获取所有答案选项文本 | [batch, num_choices]
-        
         correct_answer = batch["correct_answer"].to(self.device) # 获取正确答案选项的索引 | [batch]
-        correct_answer_type = batch["correct_answer_type"].to(self.device) # 获取正确答案选项的类型 | [batch]
+        
+        correct_answer_type = batch["correct_answer_type"] # 获取正确答案选项的类型 | (batch)
+        choices = batch["choices"]# 获取所有答案选项文本 | (batch, num_choices) | DataLoader 不会自动转换字符串
+        
         return input, num_choices, choices, correct_answer, correct_answer_type
+
     
 
     @torch.no_grad()

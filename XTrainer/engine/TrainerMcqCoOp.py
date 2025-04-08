@@ -63,8 +63,7 @@ class TrainerMcqCoOp(TrainerMcqBase):
         self.CoOp_model.to(self.device)
 
         # 初始化提示学习器，并注册到CoOp_model中，用于学习提示信息
-        self.task_type = cfg.TASK_TYPE # "CLS"分类；"MCQ"多选
-        self.pptLearner = PromptLearner(cfg, self.CoOp_model, self.task_type, n_cls=cfg.DATASET.NUM_CHOICES) # 提示学习器
+        self.pptLearner = PromptLearner(cfg, self.CoOp_model, self.num_choices) # 提示学习器
 
         # 将模型调整为精度混合训练，以减少显存占用 (如果配置了精度混合训练)
         self.scaler = GradScaler() if cfg.TRAINER.PREC == "amp" else None
@@ -82,7 +81,7 @@ class TrainerMcqCoOp(TrainerMcqBase):
         self.register_model("CLIP_promptLearner", promptLearner, self.optim, self.sched)
 
         # 给 promptLearner 载入 提示学习器 的预训练权重 (如果配置了 预训练权重) - 请仅使用相同数据集的预训练权重，否则没有意义
-        if cfg.MODEL.INIT_WEIGHTS_PATH: 
+        if hasattr(cfg.MODEL, "INIT_WEIGHTS_PATH") and cfg.MODEL.INIT_WEIGHTS_PATH: 
             pretarined_path = cfg.MODEL.INIT_WEIGHTS_PATH
             print(f"载入预训练权重：{pretarined_path}")
             self.load_model(directory=pretarined_path)  # 加载最佳模型
@@ -94,15 +93,28 @@ class TrainerMcqCoOp(TrainerMcqBase):
         (实现父类的方法) 前向传播和反向传播。
         """
         image, num_choices, choices, correct_answer, correct_answer_type = self.parse_batch_train(batch)  # 解析训练批次数据，获取图像和标签
-        assert image is not None and num_choices > 1, "forward_backward() 中 parse_batch_train 解析到的图像为空或者num_choices<=1"
+        choices = list(zip(*choices))  # 将 (num_choices=4, batchsize=n) 转换为 (batch_size=n, num_choices=4) 格式
 
-        self.CoOp_model.init_promptLearner(cls_list=choices, task_mode=self.task_type) # 根据choices初始化提示学习器的文本prompt
-        label = torch.tensor(correct_answer, dtype=torch.long, device=self.device) # [batch] -> 正确答案索引
+        # 逐batch计算损失并累积
+        total_loss = 0 
+        total_accuracy = 0
+        for idx in range(len(choices)):  # 遍历每个样本
+            # 对每个样本逐个初始化提示学习器
+            self.CoOp_model.init_promptLearner(cls_list=choices[idx], task_mode=self.task_type)  # 根据当前样本的choices初始化提示学习器的文本prompt
+            label = torch.tensor(correct_answer[idx], dtype=torch.long, device=self.device).unsqueeze(0)  # 获取当前样本的正确答案索引
+            # 图像-image: [batch, 3, 224, 224]
+            logits = self.CoOp_model(image[idx:idx+1])  # 逐个样本传入模型进行预测，注意切片方式保持batch维度 [1, 3, 224, 224]
+            # 计算当前样本的损失
+            loss = F.cross_entropy(logits, label)  # 计算损失  
+            # 累加损失、准确率
+            total_loss += loss.item()
+            total_accuracy += compute_accuracy(logits, label)[0].item()
         
-        # 图像-image: [batch, 3, 224, 224]
-        logits = self.CoOp_model(image) # [batch, num_classes] -> 模型预测的各个类别的置信度
-        loss = F.cross_entropy(logits, label)  # 计算损失  
-        self.model_backward_and_update(loss)  # 反向传播
+        # 反向传播在整个 mini-batch 上完成
+        total_loss /= len(choices)  # 取平均损失
+        total_accuracy /= len(choices)  # 计算平均准确率
+        print(f"当前批次平均损失：{total_loss:.4f}，平均准确率：{total_accuracy:.4f}")
+        self.model_backward_and_update(total_loss)  # 对整个 mini-batch 进行反向传播
 
         # 需要记录的 loss 日志
         loss_summary = {  
