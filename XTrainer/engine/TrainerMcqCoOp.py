@@ -80,6 +80,13 @@ class TrainerMcqCoOp(TrainerMcqBase):
             print(f"载入预训练权重：{pretarined_path}")
             self.load_model(directory=pretarined_path)  # 加载最佳模型
 
+        # 打印参数
+        # for name, param in self.CoOp_model.named_parameters():
+        #     if param.data.dim() >= 1:
+        #         print(f"{name} \n{param.data[:5]}")
+        #     else:
+        #         print(f"{name} \n{param.data}")
+
         return self.CoOp_model, self.optim, self.sched
     
     def forward_backward(self, batch): 
@@ -188,9 +195,12 @@ class TrainerMcqCoOp(TrainerMcqBase):
 
         names = self.get_model_names()  # 获取所有模型名称
 
-        model_file = "model-best.pth.tar" # 默认情况下，加载最佳模型
         if epoch is not None:
+            print(f"TrainerMcqCoOp.load_model 正在加载指定 epoch {epoch} 的模型...")
             model_file = "model.pth.tar-" + str(epoch) # 如果指定 epoch，加载指定 epoch 的模型
+        else:
+            print("TrainerMcqCoOp.load_model 正在加载最佳模型 model-best.pth.tar...")
+            model_file = "model-best.pth.tar" # 默认情况下，加载最佳模型
 
         # 遍历所有模型名称，加载模型
         for name in names: 

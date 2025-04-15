@@ -33,7 +33,7 @@ TEST:
 DATASET:
   NAME: "CocoMcq"  # 数据集类名
   DATASET_DIR: "/root/NP-CLIP/NegBench/data/images/MCQ"  # 数据集根目录
-  SPLIT: [0.7, 0.1, 0.2]  # 训练/验证/测试集划分比例
+  SPLIT: [0.0, 0.0, 1.0]  # zero-shot测试模式，全部为测试集
   NUM_SHOTS: -1  # 每类样本数：-1=全量，0=零样本，≥1=小样本学习
 
   CSV_FILE: "/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv" # 多选题数据集的 CSV 文件路径
@@ -49,7 +49,6 @@ DATALOADER:
 
 # 数据采样
 SAMPLER:
-  TRAIN_SP: "RandomSampler" # 训练集采样器类名（随机采样）
   TEST_SP: "SequentialSampler" # 测试集采样器类名（顺序采样）
 
 # 图像增强

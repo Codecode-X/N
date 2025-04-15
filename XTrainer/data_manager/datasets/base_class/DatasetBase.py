@@ -50,6 +50,7 @@ class DatasetBase:
             - p_trn (float): cfg.DATASET.SPLIT[0]: 训练集比例。
             - p_val (float): cfg.DATASET.SPLIT[1]: 验证集比例。
             - p_tst (float): cfg.DATASET.SPLIT[2]: 测试集比例。
+            - output_dir (str): cfg.OUTPUT_DIR: 输出目录。
 
         主要步骤：
             1. 读取配置。
@@ -64,6 +65,7 @@ class DatasetBase:
         self.p_trn, self.p_val, self.p_tst = cfg.DATASET.SPLIT  # 获取训练、验证和测试集比例
         assert self.p_trn + self.p_val + self.p_tst == 1  # 断言训练、验证和测试集比例之和为 1
         self.dataset_dir = cfg.DATASET.DATASET_DIR  # 获取数据集目录，例如：/root/autodl-tmp/caltech-101
+        self.output_dir = cfg.OUTPUT_DIR  # 获取输出目录，例如：/root/autodl-tmp/XTrainer/output
 
         # ---读取数据并分割为 train, val, test 数据集---
         self._train, self._val, self._test = self.get_data() 
@@ -100,14 +102,11 @@ class DatasetBase:
             - 训练、验证和测试数据集。
         """
         
-        split_path = os.path.join(self.dataset_dir, "split.json")  # 设置数据分割文件路径
+        split_path = os.path.join(self.output_dir, "split.json")  # 设置数据分割文件路径
 
-        # 如果数据分割文件已经存在，则直接读取；否则根据 p_trn、p_val 分割数据并保存分割文件
-        if os.path.exists(split_path):
-            train, val, test = self.read_split(split_path)  # 读取数据分割
-        else:
-            train, val, test = self.read_and_split_data()  # 读取并分割数据
-            self.save_split(train, val, test, split_path)  # 保存数据分割
+        # 根据 p_trn、p_val 分割数据并保存分割文件
+        train, val, test = self.read_and_split_data()  # 读取并分割数据
+        self.save_split(train, val, test, split_path)  # 保存数据分割
         
         return train, val, test  # 返回训练、验证和测试数据集
     

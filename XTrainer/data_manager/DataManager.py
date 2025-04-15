@@ -61,9 +61,11 @@ class DataManager:
             self.lab2cname = dataset.lab2cname  # 类别到名称的映射
         elif cfg.TASK_TYPE == "MCQ":  # 多选任务
             self.num_choices = dataset.num_choices  # 选项数量
+        
+        zero_shot = True if dataset.p_tst == 1.0 else False  # 测试集比例为 1.0，表示只进行zero-shot评估
 
         # ---构建数据增强---
-        if custom_tfm_train is None: # 构建训练数据增强
+        if not zero_shot and custom_tfm_train is None: # 构建训练数据增强
             tfm_train = build_train_transform(cfg)  # 使用配置默认的训练数据增强
         else:
             print("* 使用自定义训练数据增强")
@@ -76,28 +78,31 @@ class DataManager:
             tfm_test = custom_tfm_test  # 使用自定义的测试数据增强
 
         # ---构建数据加载器（数据集 + 采样器 + 数据增强）---
-        train_sampler = build_train_sampler(cfg, dataset.train) # 构建训练采样器
-        train_loader = _build_data_loader( # 根据配置信息，构建训练数据加载器 train_loader
-            cfg,
-            sampler=train_sampler,  # 训练采样器
-            data_source=dataset.train,  # 数据源
-            batch_size=cfg.DATALOADER.BATCH_SIZE_TRAIN,  # 批大小
-            tfm=tfm_train,  # 训练数据增强
-            is_train=True,  # 训练模式
-            dataset_transform=dataset_transform  # 数据集转换器，用于对数据集进行转换和增强
-        )
-        val_loader = None  
-        if dataset.val:  # 构建验证数据加载器 val_loader (如果存在验证数据)
-            val_sampler = build_test_sampler(cfg, dataset.val) # 构建验证集采样器
-            val_loader = _build_data_loader(
+        train_loader, val_loader, test_loader = None, None, None  # 初始化数据加载器
+        if not zero_shot:
+            train_sampler = build_train_sampler(cfg, dataset.train) # 构建训练采样器
+            train_loader = _build_data_loader( # 根据配置信息，构建训练数据加载器 train_loader
                 cfg,
-                sampler=val_sampler,  # 验证采样器
-                data_source=dataset.val,  # 数据源
-                batch_size=cfg.DATALOADER.BATCH_SIZE_TEST,  # 批大小
-                tfm=tfm_test,  # 验证数据增强
-                is_train=False,  # 测试模式
-                dataset_transform=dataset_transform # 数据集转换器，用于对数据集进行转换和增强
+                sampler=train_sampler,  # 训练采样器
+                data_source=dataset.train,  # 数据源
+                batch_size=cfg.DATALOADER.BATCH_SIZE_TRAIN,  # 批大小
+                tfm=tfm_train,  # 训练数据增强
+                is_train=True,  # 训练模式
+                dataset_transform=dataset_transform  # 数据集转换器，用于对数据集进行转换和增强
             )
+
+            if dataset.val:  # 构建验证数据加载器 val_loader (如果存在验证数据)
+                val_sampler = build_test_sampler(cfg, dataset.val) # 构建验证集采样器
+                val_loader = _build_data_loader(
+                    cfg,
+                    sampler=val_sampler,  # 验证采样器
+                    data_source=dataset.val,  # 数据源
+                    batch_size=cfg.DATALOADER.BATCH_SIZE_TEST,  # 批大小
+                    tfm=tfm_test,  # 验证数据增强
+                    is_train=False,  # 测试模式
+                    dataset_transform=dataset_transform # 数据集转换器，用于对数据集进行转换和增强
+                )
+
         test_sampler = build_test_sampler(cfg, dataset.test) # 构建测试集采样器
         test_loader = _build_data_loader( # 构建测试数据加载器 test_loader
             cfg,
