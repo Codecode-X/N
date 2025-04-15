@@ -41,7 +41,7 @@ DATASET:
 DATALOADER:
   BATCH_SIZE_TRAIN: 32  # 训练批大小
   BATCH_SIZE_TEST: 100  # 测试批大小
-  NUM_WORKERS: 4  # 数据加载并行进程数（建议=CPU 核心数）
+  NUM_WORKERS: 8  # 数据加载并行进程数（建议=CPU 核心数）
   K_TRANSFORMS: 1  # 每种增强在原始图像上（横向）重复应用次数
   RETURN_IMG0: False  # 是否返回原始未增强图像（用于可视化或对比学习）
 
