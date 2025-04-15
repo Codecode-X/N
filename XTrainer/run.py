@@ -6,7 +6,7 @@
         - python run.py --train --config_path config/CLS/Clip-VitB32-ep10-Caltech101-AdamW.yaml --output-dir output
         - python run.py --train --config_path config/CLS/CLS-CoOp-VitB16-ep50-Caltech101-SGD.yaml --output-dir output
     - MCQ:
-        - python run.py --train --config_path config/MCQ/MCQ-CoOp-VitB16-ep10-Caltech101-SGD.yaml --output-dir output
+        - python run.py --train --config_path config/MCQ/MCQ-CoOp-VitB16-ep200-CocoMcq-SGD.yaml --output-dir output
 
 测试 
     - python run.py --eval_only --config_path output/25-03-31-19-40-20/config.yaml --output-dir output --model_dir output/25-03-31-19-40-20 --load_epoch 5

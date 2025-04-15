@@ -64,6 +64,7 @@ class BaseWarmupScheduler(_LRScheduler):
             if self.warmup_recount:
                 print("由于设置了 warmup_recount，且现在预热结束，因此重置 epoch 为 -1")
                 self.last_epoch = -1  # 重置周期数
+                self.warmup_recount = False  # 重置后标记为 False，防止重复重置
 
             self.successor.step(epoch)  # 使用后续的学习率调度器更新学习率
             self._last_lr = self.successor.get_last_lr()  # 获取最新的学习率
