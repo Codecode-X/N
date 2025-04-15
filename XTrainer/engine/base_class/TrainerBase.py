@@ -559,7 +559,7 @@ class TrainerBase:
             assert curr_result is not None, "验证结果为 None"
             is_best = curr_result > self.best_result
             if is_best:
-                print(f"验证性能提升：{self.best_result:.1f} -> {curr_result:.1f}, 保存最佳模型")
+                print(f"验证性能提升：{self.best_result:.4f} -> {curr_result:.4f}, 保存最佳模型")
                 self.best_result = curr_result
                 self.save_model(
                     self.epoch,

@@ -40,8 +40,6 @@ class EvaluatorMcq(EvaluatorBase):
         else:
             self.wrong_answer_to_type = {1: 'hybrid', 2: 'positive', 3: 'negative'}
         
-        self.total_questions = len(data_loader.dataset)  # 总问题数
-        self.correct_answers_sum = 0  # 正确答案计数
         # 初始化字典以跟踪每种类型的正确答案和总问题数
         self.correct_answers_by_type = {'positive': 0, 'negative': 0, 'hybrid': 0}
         self.total_questions_by_type = {'positive': 0, 'negative': 0, 'hybrid': 0}
@@ -56,12 +54,13 @@ class EvaluatorMcq(EvaluatorBase):
             'hybrid': {'positive': 0, 'negative': 0, 'hybrid': 0}
         }
 
-        self.total_questions = len(data_loader.dataset) # 获取数据集中问题的总数
+        self.total_questions = 0 # 初始化数据集中问题的总数
         self.correct_answers_sum = 0 # 初始化正确答案计数
 
     def reset(self):
         """重置评估器状态。"""
         self.correct_answers_sum = 0
+        self.total_questions = 0
         self.correct_answers_by_type = {'positive': 0, 'negative': 0, 'hybrid': 0}
         self.total_questions_by_type = {'positive': 0, 'negative': 0, 'hybrid': 0}
         self.wrong_answer_counts = {k: 0 for k in self.wrong_answer_to_type.keys()}
@@ -80,11 +79,14 @@ class EvaluatorMcq(EvaluatorBase):
             - correct_answer (torch.LongTensor): 正确答案索引 [batch]
             - correct_answer_type (list<str>): 正确答案类型 (batch)
         """
+        # 更新总问题数
+        self.total_questions += logits.size(0) # [batch_size]=[100]
+        
         # 计算当前批次的正确预测数
         preds = logits.argmax(dim=1).cpu().numpy() # [batch_size]=[100]
         labels = torch.tensor(correct_answer, dtype=torch.long).cpu().numpy() # [batch_size]=[100]
         correct_predictions = (preds == labels).sum().item()
-        
+
         # 累加正确答案计数
         self.correct_answers_sum += correct_predictions
 

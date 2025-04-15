@@ -7,4 +7,7 @@ from .Cutout import Cutout
 from .GaussianNoise import GaussianNoise
 from .Random2DTranslation import Random2DTranslation
 
+from .RandomResizedCrop import RandomResizedCrop  # 随机裁剪和缩放图像
+from .RandomFlip import RandomFlip  # 随机水平翻转图像
+
 from .StandardNoAugTransform import StandardNoAugTransform  # 无增强的标准图像转换管道
