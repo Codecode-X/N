@@ -134,15 +134,15 @@ $$
 
 **原因：**CLIP 的预训练数据中，**包含否定词汇的描述性文本比例极低**，且这些**否定词汇往往与图像内容对齐不佳**，导致模型在训练过程中缺乏对否定概念的学习。
 
-<img src="C:/Users/xiaoj/Desktop/ECAI-2025/NegCLIP/notes/images/image-20250312163611184.png" alt="image-20250312163611184" style="zoom:33%;" />
+<img src="images/image-20250312163611184.png" alt="image-20250312163611184" style="zoom:33%;" />
 
-<img src="C:/Users/xiaoj/Desktop/ECAI-2025/NegCLIP/notes/images/image-20250312163557336.png" alt="image-20250312163557336" style="zoom: 50%;" />
+<img src="images/image-20250312163557336.png" alt="image-20250312163557336" style="zoom: 50%;" />
 
 **解决：**
 
 1. **两种数据生成管道**：分别基于 **LLM（大语言模型）** 和 **MLLM（多模态大模型）**，旨在解决 CLIP 训练数据中的两大问题：**否定表达的稀缺** 以及 **文本与视觉内容的错位**。
 
-   <img src="C:/Users/xiaoj/Desktop/ECAI-2025/NegCLIP/notes/images/image-20250312164345916.png" alt="image-20250312164345916" style="zoom:50%;" />
+   <img src="images/image-20250312164345916.png" alt="image-20250312164345916" style="zoom:50%;" />
 
 2. **模型微调**：通过在生成的数据上微调 CLIP 的文本编码器，开发出一个名为**NegationCLIP**的模型，该模型在保持通用性的同时，增强了对否定概念的理解。
 

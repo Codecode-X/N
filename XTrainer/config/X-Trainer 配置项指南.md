@@ -137,6 +137,8 @@
 | **Random2DTranslation**       |                                      |               | 缩放后随机裁剪                                               |
 |                               | `cfg.INPUT.Random2DTranslation.p`    | 0.5           | 执行概率（0=禁用，1=始终应用）                               |
 | **StandardNoAugTransform**    | -                                    | -             | 标准化的无增强图像转换管道                                   |
+| **RandomResizedCrop**         |                                      |               |                                                              |
+|                               | `cfg.INPUT.RandomResizedCrop.scale`  | [0.08, 1.0]   | 随机裁剪的比例范围                                           |
 
 ---
 
