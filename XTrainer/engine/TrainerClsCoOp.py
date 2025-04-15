@@ -1,11 +1,9 @@
 from .TrainerClsClip import TrainerClsClip
 from model import build_model
 from utils import count_num_param, load_checkpoint
-from torch.cuda.amp import GradScaler
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from torch.cuda.amp import GradScaler, autocast
 from utils.metrics import compute_accuracy
 from optimizer import build_optimizer
 from lr_scheduler import build_lr_scheduler
@@ -33,7 +31,6 @@ class TrainerClsCoOp(TrainerClsClip):
         类包含的属性：
             - CoOp_model (nn.Module): CoOp 模型。
             - pptLearner (PromptLearner): 提示学习器。
-            - scaler (GradScaler): 自动混合精度训练的缩放器。(可选)
             - optim (Optimizer): 优化器。
             - sched (LRScheduler): 学习率调度器。
 
@@ -65,10 +62,7 @@ class TrainerClsCoOp(TrainerClsClip):
         label_texts = [item[1] for item in sorted_labels]  # 文本标签 tensor | [num_classes]
         print("从小到大排序后的数据集文本标签：", label_texts)
         self.pptLearner = PromptLearner(cfg, self.CoOp_model, n_cls=len(label_texts))  # 初始化一个 PromptLearner 对象，并注册到CoOp_model中，用于学习提示信息
-        self.CoOp_model.init_promptLearner(cls_list=label_texts, task_mode=self.task_type) # 初始化提示学习器
-
-        # 将模型调整为精度混合训练，以减少显存占用 (如果配置了精度混合训练)
-        self.scaler = GradScaler() if cfg.TRAINER.PREC == "amp" else None
+        self.CoOp_model.init_prompt_learner(cls_list=label_texts) # 初始化提示学习器
 
         # 多 GPU 并行训练情况，则将模型部署到多个 GPU 上 (如果有多个 GPU)
         device_count = torch.cuda.device_count()
@@ -96,21 +90,12 @@ class TrainerClsCoOp(TrainerClsClip):
         image, label = self.parse_batch_train(batch)  # 解析训练批次数据，获取图像和标签
         assert image is not None and label is not None, "forward_backward() 中 parse_batch_train 解析到的图像和标签不能为空"
 
-        prec = self.cfg.TRAINER.PREC  # 配置的精度
-        if prec == "amp":  # 自动混合精度训练
-            with autocast():
-                # Clip 需要传入 图像 和 文本 (初始化模型时已经加载了每个类别的文本特征)。
-                # 图像-image: [batch, 3, 224, 224]
-                output = self.CoOp_model(image) # 模型预测 -> output: [batch, num_classes]
-                loss = F.cross_entropy(output, label)
-            self.optim.zero_grad()
-            self.scaler.scale(loss).backward()
-            self.scaler.step(self.optim)
-            self.scaler.update()
-        else:  # 默认 fp16
-            output = self.CoOp_model(image) # 模型预测
-            loss = F.cross_entropy(output, label)  # 计算损失  
-            self.model_backward_and_update(loss)  # 反向传播
+        prec = self.cfg.TRAINER.PREC  # 配置的精度 # 默认 fp16
+        if prec != "fp16": Warning.warn(f"TrainerClsCoOp 只支持 fp16 精度，但 cfg.TRAINER.PREC = {prec}，此处仍使用 fp16 精度以匹配Clip")
+        
+        output = self.CoOp_model(image) # 模型预测
+        loss = F.cross_entropy(output, label)  # 计算损失  
+        self.model_backward_and_update(loss)  # 反向传播
 
         # 需要记录的 loss 日志
         loss_summary = {  
