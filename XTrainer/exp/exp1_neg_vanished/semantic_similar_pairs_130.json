@@ -1,0 +1,915 @@
+{
+  "semantic_similar_pairs": [
+    {
+      "sentence1": "A tabby cat napping on the windowsill",
+      "sentence2": "A calico cat napping on the windowsill",
+      "type": "semantic_similar",
+      "modified_element": ["cat breed"]
+    },
+    {
+      "sentence1": "Children building a tall sandcastle",
+      "sentence2": "Children building a small sandcastle",
+      "type": "semantic_similar",
+      "modified_element": ["size"]
+    },
+    {
+      "sentence1": "Freshly baked chocolate chip cookies",
+      "sentence2": "Freshly baked oatmeal raisin cookies",
+      "type": "semantic_similar",
+      "modified_element": ["cookie type"]
+    },
+    {
+      "sentence1": "A silver sports car speeding down the highway",
+      "sentence2": "A red sports car speeding down the highway",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "Morning sunlight filtering through linen curtains",
+      "sentence2": "Morning sunlight filtering through silk curtains",
+      "type": "semantic_similar",
+      "modified_element": ["fabric"]
+    },
+    {
+      "sentence1": "An oak desk in the study room",
+      "sentence2": "A mahogany desk in the study room",
+      "type": "semantic_similar",
+      "modified_element": ["wood type"]
+    },
+    {
+      "sentence1": "A German shepherd playing fetch",
+      "sentence2": "A golden retriever playing fetch",
+      "type": "semantic_similar",
+      "modified_element": ["dog breed"]
+    },
+    {
+      "sentence1": "Raindrops falling on a tin roof",
+      "sentence2": "Raindrops falling on a shingle roof",
+      "type": "semantic_similar",
+      "modified_element": ["roof material"]
+    },
+    {
+      "sentence1": "A barista making cappuccinos",
+      "sentence2": "A barista making lattes",
+      "type": "semantic_similar",
+      "modified_element": ["coffee type"]
+    },
+    {
+      "sentence1": "Snow-capped mountain peaks at dawn",
+      "sentence2": "Snow-capped mountain peaks at dusk",
+      "type": "semantic_similar",
+      "modified_element": ["time of day"]
+    },
+    {
+      "sentence1": "A leather-bound journal on the table",
+      "sentence2": "A cloth-bound journal on the table",
+      "type": "semantic_similar",
+      "modified_element": ["cover material"]
+    },
+    {
+      "sentence1": "A basketball player dunking the ball",
+      "sentence2": "A basketball player shooting a three-pointer",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "Yellow tulips in a ceramic vase",
+      "sentence2": "Red tulips in a ceramic vase",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "A librarian sorting hardcover books",
+      "sentence2": "A librarian sorting paperback books",
+      "type": "semantic_similar",
+      "modified_element": ["book type"]
+    },
+    {
+      "sentence1": "A chef chopping onions with a steel knife",
+      "sentence2": "A chef chopping onions with a ceramic knife",
+      "type": "semantic_similar",
+      "modified_element": ["knife material"]
+    },
+    {
+      "sentence1": "A toddler stacking wooden blocks",
+      "sentence2": "A toddler stacking plastic blocks",
+      "type": "semantic_similar",
+      "modified_element": ["block material"]
+    },
+    {
+      "sentence1": "A blue jay perched on a pine branch",
+      "sentence2": "A cardinal perched on a pine branch",
+      "type": "semantic_similar",
+      "modified_element": ["bird species"]
+    },
+    {
+      "sentence1": "A cotton t-shirt folded in the drawer",
+      "sentence2": "A linen t-shirt folded in the drawer",
+      "type": "semantic_similar",
+      "modified_element": ["fabric"]
+    },
+    {
+      "sentence1": "Fresh strawberries in a wicker basket",
+      "sentence2": "Fresh raspberries in a wicker basket",
+      "type": "semantic_similar",
+      "modified_element": ["fruit"]
+    },
+    {
+      "sentence1": "A violinist playing a sonata",
+      "sentence2": "A violinist playing a concerto",
+      "type": "semantic_similar",
+      "modified_element": ["music piece"]
+    },
+    {
+      "sentence1": "A narrow cobblestone street in Paris",
+      "sentence2": "A wide cobblestone street in Paris",
+      "type": "semantic_similar",
+      "modified_element": ["width"]
+    },
+    {
+      "sentence1": "Morning fog over the rice fields",
+      "sentence2": "Evening fog over the rice fields",
+      "type": "semantic_similar",
+      "modified_element": ["time of day"]
+    },
+    {
+      "sentence1": "A barber cutting hair with electric clippers",
+      "sentence2": "A barber cutting hair with scissors",
+      "type": "semantic_similar",
+      "modified_element": ["tool"]
+    },
+    {
+      "sentence1": "A paperback novel on the nightstand",
+      "sentence2": "A hardcover novel on the nightstand",
+      "type": "semantic_similar",
+      "modified_element": ["book format"]
+    },
+    {
+      "sentence1": "A yellow school bus picking up children",
+      "sentence2": "An orange school bus picking up children",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "A carpenter hammering nails into oak planks",
+      "sentence2": "A carpenter hammering nails into pine planks",
+      "type": "semantic_similar",
+      "modified_element": ["wood type"]
+    },
+    {
+      "sentence1": "A chocolate milkshake in a tall glass",
+      "sentence2": "A vanilla milkshake in a tall glass",
+      "type": "semantic_similar",
+      "modified_element": ["flavor"]
+    },
+    {
+      "sentence1": "A grey squirrel digging in the flower bed",
+      "sentence2": "A brown squirrel digging in the flower bed",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "A yoga instructor demonstrating downward dog",
+      "sentence2": "A yoga instructor demonstrating warrior pose",
+      "type": "semantic_similar",
+      "modified_element": ["pose"]
+    },
+    {
+      "sentence1": "A black Labrador swimming in the lake",
+      "sentence2": "A chocolate Labrador swimming in the lake",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "A ceramic mug holding hot tea",
+      "sentence2": "A glass mug holding hot tea",
+      "type": "semantic_similar",
+      "modified_element": ["material"]
+    },
+    {
+      "sentence1": "A digital alarm clock showing 7:30 AM",
+      "sentence2": "An analog alarm clock showing 7:30 AM",
+      "type": "semantic_similar",
+      "modified_element": ["clock type"]
+    },
+    {
+      "sentence1": "A cashier scanning grocery items",
+      "sentence2": "A cashier bagging grocery items",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A stainless steel refrigerator in the kitchen",
+      "sentence2": "A black stainless steel refrigerator in the kitchen",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "A basketball team wearing purple jerseys",
+      "sentence2": "A basketball team wearing gold jerseys",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "A photographer using a Canon camera",
+      "sentence2": "A photographer using a Nikon camera",
+      "type": "semantic_similar",
+      "modified_element": ["brand"]
+    },
+    {
+      "sentence1": "A wooden roller coaster at the amusement park",
+      "sentence2": "A steel roller coaster at the amusement park",
+      "type": "semantic_similar",
+      "modified_element": ["material"]
+    },
+    {
+      "sentence1": "A waiter carrying a tray of champagne glasses",
+      "sentence2": "A waiter carrying a tray of wine glasses",
+      "type": "semantic_similar",
+      "modified_element": ["glass type"]
+    },
+    {
+      "sentence1": "A toddler eating apple slices",
+      "sentence2": "A toddler eating banana slices",
+      "type": "semantic_similar",
+      "modified_element": ["fruit"]
+    },
+    {
+      "sentence1": "A silver keychain with three keys",
+      "sentence2": "A gold keychain with three keys",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "A chef stirring soup in a copper pot",
+      "sentence2": "A chef stirring soup in a stainless steel pot",
+      "type": "semantic_similar",
+      "modified_element": ["pot material"]
+    },
+    {
+      "sentence1": "A blue backpack on the classroom floor",
+      "sentence2": "A green backpack on the classroom floor",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "A tabby cat stretching on the carpet",
+      "sentence2": "A tabby cat sleeping on the carpet",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A barista steaming milk for a latte",
+      "sentence2": "A barista frothing milk for a cappuccino",
+      "type": "semantic_similar",
+      "modified_element": ["action/drink"]
+    },
+    {
+      "sentence1": "A yellow taxi waiting at the intersection",
+      "sentence2": "A yellow taxi driving through the intersection",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A gardener planting rose bushes",
+      "sentence2": "A gardener planting hydrangea bushes",
+      "type": "semantic_similar",
+      "modified_element": ["plant type"]
+    },
+    {
+      "sentence1": "A grey elephant at the watering hole",
+      "sentence2": "A brown elephant at the watering hole",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "A librarian stamping due dates in books",
+      "sentence2": "A librarian scanning barcodes in books",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A chocolate layer cake on a glass stand",
+      "sentence2": "A vanilla layer cake on a glass stand",
+      "type": "semantic_similar",
+      "modified_element": ["flavor"]
+    },
+    {
+      "sentence1": "A construction worker wearing a yellow hardhat",
+      "sentence2": "A construction worker wearing an orange hardhat",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "A black and white photograph of a cityscape",
+      "sentence2": "A color photograph of a cityscape",
+      "type": "semantic_similar",
+      "modified_element": ["color scheme"]
+    },
+    {
+      "sentence1": "A dentist examining a patient's molars",
+      "sentence2": "A dentist examining a patient's incisors",
+      "type": "semantic_similar",
+      "modified_element": ["teeth type"]
+    },
+    {
+      "sentence1": "A red sports car parked in the driveway",
+      "sentence2": "A red sports car speeding down the highway",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A baker kneading whole wheat dough",
+      "sentence2": "A baker kneading white flour dough",
+      "type": "semantic_similar",
+      "modified_element": ["dough type"]
+    },
+    {
+      "sentence1": "A golden retriever fetching a tennis ball",
+      "sentence2": "A golden retriever fetching a frisbee",
+      "type": "semantic_similar",
+      "modified_element": ["object"]
+    },
+    {
+      "sentence1": "A toddler building with large Lego blocks",
+      "sentence2": "A toddler building with small Lego blocks",
+      "type": "semantic_similar",
+      "modified_element": ["size"]
+    },
+    {
+      "sentence1": "A silver laptop on the coffee table",
+      "sentence2": "A gold laptop on the coffee table",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "A chef dicing carrots on a cutting board",
+      "sentence2": "A chef slicing carrots on a cutting board",
+      "type": "semantic_similar",
+      "modified_element": ["cutting style"]
+    },
+    {
+      "sentence1": "A blue whale swimming in deep water",
+      "sentence2": "A humpback whale swimming in deep water",
+      "type": "semantic_similar",
+      "modified_element": ["whale species"]
+    },
+    {
+      "sentence1": "A barista writing names on paper cups",
+      "sentence2": "A barista writing names on reusable cups",
+      "type": "semantic_similar",
+      "modified_element": ["cup type"]
+    },
+    {
+      "sentence1": "A basketball player dribbling down court",
+      "sentence2": "A basketball player passing down court",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A wooden picnic table in the park",
+      "sentence2": "A metal picnic table in the park",
+      "type": "semantic_similar",
+      "modified_element": ["material"]
+    },
+    {
+      "sentence1": "A grey kitten playing with yarn",
+      "sentence2": "A grey kitten sleeping in a basket",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A cashier operating the register at Walmart",
+      "sentence2": "A cashier operating the register at Target",
+      "type": "semantic_similar",
+      "modified_element": ["store"]
+    },
+    {
+      "sentence1": "A yellow school bus dropping off students",
+      "sentence2": "A yellow school bus picking up students",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A black coffee in a white mug",
+      "sentence2": "A coffee with cream in a white mug",
+      "type": "semantic_similar",
+      "modified_element": ["coffee preparation"]
+    },
+    {
+      "sentence1": "A UPS driver delivering packages",
+      "sentence2": "A FedEx driver delivering packages",
+      "type": "semantic_similar",
+      "modified_element": ["company"]
+    },
+    {
+      "sentence1": "A toddler finger painting at daycare",
+      "sentence2": "A toddler playing with blocks at daycare",
+      "type": "semantic_similar",
+      "modified_element": ["activity"]
+    },
+    {
+      "sentence1": "A grey mouse scurrying across the floor",
+      "sentence2": "A brown mouse scurrying across the floor",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "A chef garnishing a plate with parsley",
+      "sentence2": "A chef garnishing a plate with cilantro",
+      "type": "semantic_similar",
+      "modified_element": ["herb"]
+    },
+    {
+      "sentence1": "A silver key unlocking a wooden door",
+      "sentence2": "A brass key unlocking a wooden door",
+      "type": "semantic_similar",
+      "modified_element": ["key material"]
+    },
+    {
+      "sentence1": "A blue jay perched on a maple branch",
+      "sentence2": "A blue jay perched on an oak branch",
+      "type": "semantic_similar",
+      "modified_element": ["tree type"]
+    },
+    {
+      "sentence1": "A barista making an iced coffee",
+      "sentence2": "A barista making a hot coffee",
+      "type": "semantic_similar",
+      "modified_element": ["temperature"]
+    },
+    {
+      "sentence1": "A basketball player shooting free throws",
+      "sentence2": "A basketball player shooting jump shots",
+      "type": "semantic_similar",
+      "modified_element": ["shot type"]
+    },
+    {
+      "sentence1": "A wooden chair at the dining table",
+      "sentence2": "A metal chair at the dining table",
+      "type": "semantic_similar",
+      "modified_element": ["material"]
+    },
+    {
+      "sentence1": "A grey kitten chasing its tail",
+      "sentence2": "A grey kitten batting at a toy mouse",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A cashier scanning items at Kroger",
+      "sentence2": "A cashier scanning items at Safeway",
+      "type": "semantic_similar",
+      "modified_element": ["store"]
+    },
+    {
+      "sentence1": "A yellow school bus idling at the curb",
+      "sentence2": "A yellow school bus driving down the street",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A black coffee in a ceramic mug",
+      "sentence2": "A black coffee in a paper cup",
+      "type": "semantic_similar",
+      "modified_element": ["container"]
+    },
+    {
+      "sentence1": "A UPS truck making deliveries",
+      "sentence2": "A USPS truck making deliveries",
+      "type": "semantic_similar",
+      "modified_element": ["company"]
+    },
+    {
+      "sentence1": "A toddler coloring with crayons",
+      "sentence2": "A toddler playing with playdough",
+      "type": "semantic_similar",
+      "modified_element": ["activity"]
+    },
+    {
+      "sentence1": "A grey mouse eating cheese",
+      "sentence2": "A grey mouse hiding in a hole",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A chef seasoning soup with salt",
+      "sentence2": "A chef seasoning soup with pepper",
+      "type": "semantic_similar",
+      "modified_element": ["seasoning"]
+    },
+    {
+      "sentence1": "A silver key opening a padlock",
+      "sentence2": "A silver key opening a deadbolt",
+      "type": "semantic_similar",
+      "modified_element": ["lock type"]
+    },
+    {
+      "sentence1": "A blue jay building a nest",
+      "sentence2": "A blue jay feeding its young",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A barista preparing a caramel macchiato",
+      "sentence2": "A barista preparing a vanilla latte",
+      "type": "semantic_similar",
+      "modified_element": ["drink type"]
+    },
+    {
+      "sentence1": "A basketball player setting a screen",
+      "sentence2": "A basketball player boxing out",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A wooden chair with a cushioned seat",
+      "sentence2": "A wooden chair with a wicker seat",
+      "type": "semantic_similar",
+      "modified_element": ["seat material"]
+    },
+    {
+      "sentence1": "A grey kitten drinking milk",
+      "sentence2": "A grey kitten eating kibble",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A cashier counting change at CVS",
+      "sentence2": "A cashier counting change at Walgreens",
+      "type": "semantic_similar",
+      "modified_element": ["store"]
+    },
+    {
+      "sentence1": "A yellow school bus waiting at a railroad crossing",
+      "sentence2": "A yellow school bus waiting at a traffic light",
+      "type": "semantic_similar",
+      "modified_element": ["waiting location"]
+    },
+    {
+      "sentence1": "A black coffee with sugar",
+      "sentence2": "A black coffee with artificial sweetener",
+      "type": "semantic_similar",
+      "modified_element": ["sweetener"]
+    },
+    {
+      "sentence1": "A UPS package on the doorstep",
+      "sentence2": "An Amazon package on the doorstep",
+      "type": "semantic_similar",
+      "modified_element": ["company"]
+    },
+    {
+      "sentence1": "A toddler stacking plastic cups",
+      "sentence2": "A toddler knocking over plastic cups",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A grey mouse in a maze",
+      "sentence2": "A white mouse in a maze",
+      "type": "semantic_similar",
+      "modified_element": ["color"]
+    },
+    {
+      "sentence1": "A chef chopping garlic with a chef's knife",
+      "sentence2": "A chef chopping garlic with a cleaver",
+      "type": "semantic_similar",
+      "modified_element": ["knife type"]
+    },
+    {
+      "sentence1": "A silver key on a keyring",
+      "sentence2": "A silver key on a lanyard",
+      "type": "semantic_similar",
+      "modified_element": ["holder"]
+    },
+    {
+      "sentence1": "A blue jay preening its feathers",
+      "sentence2": "A blue jay bathing in a puddle",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A barista wiping the espresso machine",
+      "sentence2": "A barista cleaning the espresso machine",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A basketball player tying their shoes",
+      "sentence2": "A basketball player adjusting their jersey",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A wooden chair with armrests",
+      "sentence2": "A wooden chair without armrests",
+      "type": "semantic_similar",
+      "modified_element": ["armrest presence"]
+    },
+    {
+      "sentence1": "A grey kitten watching birds",
+      "sentence2": "A grey kitten chasing birds",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A cashier greeting customers at Publix",
+      "sentence2": "A cashier greeting customers at Whole Foods",
+      "type": "semantic_similar",
+      "modified_element": ["store"]
+    },
+    {
+      "sentence1": "A yellow school bus parked at the school",
+      "sentence2": "A yellow school bus parked at the depot",
+      "type": "semantic_similar",
+      "modified_element": ["location"]
+    },
+    {
+      "sentence1": "A black coffee in a travel mug",
+      "sentence2": "A black coffee in a thermos",
+      "type": "semantic_similar",
+      "modified_element": ["container"]
+    },
+    {
+      "sentence1": "A UPS driver wearing brown shorts",
+      "sentence2": "A UPS driver wearing brown pants",
+      "type": "semantic_similar",
+      "modified_element": ["clothing"]
+    },
+    {
+      "sentence1": "A toddler splashing in a kiddie pool",
+      "sentence2": "A toddler splashing in a bathtub",
+      "type": "semantic_similar",
+      "modified_element": ["location"]
+    },
+    {
+      "sentence1": "A grey mouse running on a wheel",
+      "sentence2": "A grey mouse hiding in bedding",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A chef tasting soup from a wooden spoon",
+      "sentence2": "A chef tasting soup from a metal spoon",
+      "type": "semantic_similar",
+      "modified_element": ["spoon material"]
+    },
+    {
+      "sentence1": "A silver key hanging on a hook",
+      "sentence2": "A silver key left on a table",
+      "type": "semantic_similar",
+      "modified_element": ["location"]
+    },
+    {
+      "sentence1": "A blue jay collecting twigs",
+      "sentence2": "A blue jay collecting seeds",
+      "type": "semantic_similar",
+      "modified_element": ["material"]
+    },
+    {
+      "sentence1": "A barista steaming almond milk",
+      "sentence2": "A barista steaming oat milk",
+      "type": "semantic_similar",
+      "modified_element": ["milk type"]
+    },
+    {
+      "sentence1": "A basketball player high-fiving teammates",
+      "sentence2": "A basketball player hugging teammates",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A wooden chair with a high back",
+      "sentence2": "A wooden chair with a low back",
+      "type": "semantic_similar",
+      "modified_element": ["back height"]
+    },
+    {
+      "sentence1": "A grey kitten playing with a feather toy",
+      "sentence2": "A grey kitten playing with a bell toy",
+      "type": "semantic_similar",
+      "modified_element": ["toy type"]
+    },
+    {
+      "sentence1": "A cashier handing a receipt at Trader Joe's",
+      "sentence2": "A cashier handing a receipt at Aldi",
+      "type": "semantic_similar",
+      "modified_element": ["store"]
+    },
+    {
+      "sentence1": "A yellow school bus with first graders",
+      "sentence2": "A yellow school bus with fifth graders",
+      "type": "semantic_similar",
+      "modified_element": ["passengers"]
+    },
+    {
+      "sentence1": "A black coffee in a disposable cup",
+      "sentence2": "A black coffee in a reusable cup",
+      "type": "semantic_similar",
+      "modified_element": ["cup type"]
+    },
+    {
+      "sentence1": "A UPS truck backing into a driveway",
+      "sentence2": "A UPS truck parallel parking on a street",
+      "type": "semantic_similar",
+      "modified_element": ["parking action"]
+    },
+    {
+      "sentence1": "A toddler riding a rocking horse",
+      "sentence2": "A toddler riding a tricycle",
+      "type": "semantic_similar",
+      "modified_element": ["ride-on toy"]
+    },
+    {
+      "sentence1": "A grey mouse sniffing cheese",
+      "sentence2": "A grey mouse nibbling cheese",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A chef garnishing a plate with chives",
+      "sentence2": "A chef garnishing a plate with scallions",
+      "type": "semantic_similar",
+      "modified_element": ["garnish"]
+    },
+    {
+      "sentence1": "A silver key in a key box",
+      "sentence2": "A silver key in a key drawer",
+      "type": "semantic_similar",
+      "modified_element": ["storage"]
+    },
+    {
+      "sentence1": "A blue jay calling from a tree",
+      "sentence2": "A blue jay silent in a tree",
+      "type": "semantic_similar",
+      "modified_element": ["sound"]
+    },
+    {
+      "sentence1": "A barista making a mocha with dark chocolate",
+      "sentence2": "A barista making a mocha with milk chocolate",
+      "type": "semantic_similar",
+      "modified_element": ["chocolate type"]
+    },
+    {
+      "sentence1": "A basketball player stretching before the game",
+      "sentence2": "A basketball player warming up before the game",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A wooden chair with carved designs",
+      "sentence2": "A wooden chair with painted designs",
+      "type": "semantic_similar",
+      "modified_element": ["decoration"]
+    },
+    {
+      "sentence1": "A grey kitten climbing a cat tree",
+      "sentence2": "A grey kitten descending a cat tree",
+      "type": "semantic_similar",
+      "modified_element": ["direction"]
+    },
+    {
+      "sentence1": "A cashier weighing produce at Sprouts",
+      "sentence2": "A cashier weighing produce at Fresh Market",
+      "type": "semantic_similar",
+      "modified_element": ["store"]
+    },
+    {
+      "sentence1": "A yellow school bus with tinted windows",
+      "sentence2": "A yellow school bus with clear windows",
+      "type": "semantic_similar",
+      "modified_element": ["window type"]
+    },
+    {
+      "sentence1": "A black coffee with a splash of milk",
+      "sentence2": "A black coffee with a dollop of cream",
+      "type": "semantic_similar",
+      "modified_element": ["dairy addition"]
+    },
+    {
+      "sentence1": "A UPS driver walking up a driveway",
+      "sentence2": "A UPS driver walking up apartment stairs",
+      "type": "semantic_similar",
+      "modified_element": ["location"]
+    },
+    {
+      "sentence1": "A toddler building a sandcastle",
+      "sentence2": "A toddler digging in the sand",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A grey mouse in a laboratory cage",
+      "sentence2": "A grey mouse in a pet store cage",
+      "type": "semantic_similar",
+      "modified_element": ["context"]
+    },
+    {
+      "sentence1": "A chef slicing bread with a serrated knife",
+      "sentence2": "A chef slicing bread with a bread knife",
+      "type": "semantic_similar",
+      "modified_element": ["knife type"]
+    },
+    {
+      "sentence1": "A silver key attached to a carabiner",
+      "sentence2": "A silver key attached to a key fob",
+      "type": "semantic_similar",
+      "modified_element": ["attachment"]
+    },
+    {
+      "sentence1": "A blue jay stealing food from other birds",
+      "sentence2": "A blue jay sharing food with other birds",
+      "type": "semantic_similar",
+      "modified_element": ["behavior"]
+    },
+    {
+      "sentence1": "A barista writing on a chalkboard menu",
+      "sentence2": "A barista updating a digital menu",
+      "type": "semantic_similar",
+      "modified_element": ["menu type"]
+    },
+    {
+      "sentence1": "A basketball player sitting on the bench",
+      "sentence2": "A basketball player standing by the bench",
+      "type": "semantic_similar",
+      "modified_element": ["position"]
+    },
+    {
+      "sentence1": "A wooden chair at a conference table",
+      "sentence2": "A wooden chair at a dining table",
+      "type": "semantic_similar",
+      "modified_element": ["table type"]
+    },
+    {
+      "sentence1": "A grey kitten batting at a hanging toy",
+      "sentence2": "A grey kitten pouncing on a moving toy",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A cashier processing a credit card payment",
+      "sentence2": "A cashier processing a cash payment",
+      "type": "semantic_similar",
+      "modified_element": ["payment method"]
+    },
+    {
+      "sentence1": "A yellow school bus with a wheelchair lift",
+      "sentence2": "A yellow school bus without a wheelchair lift",
+      "type": "semantic_similar",
+      "modified_element": ["accessibility feature"]
+    },
+    {
+      "sentence1": "A black coffee in a paper cup with a sleeve",
+      "sentence2": "A black coffee in a paper cup without a sleeve",
+      "type": "semantic_similar",
+      "modified_element": ["cup sleeve"]
+    },
+    {
+      "sentence1": "A UPS driver scanning a package",
+      "sentence2": "A UPS driver delivering a package",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A toddler stacking rings on a pole",
+      "sentence2": "A toddler knocking over stacked rings",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A grey mouse exploring a maze",
+      "sentence2": "A grey mouse completing a maze",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    },
+    {
+      "sentence1": "A chef drizzling olive oil on salad",
+      "sentence2": "A chef drizzling balsamic vinegar on salad",
+      "type": "semantic_similar",
+      "modified_element": ["dressing"]
+    },
+    {
+      "sentence1": "A silver key to a storage unit",
+      "sentence2": "A silver key to a safety deposit box",
+      "type": "semantic_similar",
+      "modified_element": ["lock purpose"]
+    },
+    {
+      "sentence1": "A blue jay nesting in a pine tree",
+      "sentence2": "A blue jay nesting in an oak tree",
+      "type": "semantic_similar",
+      "modified_element": ["tree type"]
+    },
+    {
+      "sentence1": "A barista wiping coffee spills on the counter",
+      "sentence2": "A barista wiping milk spills on the counter",
+      "type": "semantic_similar",
+      "modified_element": ["spill type"]
+    },
+    {
+      "sentence1": "A basketball player receiving a pass",
+      "sentence2": "A basketball player intercepting a pass",
+      "type": "semantic_similar",
+      "modified_element": ["action"]
+    }]
+}

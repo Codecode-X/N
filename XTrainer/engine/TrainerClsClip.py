@@ -91,21 +91,12 @@ class TrainerClsClip(TrainerClsBase):
         image, label = self.parse_batch_train(batch)  # 解析训练批次数据，获取图像和标签
         assert image is not None and label is not None, "forward_backward() 中 parse_batch_train 解析到的图像和标签不能为空"
 
-        prec = self.cfg.TRAINER.PREC  # 配置的精度
-        if prec == "amp":  # 自动混合精度训练
-            with autocast():
-                # Clip 需要传入 图像 和 文本 (初始化模型时已经加载了每个类别的文本特征)。
-                # 图像-image: [batch, 3, 224, 224]
-                output = self.clip_model(image) # 模型预测 -> output: [batch, num_classes]
-                loss = F.cross_entropy(output, label)
-            self.optim.zero_grad()
-            self.scaler.scale(loss).backward()
-            self.scaler.step(self.optim)
-            self.scaler.update()
-        else:  # 默认 fp16
-            output = self.clip_model(image) # 模型预测
-            loss = F.cross_entropy(output, label)  # 计算损失  
-            self.model_backward_and_update(loss)  # 反向传播
+        prec = self.cfg.TRAINER.PREC  # 配置的精度 # 默认 fp16
+        if prec != "fp16": Warning.warn(f"TrainerClsCoOp 只支持 fp16 精度，但 cfg.TRAINER.PREC = {prec}，此处仍使用 fp16 精度以匹配Clip")
+        
+        output = self.clip_model(image) # 模型预测
+        loss = F.cross_entropy(output, label)  # 计算损失  
+        self.model_backward_and_update(loss)  # 反向传播
 
         # 需要记录的 loss 日志
         loss_summary = {  
