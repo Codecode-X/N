@@ -194,9 +194,10 @@ def attention_rollout(attention_maps, residual=True):
         - attention_maps (torch.Tensor): 注意力权重，形状为 (num_layers=12, num_heads=1, T, T)
         - residual (bool): 是否使用残差连接
         - device (str): 设备类型，默认为 'cpu'
+        
+    返回:
+        - result (torch.Tensor): 最终的注意力权重，形状为 (T, T) | T: token 数量
     """
-    print("正在进行attention_rollout...")
-    print("attention_maps.shape = ", attention_maps.shape) # (12, 1, 77, 77)
     num_layers, num_heads, T, _ = attention_maps.shape
     result = np.eye(T)
 
@@ -214,9 +215,9 @@ def attention_rollout(attention_maps, residual=True):
     return result  # [T, T]
 
 
-def display_text_attn(model, text, visualize=False, output_path=None):
+def display_tokens_contribution(model, text, visualize=False, output_path=None):
     """
-    可视化文本编码器每一层注意力图谱
+    可视化输入文本中每个 token 对最终 EOT 特征的贡献度
 
     参数:
         - model: 模型对象
@@ -233,7 +234,6 @@ def display_text_attn(model, text, visualize=False, output_path=None):
         max_length=77
     )
     tokens = inputs.input_ids[0]
-    words = tokenizer.convert_ids_to_tokens(tokens)
     attention_maps = get_text_attention_map(model, tokens)  # [L, H, T, T]
 
     rollout = attention_rollout(attention_maps)  # [T, T]
@@ -261,6 +261,74 @@ def display_text_attn(model, text, visualize=False, output_path=None):
         print(f"图像保存至 {output_path}/{text}.png")
 
     return eos_contribution, meaningful_words
+
+def display_word_attn(model, text, word="not", visualize=False, output_path=None):
+    """
+    可视化输入文本中的单词word对其他所有token的注意力权重
+    
+    参数:
+        - model: 模型对象
+        - text: 文本输入
+        - word(str): 单词
+        - visualize: 是否可视化
+        - output_path: 可视化图像的保存路径
+        
+    返回:
+        - attention_to_meaningful: 注意力权重
+        - meaningful_words: 有意义的token
+        - word: 单词
+    """
+    # 使用tokenizer处理输入文本
+    tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch16")
+    inputs = tokenizer(
+        text,
+        return_tensors="pt",
+        padding="max_length",
+        truncation=True,
+        max_length=77
+    )
+    tokens = inputs.input_ids[0]
+    attention_maps = get_text_attention_map(model, tokens)  # [L, H, T, T]
+    
+    # 转换tokens为可读文本并找到否定词的索引
+    token_words = tokenizer.convert_ids_to_tokens(tokens)
+    
+    # 找到否定词的索引
+    w_indices = [i for i, w in enumerate(token_words) if word in w]
+    if not w_indices:
+        print(f"没有找到单词 '{word}' 在文本中")
+        return None, None, None
+    
+    w_idx = w_indices[0]  # 使用第一个出现的word
+    
+    # 计算否定词的注意力权重
+    rollout = attention_rollout(attention_maps)  # [T, T]
+    
+    # 找到有意义的token范围（排除padding）
+    eos_idx = (tokens != tokenizer.pad_token_id).nonzero()[-1].item()
+    sos_idx = (tokens != tokenizer.pad_token_id).nonzero()[0].item()
+    
+    # 取出有意义范围内的token和对应的注意力权重
+    meaningful_tokens = tokens[sos_idx+1: eos_idx+1]
+    meaningful_words = tokenizer.convert_ids_to_tokens(meaningful_tokens)
+    attention_to_meaningful = rollout[w_idx][sos_idx+1: eos_idx+1]
+    
+    if not visualize:
+        return attention_to_meaningful, meaningful_words, word
+
+    plt.figure(figsize=(15, 2.5))
+    plt.bar(range(len(meaningful_words)), attention_to_meaningful)
+    plt.xticks(range(len(meaningful_words)), meaningful_words, rotation=90)
+    plt.title(f"Attention from Word '{word}' to Other Tokens")
+    plt.tight_layout()
+    
+    if output_path:
+        mkdir_if_missing(output_path)
+        plt.savefig(f"{output_path}/attn_{word}_{text}.png")
+        print(f"图像保存至 {output_path}/attn_{word}_{text}.png")
+    
+    return attention_to_meaningful, meaningful_words, word
+    
 
 if __name__ == "__main__":
     cfg_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB16-ep50-Caltech101-SGD.yaml"
@@ -292,4 +360,12 @@ if __name__ == "__main__":
     # 加载模型
     model = build_model(cfg)  
     # 可视化文本注意力
-    display_text_attn(model, text, visualize=True, output_path=output_path)  # 可视化文本注意力
+    attention_to_meaningful, meaningful_words = display_tokens_contribution(model, text, visualize=True, output_path=output_path)  # 可视化文本注意力
+    print(f"EOS \n - attention_to_meaningful = {attention_to_meaningful} \n - meaningful_words = {meaningful_words}")
+    # attention_to_meaningful, meaningful_words, word = display_word_attn(model, text, word="not", visualize=True, output_path=output_path)  # 可视化文本注意力
+    # print(f"word = {word} \n - attention_to_meaningful = {attention_to_meaningful} \n - meaningful_words = {meaningful_words}")
+    # attention_to_meaningful, meaningful_words, word = display_word_attn(model, text, word="dog", visualize=True, output_path=output_path)  # 可视化文本注意力
+    # print(f"word = {word} \n - attention_to_meaningful = {attention_to_meaningful} \n - meaningful_words = {meaningful_words}")
+    # attention_to_meaningful, meaningful_words, word = display_word_attn(model, text, word="house", visualize=True, output_path=output_path)  # 可视化文本注意力
+    # print(f"word = {word} \n - attention_to_meaningful = {attention_to_meaningful} \n - meaningful_words = {meaningful_words}")
+    

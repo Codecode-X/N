@@ -14,7 +14,7 @@ sys.path.insert(0, grandparent_dir)
 sys.path.insert(0, parent_dir)
 from utils import load_yaml_config
 from model import build_model
-from analyze_tools.visualization import display_text_attn
+from analyze_tools.visualization import display_tokens_contribution
 
 
 """可视化文本注意力"""
@@ -30,5 +30,5 @@ for text in texts:
    cfg = load_yaml_config(cfg_path) # 读取配置
    # 加载模型
    model = build_model(cfg)  
-   # 可视化文本注意力
-   display_text_attn(model, text, visualize=True, output_path=output_path)  # 可视化文本注意力
+   # 可视化输入文本每个token对文本特征的贡献
+   display_tokens_contribution(model, text, visualize=True, output_path=output_path)  # 可视化文本注意力
