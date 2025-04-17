@@ -1,19 +1,11 @@
 """
 ##### 数据集
 
-- **构造三类句子对**（每类200对）：
-  1. **否定-肯定对**：
-     - 否定句：`"A sofa with no cat"`
-     - 肯定句：`"A sofa with a cat"`
-     - **特点**：语义相似，仅否定词差异。
-  2. **语义相似对**：
-     - 句子1：`"A black cat on the couch"`
-     - 句子2：`"A white cat on the couch"`
-     - **特点**：替换非关键形容词，保持主体语义一致。
-  3. **语义无关对**：
-     - 句子1：`"A dog running in the park"`
-     - 句子2：`"A cloud floating in blue sky"`
-     - **特点**：语义完全无关。
+##### 数据集
+  **否定-肯定对**：
+    - 否定句：`"A sofa with no cat"`
+    - 肯定句：`"A sofa with a cat"`
+    - **特点**：语义相似，仅否定词差异。
 
 ##### 实验1：二分类任务验证
 

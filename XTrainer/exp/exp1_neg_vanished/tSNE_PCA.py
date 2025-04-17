@@ -1,26 +1,13 @@
 """
 ##### 数据集
-
-- **构造三类句子对**（每类200对）：
-  1. **否定-肯定对**：
-     - 否定句：`"A sofa with no cat"`
-     - 肯定句：`"A sofa with a cat"`
-     - **特点**：语义相似，仅否定词差异。
-  2. **语义相似对**：
-     - 句子1：`"A black cat on the couch"`
-     - 句子2：`"A white cat on the couch"`
-     - **特点**：替换非关键形容词，保持主体语义一致。
-  3. **语义无关对**：
-     - 句子1：`"A dog running in the park"`
-     - 句子2：`"A cloud floating in blue sky"`
-     - **特点**：语义完全无关。
+  **否定-肯定对**：
+    - 否定句：`"A sofa with no cat"`
+    - 肯定句：`"A sofa with a cat"`
+    - **特点**：语义相似，仅否定词差异。
      
 ##### 实验3：特征空间可视化
-
-​	使用t-SNE将高维特征 `h` 降维至2D，绘制分布图。
-
-* 若否定句（neg）和肯定句（pos）在特征空间中混叠：说明否定信息丢失。
-* 若否定句（neg）与语义无关句（unrelated）在特征空间中混叠：说明CLIP完全无法区分否定逻辑。
+    ​使用t-SNE将高维特征 `h` 降维至2D，绘制分布图。
+    若否定句（neg）和肯定句（pos）在特征空间中混叠：说明否定信息丢失。
 
 """
 import sys
@@ -83,54 +70,14 @@ def visualize_features(features, labels, method='tsne', title="Feature Visualiza
     plt.tight_layout()
     plt.show()
 
-
+# 读取否定-肯定句子对数据集
 def read_negpos_dataset(path):
-    """
-    读取数据集
-    :param path: 数据集路径
-    :return: neg_pos_pairs
-
-    数据格式示例:
-    {
-        "negation_pairs": [
-            {
-            "negative": "A bookshelf without any novels",
-            "positive": "A bookshelf with several novels",
-            "type": "negation_pair",
-            "key_diff": ["without any <-> with several"]
-            },
-            {
-            "negative": "The fridge is devoid of vegetables",
-            "positive": "The fridge contains fresh vegetables",
-            "type": "negation_pair",
-            "key_diff": ["devoid of <-> contains"]
-            },...]
-    }
-    """
     with open(path, 'r', encoding='utf-8') as f:
         data = json.load(f)
-
-    neg_pos_pairs = [
-        (item["negative"], item["positive"]) for item in data.get("negation_pairs", [])
-    ]
+    neg_pos_pairs = [(item["negative"], item["positive"]) for item in data.get("negation_pairs", [])]
     print(f"读取到 {len(neg_pos_pairs)} 对否定-肯定句子对")
     return neg_pos_pairs
 
-# 读取语义相似对
-def read_similar_dataset(path):
-    with open(path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    pairs = [(item["sentence1"], item["sentence2"]) for item in data.get("semantic_similar_pairs", [])]
-    print(f"读取到 {len(pairs)} 对语义相似句子对")
-    return pairs
-
-# 读取语义无关对
-def read_unrelated_dataset(path):
-    with open(path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-    pairs = [(item["sentence1"], item["sentence2"]) for item in data.get("semantic_unrelated_pairs", [])]
-    print(f"读取到 {len(pairs)} 对语义无关句子对")
-    return pairs
 
 def extract_clip_features(sentences):
     """提取句子的CLIP文本特征"""
@@ -146,36 +93,22 @@ def extract_clip_features(sentences):
 
 # 构造可视化实验的主函数
 def run_visualization_experiment(methods=['pca', 'tsne']):
-    neg_path = "/root/NP-CLIP/XTrainer/exp/exp1_neg_vanished/neg_pos_pairs_166.json"
-    sim_path = "/root/NP-CLIP/XTrainer/exp/exp1_neg_vanished/semantic_similar_pairs_130.json"
-    unrel_path = "/root/NP-CLIP/XTrainer/exp/exp1_neg_vanished/semantic_unrelated_pairs_199.json"
-
     # 加载三类句子对
+    neg_path = "/root/NP-CLIP/XTrainer/exp/exp1_neg_vanished/neg_pos_pairs_166.json"
     neg_pos_pairs = read_negpos_dataset(neg_path)
-    sim_pairs = read_similar_dataset(sim_path)
-    unrel_pairs = read_unrelated_dataset(unrel_path)
 
     # 获取每类的句子（均摊数量避免偏差）
-    n = min(len(neg_pos_pairs), len(sim_pairs), len(unrel_pairs), 200)
+    n = len(neg_pos_pairs)
 
     neg_sentences = [pair[0] for pair in neg_pos_pairs[:n]]
     pos_sentences = [pair[1] for pair in neg_pos_pairs[:n]]
-    sim_sentences = [pair[0] for pair in sim_pairs[:n]] + [pair[1] for pair in sim_pairs[:n]]
-    unrel_sentences = [pair[0] for pair in unrel_pairs[:n]] + [pair[1] for pair in unrel_pairs[:n]]
 
-    all_sentences = neg_sentences + pos_sentences + sim_sentences + unrel_sentences
+    all_sentences = neg_sentences + pos_sentences
     print(f"总句子数量: {len(all_sentences)}")
 
-    # 标签设定：
-    # 0 - positive (肯定)
-    # 1 - negative (否定)
-    # 2 - similar (语义相似)
-    # 3 - unrelated (语义无关)
     labels = (
         [1] * len(neg_sentences) +  # negative
-        [0] * len(pos_sentences) +  # positive
-        [2] * len(sim_sentences) +
-        [3] * len(unrel_sentences)
+        [0] * len(pos_sentences)  # positive
     )
     labels = np.array(labels)
 
@@ -191,12 +124,10 @@ def run_visualization_experiment(methods=['pca', 'tsne']):
 
 def visualize_multiclass_features(features, labels, method='pca', title=None):
     """
-    可视化多类分布
+    可视化两类分布
     labels: 
       0 -> positive
       1 -> negative
-      2 -> semantic similar
-      3 -> semantic unrelated
     """
     n_samples = features.shape[0]
     print(f"样本数量: {n_samples}")
@@ -215,8 +146,6 @@ def visualize_multiclass_features(features, labels, method='pca', title=None):
     label_map = {
         0: ('Positive', 'blue'),
         1: ('Negative', 'red'),
-        2: ('Semantic Similar', 'green'),
-        3: ('Unrelated', 'gray')
     }
 
     for label_value, (label_name, color) in label_map.items():
