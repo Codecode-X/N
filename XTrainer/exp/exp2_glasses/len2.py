@@ -1,5 +1,10 @@
 """
-任务: 设计并训练一个轻量级模块CLIP-Lens，通过处理CLIP的文本编码器的输出文本特征，来生成否定内容和肯定内容的文本特征。
+CLIP-GlassesLens
+
+len2: 一个轻量级模块CLIP-GlassesLens，通过处理CLIP的文本编码器的输出文本特征，来生成否定内容和肯定内容的文本特征。
+相比len1：
+    - 通过2-head自注意力机制，增强了对输入句子中否定对象的关注。
+    - 调整了些超参数
 
 输入:
     - CLIP的文本编码器的输出文本特征 h
@@ -54,7 +59,7 @@ config = {
     'epochs': 200,  # 训练轮数
     'batch_size': 32,  # 批次大小
     'lr': 1e-3,  # 学习率
-    'early_stop_patience': 200,  # 早停耐心值
+    'early_stop_patience': -1,  # 早停耐心值-不早停
     'stage_switch_threshold': 0.02,  # 阶段切换阈值-越大-越早结束stage-1粗对齐，越早开启stage-2精细对齐
     
     # 数据集划分
@@ -444,7 +449,7 @@ def train(model, features, config):
             torch.save(model.state_dict(), os.path.join(current_dir, 'best_clip_lens.pth'))
         else:
             patience_counter += 1 # 增加耐心计数器
-            if patience_counter >= early_stop_patience:
+            if early_stop_patience > 0 and patience_counter >= early_stop_patience:
                 print(f"Early stopping after {epoch+1} epochs")
                 break
     
@@ -562,6 +567,89 @@ def visualize_examples(model, examples, top_k=5):
             print(f"  - {candidates[idx]}: {neg_similarities[idx]:.4f}")
         
         print("-"*50)
+        
+def load_clip_glasses_lens(weights_path, device=None):
+    """
+    加载预训练的 CLIPGlassesLens 模型权重。
+    
+    参数:
+        weights_path (str): 模型权重文件的路径
+        config (dict, optional): 模型初始化的配置字典。
+                                    如果为 None，则使用默认配置。
+        device (str, optional): 加载模型的设备 ('cuda' 或 'cpu')。
+                                    如果为 None，则优先使用 CUDA（如果可用）。
+    
+    返回:
+        model (CLIPGlassesLens): 初始化并加载权重的模型
+    """
+    # 检查权重文件是否存在
+    if not os.path.exists(weights_path):
+        raise FileNotFoundError(f"未找到模型权重文件: {weights_path}")
+    
+    # 默认配置
+    config = {
+        'embed_dim': 512,  # CLIP 文本特征的维度
+        'hidden_dim': 256   # 隐藏层维度
+    }
+    
+    # 设置设备
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    # 初始化模型
+    model = CLIPGlassesLens(config)
+    
+    # 加载权重
+    state_dict = torch.load(weights_path, map_location=device)
+    model.load_state_dict(state_dict)
+    
+    # 将模型移动到指定设备
+    model = model.to(device)
+    
+    # 设置模型为评估模式
+    model.eval()
+    
+    print(f"成功加载 CLIPGlassesLens 模型，权重路径: {weights_path}")
+    
+    return model
+
+def load_lens_example():
+    """
+    使用示例: 演示如何加载预训练的 CLIPGlassesLens 模型并进行预测
+    """
+    print("="*50)
+    print("CLIPGlassesLens 模型加载示例")
+    print("="*50)
+    
+    # 模型权重路径 - 请替换为实际路径
+    weights_path = os.path.join(current_dir, 'best_clip_lens.pth')
+    
+    # 加载预训练模型
+    model = load_clip_glasses_lens(weights_path)
+    
+    # 测试样例
+    test_examples = [
+        "In a rustic cabin, an elegant bench sits in the corner, while with notable absence of a camera and no a gloves.",
+        "On a wooden dining table amidst a quiet afternoon, you can see a bright gloves, a woman, a screwdriver, a delicious egg, and yet without a knife and no a plate."
+    ]
+    
+    # 对测试样例进行预测
+    for sentence in test_examples:
+        print(f"\n输入句子: {sentence}")
+        
+        # 使用模型进行预测
+        h_pos, h_neg = predict(model, sentence)
+        
+        # 预测结果可视化
+        print(f"肯定内容特征范数: {np.linalg.norm(h_pos):.4f}")
+        print(f"否定内容特征范数: {np.linalg.norm(h_neg):.4f}")
+        
+        # 计算特征之间的余弦相似度
+        cos_sim = np.dot(h_pos, h_neg) / (np.linalg.norm(h_pos) * np.linalg.norm(h_neg))
+        print(f"肯定与否定特征余弦相似度: {cos_sim:.4f}")
+        
+        print("-"*50)
+    
+    return model
 
 def main():
     
@@ -583,7 +671,7 @@ def main():
         'epochs': 200,  # 训练轮数
         'batch_size': 32,  # 批次大小
         'lr': 1e-3,  # 学习率
-        'early_stop_patience': 200,  # 早停耐心值
+        'early_stop_patience': -1,  # 早停耐心值（-1表示不早停
         'stage_switch_threshold': 0.02,  # 阶段切换阈值-越大-越早结束stage-1粗对齐，越早开启stage-2精细对齐
         
         # 数据集划分
@@ -659,4 +747,5 @@ def main():
     return clip_lens, history, metrics
 
 if __name__ == "__main__":
-    main()
+    # main() # 训练
+    load_lens_example() # 加载使用
