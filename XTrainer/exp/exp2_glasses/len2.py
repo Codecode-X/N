@@ -34,7 +34,7 @@ len2: 一个轻量级模块CLIP-GlassesLens，通过处理CLIP的文本编码器
 """
 
 """
-last2 实验结果:
+len2 实验结果:
 指标	训练前	训练后	理想目标	结论
 avg_pos_similarity	0.773	0.915↑	→1.0	✅ 成功提升肯定语义对齐
 avg_neg_similarity	0.684	0.939↑	→1.0	✅ 否定语义对齐显著优化

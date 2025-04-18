@@ -1,8 +1,9 @@
 """
-当前性能：
-    - 在 VOCMCQ 80%数据上训练 动态惩罚权重生成器(MLP), 在 COCOMCQ 的 zero-shot 结果为：57.36%
-    - 在 COCOMCQ 80%数据上训练 动态惩罚权重生成器(MLP), 在 VOCMCQ 的 zero-shot 结果为：59.73%
+消融 frame模块的 动态惩罚权重生成器(MLP)：
+    - 去除掉了frame模块的 动态惩罚权重生成器(MLP)，改为直接使用可学习的lambda_0参数作为权重
+    - 在COCO MCQ数据集上的结果下降到：57.36% -> 39.75%
 """
+
 import sys
 import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -151,6 +152,7 @@ class CLIPGlassesFrame(nn.Module):
         # 温度参数(可学习)
         self.tau_pos = nn.Parameter(torch.ones(1) * 0.07)
         self.tau_neg = nn.Parameter(torch.ones(1) * 0.07)
+        self.lambda_neg = nn.Parameter(torch.ones(1) * lambda_0)
         
         # 用于动态惩罚权重的MLP
         self.confidence_mlp = nn.Sequential(
@@ -173,24 +175,15 @@ class CLIPGlassesFrame(nn.Module):
             
         Returns:
             scores: 匹配得分 [batch_size]
-            reg_loss: 正则化损失
-            lambda_dynamic: 动态惩罚权重
         """
         # 计算余弦相似度
         cos_pos = F.cosine_similarity(h_img, h_pos, dim=1)
         cos_neg = F.cosine_similarity(h_img, h_neg, dim=1)
         
-        # 计算动态惩罚权重
-        confidence = self.confidence_mlp(h_neg)
-        lambda_dynamic = self.lambda_0 * torch.sigmoid(confidence).squeeze(-1)
-        
         # 计算标准化差分匹配得分
-        scores = cos_pos / self.tau_pos - lambda_dynamic * (cos_neg / self.tau_neg)
+        scores = cos_pos / self.tau_pos - self.lambda_neg * (cos_neg / self.tau_neg)
         
-        # 正则化损失
-        reg_loss = self.reg_weight * torch.mean(torch.square(confidence))
-        
-        return scores, reg_loss, lambda_dynamic
+        return scores
     
     def compute_mcq_scores(self, h_img, h_pos_list, h_neg_list):
         """
@@ -203,21 +196,18 @@ class CLIPGlassesFrame(nn.Module):
             
         Returns:
             all_scores: 所有选项的得分 [batch_size, num_options]
-            total_reg_loss: 总正则化损失
         """
         num_options = len(h_pos_list)
         batch_size = h_img.shape[0]
         device = h_img.device
         
         all_scores = torch.zeros(batch_size, num_options, device=device)
-        total_reg_loss = 0
         
         for i in range(num_options):
-            scores, reg_loss, _ = self.forward(h_img, h_pos_list[i], h_neg_list[i])
+            scores = self.forward(h_img, h_pos_list[i], h_neg_list[i])
             all_scores[:, i] = scores
-            total_reg_loss += reg_loss
             
-        return all_scores, total_reg_loss
+        return all_scores
         
 
 class CLIPGlassesLens(nn.Module):
@@ -379,45 +369,6 @@ def load_clip_glasses_lens(weights_path, device=None):
     
     return model
 
-def load_lens_example():
-    """
-    使用示例: 演示如何加载预训练的 CLIPGlassesLens 模型并进行预测
-    """
-    print("="*50)
-    print("CLIPGlassesLens 模型加载示例")
-    print("="*50)
-    
-    # 模型权重路径 - 请替换为实际路径
-    weights_path = os.path.join(current_dir, 'best_clip_lens.pth')
-    
-    # 加载预训练模型
-    model = load_clip_glasses_lens(weights_path)
-    
-    # 测试样例
-    test_examples = [
-        "In a rustic cabin, an elegant bench sits in the corner, while with notable absence of a camera and no a gloves.",
-        "On a wooden dining table amidst a quiet afternoon, you can see a bright gloves, a woman, a screwdriver, a delicious egg, and yet without a knife and no a plate."
-    ]
-    
-    # 对测试样例进行预测
-    for sentence in test_examples:
-        print(f"\n输入句子: {sentence}")
-        
-        # 使用模型进行预测
-        h_pos, h_neg = predict(model, sentence)
-        
-        # 预测结果可视化
-        print(f"肯定内容特征范数: {np.linalg.norm(h_pos):.4f}")
-        print(f"否定内容特征范数: {np.linalg.norm(h_neg):.4f}")
-        
-        # 计算特征之间的余弦相似度
-        cos_sim = np.dot(h_pos, h_neg) / (np.linalg.norm(h_pos) * np.linalg.norm(h_neg))
-        print(f"肯定与否定特征余弦相似度: {cos_sim:.4f}")
-        
-        print("-"*50)
-    
-    return model
-
 
 class MCQDataset(Dataset):
     """Multiple Choice Question dataset"""
@@ -552,22 +503,20 @@ def train_clip_glasses_frame(cfg):
             
             # Process each option
             all_scores = []
-            total_reg_loss = 0
             
             for i in range(num_options):
                 option_pos = pos_features[:, i]
                 option_neg = neg_features[:, i]
                 
-                scores, reg_loss, _ = frame_model(img_features, option_pos, option_neg)
+                scores = frame_model(img_features, option_pos, option_neg)
                 all_scores.append(scores)
-                total_reg_loss += reg_loss
             
             # Stack scores for all options
             all_scores = torch.stack(all_scores, dim=1)  # [batch_size, num_options]
             
             # Compute cross-entropy loss
             ce_loss = F.cross_entropy(all_scores, labels)
-            loss = ce_loss + total_reg_loss
+            loss = ce_loss
             
             loss.backward()
             optimizer.step()
@@ -596,22 +545,20 @@ def train_clip_glasses_frame(cfg):
                 
                 # Process each option
                 all_scores = []
-                total_reg_loss = 0
                 
                 for i in range(pos_features.shape[1]):
                     option_pos = pos_features[:, i]
                     option_neg = neg_features[:, i]
                     
-                    scores, reg_loss, _ = frame_model(img_features, option_pos, option_neg)
+                    scores = frame_model(img_features, option_pos, option_neg)
                     all_scores.append(scores)
-                    total_reg_loss += reg_loss
                 
                 # Stack scores for all options
                 all_scores = torch.stack(all_scores, dim=1)  # [batch_size, num_options]
                 
                 # Compute cross-entropy loss
                 ce_loss = F.cross_entropy(all_scores, labels)
-                loss = ce_loss + total_reg_loss
+                loss = ce_loss
                 
                 val_loss += loss.item()
                 
@@ -627,6 +574,9 @@ def train_clip_glasses_frame(cfg):
         print(f"Epoch {epoch+1}/{cfg.epochs}")
         print(f"Train Loss: {train_loss/len(train_loader):.4f}, Train Acc: {train_acc:.2f}%")
         print(f"Val Loss: {val_loss/len(val_loader):.4f}, Val Acc: {val_acc:.2f}%")
+        
+        # 打印frame学到的lambda_0, tau_pos, tau_neg
+        print(f"lambda_0: {frame_model.lambda_neg.item():.4f}, tau_pos: {frame_model.tau_pos.item():.4f}, tau_neg: {frame_model.tau_neg.item():.4f}")
         
         # Save best model
         if val_acc > best_val_acc:
@@ -684,7 +634,7 @@ def test_clip_glasses_frame(cfg):
                 option_pos = pos_features[:, i]
                 option_neg = neg_features[:, i]
                 
-                scores, _, _ = frame_model(img_features, option_pos, option_neg)
+                scores = frame_model(img_features, option_pos, option_neg)
                 all_scores.append(scores)
             
             # Stack scores for all options
@@ -725,18 +675,19 @@ class Config:
 def main():
     
     cfg = {
-        'csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv',  # Path to training CSV file
+        # 'csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv',  # Path to training CSV file
+        'csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv',  # Path to training CSV file
         'train_rate': 0.8,  # Training data ratio
         'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp2_glasses/len-pretrained/final_clip_lens.pth',  # Path to CLIPGlassesLens weights
         'batch_size': 64,  # Batch size
         'epochs': 100,  # Number of epochs
         'learning_rate': 3e-4,  # Learning rate
-        'lambda_0': 0.8,  # Base penalty strength
+        'lambda_0': 2,  # Base penalty strength
         'num_workers': 4,  # Number of data loading workers
-        'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses/Voc2007Mcq-08-frame-pretrained',  # Output directory for saving models
+        'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses/glasses-CocoMcq-08-frame-pretrained',  # Output directory for saving models
         'frame_weights_path': 'best_clip_frame.pth',  # 和 output_dir 拼接得到完整路径
         'test_csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv', # Path to test CSV file - 0-shot ACC: 59.73
-        'test_only': True,  # Set to True to only run testing
+        'test_only': False,  # Set to True to only run testing
     }
     
     cfg = Config(**cfg)
