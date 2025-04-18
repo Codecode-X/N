@@ -1,19 +1,8 @@
 """
-last1 实验结果:
-指标	训练前	训练后	理想目标	结论
-avg_pos_similarity	0.773	0.926↑	→1.0	✅ 成功提升肯定语义对齐
-avg_neg_similarity	0.684	0.934↑	→1.0	✅ 否定语义对齐显著优化
-avg_ortho_metric	0.987	0.820↓	→0.0	⚠️ 正交分离不足，需重点改进
-avg_pos_neg_similarity	0.685	0.822↑	→0.0	❌ 反向相关性恶化
-avg_neg_pos_similarity	0.772	0.822↑	→0.0	❌ 交叉干扰增强
-avg_l_pos_l_neg_similarity	0.788	0.788	-	标签固有相关性不变
-
-last1 实验结果:
-XXXXX
-"""
-
-"""
-设计并训练一个轻量级模块CLIP-Lens，通过处理CLIP的文本编码器的输出文本特征，来生成否定内容和肯定内容的文本特征。
+len2: 一个轻量级模块CLIP-GlassesLens，通过处理CLIP的文本编码器的输出文本特征，来生成否定内容和肯定内容的文本特征。
+相比len1：
+    - 通过2-head自注意力机制，增强了对输入句子中否定对象的关注。
+    - 调整了些超参数
 
 输入:
     - CLIP的文本编码器的输出文本特征 h
@@ -41,6 +30,41 @@ XXXXX
     1000	2	4	On a wooden dining table amidst a quiet afternoon, you can see a bright gloves, a woman, a screwdriver, a delicious egg, and yet without a knife and no a plate.	['gloves', 'woman', 'screwdriver', 'egg']	['knife', 'plate']
 
 """
+
+"""
+len2 实验结果:
+指标	训练前	训练后	理想目标	结论
+avg_pos_similarity	0.773	0.915↑	→1.0	✅ 成功提升肯定语义对齐
+avg_neg_similarity	0.684	0.939↑	→1.0	✅ 否定语义对齐显著优化
+avg_ortho_metric	0.987	0.715↓	→0.0	✅ 正交分离度接近且低于标签0.788
+avg_l_pos_l_neg_similarity	0.788	0.788	-	标签固有相关性不变
+
+配置信息：
+config = {
+    # 模型超参数
+    'embed_dim': 512,  # CLIP文本特征的维度
+    'hidden_dim': 256,  # 隐藏层维度
+    
+    # 训练超参数
+    'lambda1': 1,  # 语义对齐损失权重
+    'lambda2_max': 2,  # 正交对抗损失权重最大值  #TODO:待选择一个合适的值
+    'ortho_eps': 0.5,  # 正交对抗损失阈值  #TODO:待选择一个合适的值，统计一下negbench数据集的正交度量平均值？？？
+    'use_dynamic_weight': True,  # 是否使用动态权重
+    'k': 5.0,  # 动态权重的斜率
+    's0': 0.6,  # 动态权重的初始相似度
+    
+    # 训练常规超参数
+    'epochs': 200,  # 训练轮数
+    'batch_size': 32,  # 批次大小
+    'lr': 1e-3,  # 学习率
+    'early_stop_patience': 200,  # 早停耐心值
+    'stage_switch_threshold': 0.02,  # 阶段切换阈值-越大-越早结束stage-1粗对齐，越早开启stage-2精细对齐
+    
+    # 数据集划分
+    'train_rate': 0.8
+}
+"""
+
 import sys
 import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -56,6 +80,9 @@ import numpy as np
 import pandas as pd
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.transforms import Compose, ToTensor
+from utils import standard_image_transform
+from PIL import Image
 
 
 config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB16-ep50-Caltech101-SGD.yaml"
@@ -69,12 +96,25 @@ def extract_sentence_features(sentence:str):
         tokenized_text = tokenized_text.to(Clip_model.device) # [num_classes, context_length]
         text_features = Clip_model.encode_text(tokenized_text) # [num_classes, embed_dim]
         return text_features.cpu().numpy()[0] # [embed_dim]
+
+def extract_img_features(image_path:str):
+    """提取单个图像的CLIP图像特征"""
+    # 加载图像，转为张量[batch_size, 3, input_size, input_size]
+    img = Image.open(image_path)  # 打开图像
+    transform = Compose([standard_image_transform(224, 'BICUBIC'), ToTensor()])  # 定义转换
+    img = transform(img)  # 转换图像
+    img = img.unsqueeze(0)  # 添加 batch 维度
+    img = img.to(dtype=Clip_model.dtype, device=Clip_model.device)  # 转移到模型的设备上
+    with torch.no_grad():  # 关闭梯度计算
+        image = Clip_model.preprocess(image_path) # [num_classes, 3, 224, 224]
+        image = image.to(Clip_model.device) # [num_classes, 3, 224, 224]
+        image_features = Clip_model.visual(image) # [num_classes, embed_dim]
+        return image_features.cpu().numpy()[0] # [embed_dim]
     
 
-
-class CLIPLens(nn.Module):
+class CLIPGlassesLens(nn.Module):
     """
-    CLIP-Lens: 一个轻量级模块，用于处理CLIP文本编码器的输出特征，
+    CLIPGlassesLens: 一个轻量级模块，用于处理CLIP文本编码器的输出特征，
     生成否定内容和肯定内容的特征。
     """
     def __init__(self, config):
@@ -540,6 +580,90 @@ def visualize_examples(model, examples, top_k=5):
             print(f"  - {candidates[idx]}: {neg_similarities[idx]:.4f}")
         
         print("-"*50)
+        
+def load_clip_glasses_lens(weights_path, device=None):
+    """
+    加载预训练的 CLIPGlassesLens 模型权重。
+    
+    参数:
+        weights_path (str): 模型权重文件的路径
+        config (dict, optional): 模型初始化的配置字典。
+                                    如果为 None，则使用默认配置。
+        device (str, optional): 加载模型的设备 ('cuda' 或 'cpu')。
+                                    如果为 None，则优先使用 CUDA（如果可用）。
+    
+    返回:
+        model (CLIPGlassesLens): 初始化并加载权重的模型
+    """
+    # 检查权重文件是否存在
+    if not os.path.exists(weights_path):
+        raise FileNotFoundError(f"未找到模型权重文件: {weights_path}")
+    
+    # 默认配置
+    config = {
+        'embed_dim': 512,  # CLIP 文本特征的维度
+        'hidden_dim': 256   # 隐藏层维度
+    }
+    
+    # 设置设备
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    # 初始化模型
+    model = CLIPGlassesLens(config)
+    
+    # 加载权重
+    state_dict = torch.load(weights_path, map_location=device)
+    model.load_state_dict(state_dict)
+    
+    # 将模型移动到指定设备
+    model = model.to(device)
+    
+    # 设置模型为评估模式
+    model.eval()
+    
+    print(f"成功加载 CLIPGlassesLens 模型，权重路径: {weights_path}")
+    
+    return model
+
+def load_model_example():
+    """
+    使用示例: 演示如何加载预训练的 CLIPGlassesLens 模型并进行预测
+    """
+    print("="*50)
+    print("CLIPGlassesLens 模型加载示例")
+    print("="*50)
+    
+    # 模型权重路径 - 请替换为实际路径
+    weights_path = os.path.join(current_dir, 'best_clip_lens.pth')
+    
+    # 加载预训练模型
+    model = load_clip_glasses_lens(weights_path)
+    
+    # 测试样例
+    test_examples = [
+        "In a rustic cabin, an elegant bench sits in the corner, while with notable absence of a camera and no a gloves.",
+        "On a wooden dining table amidst a quiet afternoon, you can see a bright gloves, a woman, a screwdriver, a delicious egg, and yet without a knife and no a plate."
+    ]
+    
+    # 对测试样例进行预测
+    for sentence in test_examples:
+        print(f"\n输入句子: {sentence}")
+        
+        # 使用模型进行预测
+        h_pos, h_neg = predict(model, sentence)
+        
+        # 预测结果可视化
+        print(f"肯定内容特征范数: {np.linalg.norm(h_pos):.4f}")
+        print(f"否定内容特征范数: {np.linalg.norm(h_neg):.4f}")
+        
+        # 计算特征之间的余弦相似度
+        cos_sim = np.dot(h_pos, h_neg) / (np.linalg.norm(h_pos) * np.linalg.norm(h_neg))
+        print(f"肯定与否定特征余弦相似度: {cos_sim:.4f}")
+        
+        print("-"*50)
+    
+    return model
+
 
 def main():
     
@@ -551,8 +675,8 @@ def main():
         
         # 训练超参数
         'lambda1': 1,  # 语义对齐损失权重
-        'lambda2_max': 2,  # 正交对抗损失权重最大值  #TODO:待选择一个合适的值
-        'ortho_eps': 0.5,  # 正交对抗损失阈值  #TODO:待选择一个合适的值，统计一下negbench数据集的正交度量平均值？？？
+        'lambda2_max': 2,  # 正交对抗损失权重最大值  
+        'ortho_eps': 0.5,  # 正交对抗损失阈值
         'use_dynamic_weight': True,  # 是否使用动态权重
         'k': 5.0,  # 动态权重的斜率
         's0': 0.6,  # 动态权重的初始相似度
@@ -562,20 +686,10 @@ def main():
         'batch_size': 32,  # 批次大小
         'lr': 1e-3,  # 学习率
         'early_stop_patience': 200,  # 早停耐心值
-        'stage_switch_threshold': 0.01,  # 阶段切换阈值
+        'stage_switch_threshold': 0.02,  # 阶段切换阈值
         
         # 数据集划分
         'train_rate': 0.8
-        
-        # ---当前配置实验结果--- 
-        # metrics = {                               
-        #     'avg_pos_similarity': 0.914044, 
-        #     'avg_neg_similarity': 0.9360254, 
-        #     'avg_ortho_metric': 0.70526725, 
-        #     'avg_pos_neg_similarity': 0.77293307, 
-        #     'avg_neg_pos_similarity': 0.7772156, 
-        #     'avg_l_pos_l_neg_similarity': 0.78769076
-        # } 
     }
     
     # 设置随机种子
@@ -600,7 +714,7 @@ def main():
     val_features = prepare_features(val_dataset)
     
     # 初始化模型
-    clip_lens = CLIPLens(config)
+    clip_lens = CLIPGlassesLens(config)
     
     # 在训练前评估模型
     print("Evaluating model before training...")
@@ -633,7 +747,13 @@ def main():
     
     visualize_examples(clip_lens, test_examples)
     
+    # 演示如何加载预训练模型
+    print("\n演示如何加载预训练的 CLIPGlassesLens 模型:")
+    load_model_example()
+    
     return clip_lens, history, metrics
 
+
 if __name__ == "__main__":
-    main()
+    # main() # 训练
+    load_model_example() # 加载使用
