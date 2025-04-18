@@ -511,7 +511,7 @@ def train_clip_glasses_frame(cfg):
     dataset = MCQDataset(cfg.csv_path, Clip_model, lens_model)
     
     # Split dataset into train and validation sets (80/20)
-    train_size = int(0.8 * len(dataset))
+    train_size = int(cfg.train_rate * len(dataset))
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
     
@@ -701,9 +701,9 @@ def test_clip_glasses_frame(cfg):
     
     # Save results
     results = {
-        'test_accuracy': test_acc,
-        'predictions': all_predictions,
-        'labels': all_labels
+        'test_accuracy': float(test_acc),  # 如果 test_acc 是 numpy.float
+        'predictions': [int(p) for p in all_predictions],
+        'labels': [int(l) for l in all_labels]
     }
     
     with open(cfg.output_dir + "/test_results.json", 'w') as f:
@@ -721,17 +721,18 @@ class Config:
 def main():
     
     cfg = {
-        'csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv',  # Path to training CSV file
-        'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp2_glasses/final_clip_lens.pth',  # Path to CLIPGlassesLens weights
-        'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses/',  # Output directory for saving models
+        'csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv',  # Path to training CSV file
+        'train_rate': 0.8,  # Training data ratio
+        'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp2_glasses/len-pretrained/final_clip_lens.pth',  # Path to CLIPGlassesLens weights
+        'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses/Voc2007Mcq-08-frame-pretrained',  # Output directory for saving models
         'batch_size': 64,  # Batch size
         'epochs': 100,  # Number of epochs
         'learning_rate': 3e-4,  # Learning rate
         'lambda_0': 0.8,  # Base penalty strength
         'num_workers': 4,  # Number of data loading workers
-        'test_only': False,  # Set to True to only run testing
         'frame_weights_path': 'best_clip_frame.pth',  # 和 output_dir 拼接得到完整路径
-        'test_csv_path': None # Path to test CSV file
+        'test_csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv', # Path to test CSV file - 0-shot ACC: 59.73
+        'test_only': False,  # Set to True to only run testing
     }
     
     cfg = Config(**cfg)
@@ -746,4 +747,4 @@ def main():
 
 
 if __name__ == "__main__":
-        main()
+    main()
