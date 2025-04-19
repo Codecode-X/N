@@ -363,7 +363,7 @@ def load_clip_glasses_lens(weights_path, device=None):
     model = CLIPGlassesLens(config)
     
     # 加载权重
-    state_dict = torch.load(weights_path, map_location=device)
+    state_dict = torch.load(weights_path, map_location=device, weights_only=True)
     model.load_state_dict(state_dict)
     
     # 将模型移动到指定设备
@@ -411,7 +411,7 @@ class RetrievalDataset(Dataset):
         # Check if cache file exists
         if os.path.exists(cache_path):
             print(f"Loading preprocessed features from cache: {cache_path} of {self.csv_path} ...")
-            cached_data = torch.load(cache_path)
+            cached_data = torch.load(cache_path, weights_only=False)
             self.image_features = cached_data['image_features']
             self.caption_pos_features = cached_data['caption_pos_features']
             self.caption_neg_features = cached_data['caption_neg_features']
@@ -488,18 +488,93 @@ def retrieval_collate_fn(batch):
         torch.stack(image_ids)      # [B]
     )
 
-# def batch_to_tensor(batch, device):
-#     def to_tensor(x):
-#         if isinstance(x, list):
-#             if isinstance(x[0], list):  # 2D list: [B][N]
-#                 return torch.stack([torch.stack(f, dim=0) for f in x], dim=0).to(device)
-#             else:  # 1D list: [B]
-#                 return torch.stack(x, dim=0).to(device)
-#         return x.to(device)
+# Validation
+def _evaluate_model(frame_model, val_loader, device):
+    frame_model.eval()
+    val_loss = 0
+    txt2img_correct = 0
+    img2txt_correct = 0
+    total_txt_queries = 0
+    total_img_queries = 0
+    
+    with torch.no_grad():
+        for img_features, pos_features, neg_features, image_ids in tqdm.tqdm(val_loader, desc="Validation"):
+            img_features = img_features.to(device)
+            pos_features = [f.to(device) for f in pos_features] # list of [num_captions_i, embed_dim]
+            neg_features = [f.to(device) for f in neg_features] # list of [num_captions_i, embed_dim]
+            image_ids = image_ids.to(device)
+            
+            batch_size = img_features.shape[0]
+            
+            # Get caption counts for each image
+            caption_counts = [pos_feat.shape[0] for pos_feat in pos_features]
+            total_captions = sum(caption_counts) # 一个batch中所有图片的总caption数量
+                
+            similarity_matrix = torch.zeros(total_captions, batch_size).to(device)
+            total_frame_loss = 0
+            
+            caption_to_img_idx = []
+            for i, count in enumerate(caption_counts):
+                caption_to_img_idx.extend([i] * count)
 
-#     img_features, pos_features, neg_features, image_ids = batch
-#     return (to_tensor(img_features), to_tensor(pos_features), to_tensor(neg_features), image_ids)
-
+            # Create caption-to-image mapping
+            for i in range(batch_size):
+                img_feature = img_features[i].unsqueeze(0)
+                
+                for j in range(batch_size):
+                    for c in range(caption_counts[j]):
+                        cap_idx = sum(caption_counts[:j]) + c
+                        cap_pos = pos_features[j][c].unsqueeze(0)
+                        cap_neg = neg_features[j][c].unsqueeze(0)
+                        
+                        score, frame_loss, _ = frame_model(img_feature, cap_pos, cap_neg)
+                        similarity_matrix[cap_idx, i] = score
+                        total_frame_loss += frame_loss / (batch_size * total_captions) # batch_size个图片，每个图片有total_captions个caption
+                
+            # Text-to-image and image-to-text losses
+            txt2img_val_loss = 0
+            for cap_idx in range(total_captions):
+                img_idx = caption_to_img_idx[cap_idx]
+                txt2img_val_loss += -torch.log(torch.exp(similarity_matrix[cap_idx, img_idx]) / torch.sum(torch.exp(similarity_matrix[cap_idx, :])))
+                # Calculate Recall@5 for text-to-image
+                _, indices = torch.sort(similarity_matrix[cap_idx], descending=True)
+                top5_indices = indices[:5].tolist()
+                total_txt_queries += 1
+                if img_idx in top5_indices:
+                    txt2img_correct += 1
+                
+            txt2img_val_loss /= total_captions
+            
+            img2txt_val_loss = 0
+            for i in range(batch_size):
+                pos_cap_indices = [idx for idx, img_idx in enumerate(caption_to_img_idx) if img_idx == i]
+                pos_exp_sum = torch.sum(torch.exp(similarity_matrix[pos_cap_indices, i]))
+                all_exp_sum = torch.sum(torch.exp(similarity_matrix[:, i]))
+                img2txt_val_loss += -torch.log(pos_exp_sum / all_exp_sum)
+                # Calculate Recall@5 for image-to-text
+                _, indices = torch.sort(similarity_matrix[:, i], descending=True)
+                top5_indices = indices[:5].tolist()
+                total_img_queries += 1
+                if any(idx in top5_indices for idx in pos_cap_indices):
+                    img2txt_correct += 1
+                
+            img2txt_val_loss /= batch_size
+            
+            contrastive_val_loss = 0.5 * (txt2img_val_loss + img2txt_val_loss)
+            val_batch_loss = contrastive_val_loss + total_frame_loss
+            
+            val_loss += val_batch_loss.item()
+    
+    val_loss /= len(val_loader)
+    
+    # Calculate Recall@5 for Text-to-Image
+    txt2img_recall5 = (txt2img_correct / total_txt_queries) * 100 if total_txt_queries > 0 else 0
+    # Calculate Recall@5 for Image-to-Text
+    img2txt_recall5 = (img2txt_correct / total_img_queries) * 100 if total_img_queries > 0 else 0
+    # Calculate Mean Recall@5
+    mean_recall5 = (txt2img_recall5 + img2txt_recall5) / 2
+    
+    return val_loss, txt2img_recall5, img2txt_recall5, mean_recall5
     
 def train_clip_glasses_frame_Retrieval(cfg):
     """Train the CLIPGlassesFrame model on a test dataset on Retrieval"""
@@ -535,6 +610,11 @@ def train_clip_glasses_frame_Retrieval(cfg):
     # Setup optimizer
     optimizer = optim.AdamW(frame_model.parameters(), lr=cfg.learning_rate, betas=(0.9, 0.98))
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.epochs)
+    
+    # begin training model evaluation _evaluate_model(frame_model, val_loader, device)
+    print("Evaluating initial model performance...")
+    _, txt2img_recall5, img2txt_recall5, mean_recall5 = _evaluate_model(frame_model, val_loader, device)
+    print(f"Initial Recall@5: T2I: {txt2img_recall5:.2f}%, I2T: {img2txt_recall5:.2f}%, Mean: {mean_recall5:.2f}%")
     
     # Training loop
     best_val_loss = float('inf')
@@ -627,71 +707,13 @@ def train_clip_glasses_frame_Retrieval(cfg):
         scheduler.step()
         
         # Validation
-        frame_model.eval()
-        val_loss = 0
-        with torch.no_grad():
-            for img_features, pos_features, neg_features, image_ids in tqdm.tqdm(val_loader, desc="Validation"):
-                img_features = img_features.to(device)
-                pos_features = [f.to(device) for f in pos_features] # list of [num_captions_i, embed_dim]
-                neg_features = [f.to(device) for f in neg_features] # list of [num_captions_i, embed_dim]
-                image_ids = image_ids.to(device)
-                
-                batch_size = img_features.shape[0]
-                
-                # Get caption counts for each image
-                caption_counts = [pos_feat.shape[0] for pos_feat in pos_features]
-                total_captions = sum(caption_counts) # 一个batch中所有图片的总caption数量
-                    
-                similarity_matrix = torch.zeros(total_captions, batch_size).to(device)
-                total_frame_loss = 0
-                
-                caption_to_img_idx = []
-                for i, count in enumerate(caption_counts):
-                    caption_to_img_idx.extend([i] * count)
-
-                # Create caption-to-image mapping
-                for i in range(batch_size):
-                    img_feature = img_features[i].unsqueeze(0)
-                    
-                    for j in range(batch_size):
-                        for c in range(caption_counts[j]):
-                            cap_idx = sum(caption_counts[:j]) + c
-                            cap_pos = pos_features[j][c].unsqueeze(0)
-                            cap_neg = neg_features[j][c].unsqueeze(0)
-                            
-                            score, frame_loss, _ = frame_model(img_feature, cap_pos, cap_neg)
-                            similarity_matrix[cap_idx, i] = score
-                            total_frame_loss += frame_loss / (batch_size * total_captions) # batch_size个图片，每个图片有total_captions个caption
-                
-                # Text-to-image and image-to-text losses
-                txt2img_val_loss = 0
-                for cap_idx in range(total_captions):
-                    img_idx = caption_to_img_idx[cap_idx]
-                    txt2img_val_loss += -torch.log(
-                        torch.exp(similarity_matrix[cap_idx, img_idx]) / 
-                        torch.sum(torch.exp(similarity_matrix[cap_idx, :]))
-                    )
-                txt2img_val_loss /= total_captions
-                
-                img2txt_val_loss = 0
-                for i in range(batch_size):
-                    pos_cap_indices = [idx for idx, img_idx in enumerate(caption_to_img_idx) if img_idx == i]
-                    pos_exp_sum = torch.sum(torch.exp(similarity_matrix[pos_cap_indices, i]))
-                    all_exp_sum = torch.sum(torch.exp(similarity_matrix[:, i]))
-                    img2txt_val_loss += -torch.log(pos_exp_sum / all_exp_sum)
-                img2txt_val_loss /= batch_size
-                
-                contrastive_val_loss = 0.5 * (txt2img_val_loss + img2txt_val_loss)
-                val_batch_loss = contrastive_val_loss + total_frame_loss
-                
-                val_loss += val_batch_loss.item()
-        
-        val_loss /= len(val_loader)
+        val_loss, txt2img_recall5, img2txt_recall5, mean_recall5 = _evaluate_model(frame_model, val_loader, device)
         
         # Print metrics
         print(f"Epoch {epoch+1}/{cfg.epochs}")
         print(f"Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
-        
+        print(f"Recall@5: T2I: {txt2img_recall5:.2f}%, I2T: {img2txt_recall5:.2f}%, Mean: {mean_recall5:.2f}%")
+                
         # Save best model
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -738,7 +760,7 @@ def test_clip_glasses_frame_Retrieval(cfg):
     
     # Load the trained model weights
     model_path = Path(cfg.output_dir) / cfg.frame_weights_path
-    state_dict = torch.load(model_path, map_location=device)
+    state_dict = torch.load(model_path, map_location=device, weights_only=True)
     frame_model.load_state_dict(state_dict)
     frame_model.eval()
     print(f"Loaded model from {model_path}")
@@ -873,7 +895,7 @@ def main():
         # -----模型参数-----
         'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp3_glasses_Retrieval/len-pretrained/final_clip_lens.pth',  # Path to CLIPGlassesLens weights
         'batch_size': 32,  # Batch size
-        'epochs': 5,  # Number of epochs
+        'epochs': 50,  # Number of epochs
         'learning_rate': 3e-4,  # Learning rate
         'lambda_0': 0.8,  # Base penalty strength 62.48%
         'reg_weight': 1,  # Regularization loss weight
@@ -886,7 +908,7 @@ def main():
         'output_dir': '/root/NP-CLIP/XTrainer/exp/exp3_glasses_Retrieval/COCORetrieval-08-frame2-pretrained',  # Output directory for saving models
         'frame_weights_path': f'best_clip_frame2.pth',  # 和 output_dir 拼接得到完整路径
         'test_csv_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/s_COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv', # Path to test CSV file - 0-shot ACC: 59.73
-        'test_only': True,  # Set to True to only run testing
+        'test_only': False,  # Set to True to only run testing
     }
     
     cfg = Config(**cfg)
