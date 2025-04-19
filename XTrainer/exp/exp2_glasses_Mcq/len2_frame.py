@@ -727,13 +727,13 @@ def main():
     cfg = {
         'csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv',  # Path to training CSV file
         'train_rate': 0.8,  # Training data ratio
-        'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp2_glasses/len-pretrained/final_clip_lens.pth',  # Path to CLIPGlassesLens weights
+        'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/len-pretrained/final_clip_lens.pth',  # Path to CLIPGlassesLens weights
         'batch_size': 64,  # Batch size
         'epochs': 100,  # Number of epochs
         'learning_rate': 3e-4,  # Learning rate
         'lambda_0': 0.8,  # Base penalty strength
         'num_workers': 4,  # Number of data loading workers
-        'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses/Voc2007Mcq-08-frame-pretrained',  # Output directory for saving models
+        'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/Voc2007Mcq-08-frame-pretrained',  # Output directory for saving models
         'frame_weights_path': 'best_clip_frame.pth',  # 和 output_dir 拼接得到完整路径
         'test_csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv', # Path to test CSV file - 0-shot ACC: 59.73
         'test_only': True,  # Set to True to only run testing

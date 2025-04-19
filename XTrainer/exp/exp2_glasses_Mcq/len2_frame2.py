@@ -26,6 +26,7 @@ from pathlib import Path
 import hashlib
 import torch.optim as optim
 import random
+from sklearn.metrics import average_precision_score
 
 
 config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB16-ep50-Caltech101-SGD.yaml"
@@ -380,45 +381,6 @@ def load_clip_glasses_lens(weights_path, device=None):
     
     return model
 
-def load_lens_example():
-    """
-    使用示例: 演示如何加载预训练的 CLIPGlassesLens 模型并进行预测
-    """
-    print("="*50)
-    print("CLIPGlassesLens 模型加载示例")
-    print("="*50)
-    
-    # 模型权重路径 - 请替换为实际路径
-    weights_path = os.path.join(current_dir, 'best_clip_lens.pth')
-    
-    # 加载预训练模型
-    model = load_clip_glasses_lens(weights_path)
-    
-    # 测试样例
-    test_examples = [
-        "In a rustic cabin, an elegant bench sits in the corner, while with notable absence of a camera and no a gloves.",
-        "On a wooden dining table amidst a quiet afternoon, you can see a bright gloves, a woman, a screwdriver, a delicious egg, and yet without a knife and no a plate."
-    ]
-    
-    # 对测试样例进行预测
-    for sentence in test_examples:
-        print(f"\n输入句子: {sentence}")
-        
-        # 使用模型进行预测
-        h_pos, h_neg = predict(model, sentence)
-        
-        # 预测结果可视化
-        print(f"肯定内容特征范数: {np.linalg.norm(h_pos):.4f}")
-        print(f"否定内容特征范数: {np.linalg.norm(h_neg):.4f}")
-        
-        # 计算特征之间的余弦相似度
-        cos_sim = np.dot(h_pos, h_neg) / (np.linalg.norm(h_pos) * np.linalg.norm(h_neg))
-        print(f"肯定与否定特征余弦相似度: {cos_sim:.4f}")
-        
-        print("-"*50)
-    
-    return model
-
 
 class MCQDataset(Dataset):
     """Multiple Choice Question dataset"""
@@ -621,7 +583,6 @@ def train_clip_glasses_frame(cfg):
         val_loss = 0
         val_correct = 0
         val_total = 0
-        
         with torch.no_grad():
             for img_features, pos_features, neg_features, labels in tqdm.tqdm(val_loader, desc="Validation"):
                 img_features = img_features.to(device)
@@ -772,7 +733,7 @@ def main():
     
     cfg = {
         # -----模型参数-----
-        'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp2_glasses/len-pretrained/final_clip_lens.pth',  # Path to CLIPGlassesLens weights
+        'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/len-pretrained/final_clip_lens.pth',  # Path to CLIPGlassesLens weights
         'batch_size': 64,  # Batch size
         'epochs': 5,  # Number of epochs
         'learning_rate': 3e-4,  # Learning rate
@@ -784,7 +745,7 @@ def main():
         'csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv',  # Path to training CSV file
         'train_rate': 0.8,  # Training data ratio
         'num_workers': 4,  # Number of data loading workers
-        'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses/Voc2007Mcq-08-frame2-pretrained',  # Output directory for saving models
+        'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/Voc2007Mcq-08-frame2-pretrained',  # Output directory for saving models
         'frame_weights_path': f'best_clip_frame2.pth',  # 和 output_dir 拼接得到完整路径
         'test_csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv', # Path to test CSV file - 0-shot ACC: 59.73
         'test_only': False,  # Set to True to only run testing
