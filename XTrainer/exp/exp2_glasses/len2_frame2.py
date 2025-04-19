@@ -104,37 +104,28 @@ class CLIPGlassesFrame(nn.Module):
             #### **损失函数设计**
 
             * **交叉熵损失**：
-            $$
-            \mathcal{L}_{\text{CE}} = -\sum_{i=0}^3 y_i \log\left(\frac{e^{S_i}}{\sum_j e^{S_j}}\right)
-            $$
+                $$
+                \mathcal{L}_{\text{CE}} = -\sum_{i=0}^3 y_i \log\left(\frac{e^{S_i}}{\sum_j e^{S_j}}\right)
+                $$
 
             * **正则化项**：
-            $$
-            \mathcal{L}_{\text{reg}} = 0.05 \cdot \|\text{MLP}(h_{neg})\|_2^2
-            $$
+                $$
+                \mathcal{L}_{\text{reg}} = 0.05 \cdot \|\text{MLP}(h_{neg})\|_2^2
+                $$
 
             * **正交约束项**  （新增）
-            $$
-            \mathcal{L}_{\text{ortho}} = \| W_p^T W_n \|_F^2 + \| W_p W_p^T - I \|_F^2 + \| W_n W_n^T - I \|_F^2
-            $$
+                $$
+                \mathcal{L}_{\text{ortho}} = \| W_p^T W_n \|_F^2 + \| W_p W_p^T - I \|_F^2 + \| W_n W_n^T - I \|_F^2
+                $$
 
-            - 强制投影矩阵正交且标准化
-
-            * **特征保真项**  （新增）
-            $$
-            \mathcal{L}_{\text{fidelity}} = \|v_{pos} + v_{neg} - v\|_2^2
-            $$
-
-            - 保持投影后特征与原始特征线性可重构
+                - 强制投影矩阵正交且标准化
 
             * **总损失**  
-            $$
-            \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{CE}} + \mathcal{L}_{\text{reg}} + \alpha \mathcal{L}_{\text{ortho}} + \beta \mathcal{L}_{\text{fidelity}}
-            $$
-
-            - ==$\alpha=0.1, \beta=0.05$：平衡权重超参数==
+                $$
+                \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{CE}} + \mathcal{L}_{\text{reg}} + \alpha \mathcal{L}_{\text{ortho}}}
+                $$
     """
-    def __init__(self, embed_dim=512, hidden_dim=128, lambda_0=0.8, reg_weight=0.05, ortho_weight=0.1, fidelity_weight=0.05):
+    def __init__(self, embed_dim=512, hidden_dim=128, lambda_0=0.8, reg_weight=0.05, ortho_weight=0.1):
         """
         初始化CLIPGlassesFrame模块
         
@@ -144,7 +135,6 @@ class CLIPGlassesFrame(nn.Module):
             - lambda_0: 基础惩罚强度
             - reg_weight: 正则化损失权重
             - ortho_weight: 正交约束损失权重
-            - fidelity_weight: 特征保真损失权重
         """
         super().__init__()
         
@@ -186,7 +176,6 @@ class CLIPGlassesFrame(nn.Module):
         self.lambda_0 = lambda_0  # 基础惩罚强度
         self.reg_weight = reg_weight  # 正则化损失权重
         self.ortho_weight = ortho_weight  # 正交约束权重
-        self.fidelity_weight = fidelity_weight  # 特征保真权重
         
     def forward(self, h_img, h_pos, h_neg):
         """
@@ -199,7 +188,7 @@ class CLIPGlassesFrame(nn.Module):
             
         Returns:
             scores: 匹配得分 [batch_size]
-            reg_loss: 正则化损失
+            total_loss: 总损失 = 正则化损失 + 正交约束损失 + 交叉熵损失(不在此处计算)
             lambda_dynamic: 动态惩罚权重
         """
         # 图像特征正交投影
@@ -226,11 +215,8 @@ class CLIPGlassesFrame(nn.Module):
         ortho_loss += torch.norm(self.W_neg @ self.W_neg.t() - torch.eye(self.W_neg.size(0), device=self.W_neg.device), p='fro')**2  # W_n W_n^T - I
         ortho_loss *= self.ortho_weight
         
-        # 特征保真损失
-        fidelity_loss = self.fidelity_weight * torch.mean(torch.norm(img_pos + img_neg - h_img, dim=1)**2)
-        
         # 总损失
-        total_loss = reg_loss + ortho_loss + fidelity_loss
+        total_loss = reg_loss + ortho_loss
         
         return scores, total_loss, lambda_dynamic
         
@@ -558,8 +544,7 @@ def train_clip_glasses_frame(cfg):
     frame_model = CLIPGlassesFrame(embed_dim=512, hidden_dim=128, 
                                    lambda_0=cfg.lambda_0, 
                                    reg_weight=cfg.reg_weight,
-                                   ortho_weight=cfg.ortho_weight, 
-                                   fidelity_weight=cfg.fidelity_weight).to(device)
+                                   ortho_weight=cfg.ortho_weight).to(device)
 
     # Setup dataset and dataloader
     dataset = MCQDataset(cfg.csv_path, Clip_model, lens_model)
@@ -709,8 +694,7 @@ def test_clip_glasses_frame(cfg):
     frame_model = CLIPGlassesFrame(embed_dim=512, hidden_dim=128, 
                                 lambda_0=cfg.lambda_0, 
                                 reg_weight=cfg.reg_weight,
-                                ortho_weight=cfg.ortho_weight, 
-                                fidelity_weight=cfg.fidelity_weight).to(device)
+                                ortho_weight=cfg.ortho_weight).to(device)
     frame_model.load_state_dict(torch.load(os.path.join(cfg.output_dir, cfg.frame_weights_path), map_location=device))
     frame_model.eval()
     
@@ -794,8 +778,6 @@ def main():
         'learning_rate': 3e-4,  # Learning rate
         'lambda_0': 0.8,  # Base penalty strength
         'reg_weight': 1,  # Regularization loss weight
-        
-        'fidelity_weight': 0,  # Feature fidelity weight (固定)
         'ortho_weight': 0.0005,  # Orthogonal constraint weight > ep1: 49.76 > ep3: 58.54% > ep5: 62.48% > ep7: 61.85% > ep10: 61.72% > ep20: 60.89%
         
         # -----常规参数-----
