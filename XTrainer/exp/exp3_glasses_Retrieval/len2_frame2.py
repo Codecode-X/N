@@ -868,7 +868,6 @@ def main():
     random.seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    # 
     
     cfg = {
         # -----模型参数-----
