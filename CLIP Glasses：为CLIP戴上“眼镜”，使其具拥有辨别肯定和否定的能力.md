@@ -51,7 +51,7 @@ CLIPGlasses 由 Lens 和 Fram 两个组件组成。
 
 ​	使用t-SNE将高维特征 `h` 降维至2D，绘制分布图。
 
-<img src="notes/images/CLIP Glasses：为CLIP戴上“眼镜”，使其具拥有辨别肯定和否定的能力/image-20250417141648352.png" alt="image-20250417141648352" style="zoom: 33%;" /><img src="notes/images/CLIP Glasses：为CLIP戴上“眼镜”，使其具拥有辨别肯定和否定的能力/image-20250417152437859.png" alt="image-20250417152437859" style="zoom:33%;" />
+<img src="notes/notes/images/CLIP Glasses：为CLIP戴上“眼镜”，使其具拥有辨别肯定和否定的能力/image-20250417141648352.png" alt="image-20250417141648352" style="zoom: 33%;" /><img src="notes/notes/images/CLIP Glasses：为CLIP戴上“眼镜”，使其具拥有辨别肯定和否定的能力/image-20250417152437859.png" alt="image-20250417152437859" style="zoom:33%;" />
 
 * 若否定句（neg）和肯定句（pos）在特征空间中混叠：说明否定信息丢失。
 * 若否定句（neg）与语义无关句（unrelated）在特征空间中混叠：说明CLIP完全无法区分否定逻辑。
@@ -173,7 +173,17 @@ $$
 
 ## 组件2：Frame of Glasses
 
-### 1. **鲁棒差分对比学习（RDCL）**
+### 1. **双投影鲁棒差分对比学习（DP-RDCL）**
+
+#### **图像双空间投影**  （新增）
+
+对原始图像特征 $v \in \mathbb{R}^d$ 进行正交分解：  
+$$
+v_{pos} = W_p v, \quad v_{neg} = W_n v
+$$
+
+- $W_p, W_n \in \mathbb{R}^{d \times d}$：正交投影矩阵（$W_p^T W_n = 0$）  
+- **正交初始化**：$\text{span}(W_p) \perp \text{span}(W_n)$
 
 #### **标准化差分匹配得分**  
 
@@ -191,7 +201,7 @@ $$
 \lambda = \lambda_0 \cdot \sigma\left( \text{MLP}(h_{neg}) \right)
 $$
 
-- $\lambda_0$：基础惩罚强度（超参数，建议0.5-1.0）  
+- $\lambda_0$：基础惩罚强度（超参数，结果不敏感，实验最优为0.8，其余略低）
 - $\sigma(\cdot)$：Sigmoid函数，限制 $\lambda \in (0, \lambda_0)$  
 - MLP：单隐藏层网络（输入维度$d$, 输出维度1）
 
@@ -211,16 +221,34 @@ $$
   
 * **正则化项**：
   $$
-  \mathcal{L}_{\text{reg}} = 0.05 \cdot \|\text{MLP}(h_{neg})\|_2^2
+  \mathcal{L}_{\text{reg}} = \|\text{MLP}(h_{neg})\|_2^2
   $$
+
+* **正交约束项** 
+  $$
+  \mathcal{L}_{\text{ortho}} = \| W_p^T W_n \|_F^2 + \| W_p W_p^T - I \|_F^2 + \| W_n W_n^T - I \|_F^2
+  $$
+
+  - 强制投影矩阵正交且标准化
+
+* **总损失**  
+  $$
+  \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{CE}} + \alpha \mathcal{L}_{\text{reg}} + \beta \mathcal{L}_{\text{ortho}}
+  $$
+
+  - $\alpha=1, \beta=0.0005$：平衡权重超参数 （经过实验证明：$β$ 过大过小都会导致性能下降）
 
 #### **训练流程**
 
-* **训练参数：**(总参数量 <1K)  
+* **训练参数：**(总参数量 <1K)   
 
-  * MLP参数
-
-  * $\tau_{pos}$, $\tau_{neg}$, $\lambda_0$  
+  | 参数                     | 数量                    | 说明                   |
+  | ------------------------ | ----------------------- | ---------------------- |
+  | $W_p, W_n$               | $2d^2$                  | 正交投影矩阵（主参数） |
+  | $\tau_{pos}, \tau_{neg}$ | 2                       | 温度系数               |
+  | $\lambda_0$              | 1                       | 基础惩罚强度           |
+  | MLP参数                  | $2d \to 128 \to 1$      | 动态权重生成器         |
+  | **总计**                 | $\approx$ 0.5M（d=512） | 远小于原始CLIP参数     |
 
 * **训练数据集**: 
 
@@ -236,4 +264,5 @@ $$
     * 对每个样本生成 One-Hot 标签向量 $y \in \{0,1\}^4$（正确选项为1）
 
 * **训练策略**
+  
   * 余弦退火训练

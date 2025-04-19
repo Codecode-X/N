@@ -776,7 +776,7 @@ def main():
         'batch_size': 64,  # Batch size
         'epochs': 5,  # Number of epochs
         'learning_rate': 3e-4,  # Learning rate
-        'lambda_0': 0.8,  # Base penalty strength
+        'lambda_0': 0.8,  # Base penalty strength 62.48%
         'reg_weight': 1,  # Regularization loss weight
         'ortho_weight': 0.0005,  # Orthogonal constraint weight > ep1: 49.76 > ep3: 58.54% > ep5: 62.48% > ep7: 61.85% > ep10: 61.72% > ep20: 60.89%
         
