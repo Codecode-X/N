@@ -86,7 +86,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB16-ep50-Caltech101-SGD.yaml"
+config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB32-ep10-Caltech101-AdamW.yaml"
 
 Clip_model = build_clip_model(config_path=config_path) # 加载CLIP模型
 
@@ -747,5 +747,5 @@ def main():
     return clip_lens, history, metrics
 
 if __name__ == "__main__":
-    # main() # 训练
-    load_lens_example() # 加载使用
+    main() # 训练
+    # load_lens_example() # 加载使用

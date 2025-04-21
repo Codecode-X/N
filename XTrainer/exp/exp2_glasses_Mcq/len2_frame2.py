@@ -27,9 +27,10 @@ import hashlib
 import torch.optim as optim
 import random
 from sklearn.metrics import average_precision_score
+import math
 
 
-config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB16-ep50-Caltech101-SGD.yaml"
+config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB32-ep10-Caltech101-AdamW.yaml"
 
 Clip_model = build_clip_model(config_path=config_path) # 加载CLIP模型
 
@@ -57,76 +58,14 @@ class CLIPGlassesFrame(nn.Module):
     """
     CLIPGlassesFrame: 
         输入：
-            - CLIPGlassesLens的输出的否定内容和肯定内容的文本特征h_pos和h_neg。
+            - CLIP输出的文本特征h_text。
             - CLIP图像编码器的输出图像特征h_img。
         输出:
             - 文本和图像的匹配度
         场景：
             - MCQ任务
-        
-        设计：
-            #### **图像双空间投影**  （新增）
-
-            对原始图像特征 $v \in \mathbb{R}^d$ 进行正交分解：  
-            $$
-            v_{pos} = W_p v, \quad v_{neg} = W_n v
-            $$
-
-            - $W_p, W_n \in \mathbb{R}^{d \times d}$：正交投影矩阵（$W_p^T W_n = 0$）  
-            - **正交初始化**：$\text{span}(W_p) \perp \text{span}(W_n)$
-
-            #### **标准化差分匹配得分**  
-
-            对图像特征 $v \in \mathbb{R}^d$ 和文本特征 $h_{pos}, h_{neg}$，定义：  
-            $$
-            S(v) = \frac{\cos(v, h_{pos})}{\tau_{pos}} - \lambda \cdot \frac{\cos(v, h_{neg})}{\tau_{neg}}
-            $$
-
-            - $\tau_{pos}, \tau_{neg}$：温度系数（可学习标量）  
-            - $\lambda$：动态惩罚权重（由 $h_{neg}$ 置信度决定，见后）
-
-            #### **动态惩罚权重**  
-
-            $$
-            \lambda = \lambda_0 \cdot \sigma\left( \text{MLP}(h_{neg}) \right)
-            $$
-
-            - $\lambda_0$：基础惩罚强度（超参数，建议0.5-1.0）  
-            - $\sigma(\cdot)$：Sigmoid函数，限制 $\lambda \in (0, \lambda_0)$  
-            - MLP：单隐藏层网络（输入维度$d$, 输出维度1）
-
-            #### **匹配度计算**：
-
-            每个候选描述计算得分 $S_0, S_1, S_2, S_3$
-            $$
-            S_i = \frac{\cos(h_{img}, h_{pos}^{(i)})}{\tau_{pos}} - \lambda^{(i)} \cdot \frac{\cos(h_{img}, h_{neg}^{(i)})}{\tau_{neg}}
-            $$
-
-            #### **损失函数设计**
-
-            * **交叉熵损失**：
-                $$
-                \mathcal{L}_{\text{CE}} = -\sum_{i=0}^3 y_i \log\left(\frac{e^{S_i}}{\sum_j e^{S_j}}\right)
-                $$
-
-            * **正则化项**：
-                $$
-                \mathcal{L}_{\text{reg}} = 0.05 \cdot \|\text{MLP}(h_{neg})\|_2^2
-                $$
-
-            * **正交约束项**  （新增）
-                $$
-                \mathcal{L}_{\text{ortho}} = \| W_p^T W_n \|_F^2 + \| W_p W_p^T - I \|_F^2 + \| W_n W_n^T - I \|_F^2
-                $$
-
-                - 强制投影矩阵正交且标准化
-
-            * **总损失**  
-                $$
-                \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{CE}} + \mathcal{L}_{\text{reg}} + \alpha \mathcal{L}_{\text{ortho}}}
-                $$
     """
-    def __init__(self, embed_dim=512, hidden_dim=128, lambda_0=0.8, reg_weight=0.05, ortho_weight=0.1):
+    def __init__(self, embed_dim=512, hidden_dim=128, lambda_0=0.8):
         """
         初始化CLIPGlassesFrame模块
         
@@ -134,14 +73,11 @@ class CLIPGlassesFrame(nn.Module):
             - embed_dim: 嵌入维度(CLIP特征维度)
             - hidden_dim: MLP隐藏层维度
             - lambda_0: 基础惩罚强度
-            - reg_weight: 正则化损失权重
-            - ortho_weight: 正交约束损失权重
         """
         super().__init__()
         
         # 温度参数(可学习)
-        self.tau_pos = nn.Parameter(torch.ones(1) * 0.07)
-        self.tau_neg = nn.Parameter(torch.ones(1) * 0.07)
+        self.tau = nn.Parameter(torch.ones(1) * 0.07)
         
         # 用于动态惩罚权重的MLP
         self.confidence_mlp = nn.Sequential(
@@ -151,19 +87,24 @@ class CLIPGlassesFrame(nn.Module):
         )
         
         # 图像正交投影矩阵 - 初始化为正交矩阵
-        self.W_pos = nn.Parameter(torch.empty(embed_dim, embed_dim))
-        self.W_neg = nn.Parameter(torch.empty(embed_dim, embed_dim))
+        self.W_adpt = nn.Parameter(torch.empty(embed_dim, embed_dim))
         
-        # 正交初始化
-        nn.init.orthogonal_(self.W_pos)
-        nn.init.orthogonal_(self.W_neg)
+        # # kaiming初始化
+        # nn.init.kaiming_uniform_(self.W_adpt, a=math.sqrt(5)) # 64.54%
+        # Xavier初始化
+        # nn.init.xavier_uniform_(self.W_adpt) # 65.05%
         
+        # # 正交初始化
+        self.orthogonal_init(self.W_adpt, embed_dim) # 67.59% | kaiming初始化:64.54% | Xavier初始化:65.05%
+        
+        self.lambda_0 = lambda_0  # 基础惩罚强度
+      
+    # 正交初始化
+    def orthogonal_init(self, W_adpt, embed_dim):
         # 生成两个彼此正交、各自也正交的投影矩阵 W_pos 和 W_neg，为模型提供结构良好的初始参数
         with torch.no_grad():
             # 生成随机正交矩阵
             u, _, v = torch.svd(torch.randn(embed_dim, embed_dim))
-            self.W_pos.data = u
-            
             # 生成另一个正交矩阵，确保与第一个正交
             u2, _, v2 = torch.svd(torch.randn(embed_dim, embed_dim))
             # 使用Gram-Schmidt过程确保正交性
@@ -171,55 +112,34 @@ class CLIPGlassesFrame(nn.Module):
             u2_orth = u2 - proj
             # 归一化
             u2_orth = F.normalize(u2_orth, dim=1)
-            self.W_neg.data = u2_orth
-        
-        #TODO: 待调参
-        self.lambda_0 = lambda_0  # 基础惩罚强度
-        self.reg_weight = reg_weight  # 正则化损失权重
-        self.ortho_weight = ortho_weight  # 正交约束权重
-        
-    def forward(self, h_img, h_pos, h_neg):
+            W_adpt.data = u2_orth
+      
+    def forward(self, h_img, h_text):
         """
         计算图像和文本特征的匹配得分
         
         Args:
             h_img: 图像特征 [batch_size, embed_dim]
-            h_pos: 肯定文本特征 [batch_size, embed_dim]
-            h_neg: 否定文本特征 [batch_size, embed_dim]
+            h: 文本特征 [batch_size, embed_dim]
             
         Returns:
             scores: 匹配得分 [batch_size]
-            total_loss: 总损失 = 正则化损失 + 正交约束损失 + 交叉熵损失(不在此处计算)
             lambda_dynamic: 动态惩罚权重
         """
         # 图像特征正交投影
-        img_pos = h_img @ self.W_pos  # [batch_size, embed_dim]
-        img_neg = h_img @ self.W_neg  # [batch_size, embed_dim]
+        h_img = h_img @ self.W_adpt
         
         # 计算余弦相似度
-        cos_pos = F.cosine_similarity(img_pos, h_pos, dim=1)
-        cos_neg = F.cosine_similarity(img_neg, h_neg, dim=1)
+        cos = F.cosine_similarity(h_img, h_text, dim=1)
         
         # 计算动态惩罚权重
-        confidence = self.confidence_mlp(h_neg)
+        confidence = self.confidence_mlp(h_text)
         lambda_dynamic = self.lambda_0 * torch.sigmoid(confidence).squeeze(-1)
         
         # 计算标准化差分匹配得分
-        scores = cos_pos / self.tau_pos - lambda_dynamic * (cos_neg / self.tau_neg)
+        scores = (1-lambda_dynamic) * (cos / self.tau) # 67.97%
         
-        # 正则化损失
-        reg_loss = self.reg_weight * torch.mean(torch.square(confidence))
-        
-        # 正交约束损失
-        ortho_loss = torch.norm(self.W_pos.t() @ self.W_neg, p='fro')**2  # W_p^T W_n
-        ortho_loss += torch.norm(self.W_pos @ self.W_pos.t() - torch.eye(self.W_pos.size(0), device=self.W_pos.device), p='fro')**2  # W_p W_p^T - I
-        ortho_loss += torch.norm(self.W_neg @ self.W_neg.t() - torch.eye(self.W_neg.size(0), device=self.W_neg.device), p='fro')**2  # W_n W_n^T - I
-        ortho_loss *= self.ortho_weight
-        
-        # 总损失
-        total_loss = reg_loss + ortho_loss
-        
-        return scores, total_loss, lambda_dynamic
+        return scores, lambda_dynamic
         
 
 class CLIPGlassesLens(nn.Module):
@@ -287,6 +207,8 @@ class CLIPGlassesLens(nn.Module):
             h_pos: 肯定内容特征 [batch_size, embed_dim]
             h_neg: 否定内容特征 [batch_size, embed_dim]
         """
+        return h, h
+    
         batch_size = h.shape[0]
         
         # Self-Attention需要序列输入格式 [batch_size, seq_len, embed_dim]
@@ -322,6 +244,7 @@ class CLIPGlassesLens(nn.Module):
         h_neg = beta * v_norm + (1 - beta) * h
         
         return h_pos, h_neg
+
 
 @torch.no_grad()
 def predict(model, sentence):
@@ -411,16 +334,19 @@ class MCQDataset(Dataset):
         """
         # Create cache file path based on CSV path
         csv_hash = hashlib.md5(self.data.to_json().encode()).hexdigest()[:10]
-        cache_path = f"mcq_features_cache_{csv_hash}.pt"
+        
+        dataset_name = "COCO" if "COCO" in self.csv_path else "VOC2007"
+        cache_path = f"{dataset_name}_mcq_features_cache_{csv_hash}.pt"
         
         # Check if cache file exists
         if os.path.exists(cache_path):
             print(f"Loading preprocessed features from cache: {cache_path} of {self.csv_path} ...")
             cached_data = torch.load(cache_path)
-            self.image_features = cached_data['image_features']
-            self.pos_features = cached_data['pos_features']
-            self.neg_features = cached_data['neg_features']
-            self.labels = cached_data['labels']
+            with torch.no_grad():
+                self.image_features = cached_data['image_features']
+                self.pos_features = cached_data['pos_features']
+                self.neg_features = cached_data['neg_features']
+                self.labels = cached_data['labels']
             print(f"Loaded {len(self.labels)} samples from cache")
             return
         
@@ -504,12 +430,10 @@ def train_clip_glasses_frame(cfg):
 
     # Initialize CLIPGlassesFrame model
     frame_model = CLIPGlassesFrame(embed_dim=512, hidden_dim=128, 
-                                   lambda_0=cfg.lambda_0, 
-                                   reg_weight=cfg.reg_weight,
-                                   ortho_weight=cfg.ortho_weight).to(device)
+                                   lambda_0=cfg.lambda_0).to(device)
 
     # Setup dataset and dataloader
-    dataset = MCQDataset(cfg.csv_path, Clip_model, lens_model)
+    dataset = MCQDataset(cfg.csv_path, Clip_model, lens_model) # Clip_model, lens_model 用于预加载数据过程中的特征提取
     
     # Split dataset into train and validation sets (80/20)
     train_size = int(cfg.train_rate * len(dataset))
@@ -535,36 +459,26 @@ def train_clip_glasses_frame(cfg):
         train_correct = 0
         train_total = 0
         
-        for img_features, pos_features, neg_features, labels in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{cfg.epochs}"):
+        for img_features, text_features, _, labels in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{cfg.epochs}"):
             img_features = img_features.to(device)
-            pos_features = pos_features.to(device)
-            neg_features = neg_features.to(device)
+            text_features = text_features.to(device)
             labels = labels.to(device)
             
             optimizer.zero_grad()
             
             # Get scores for all options
-            batch_size = img_features.shape[0]
-            num_options = pos_features.shape[1]
-            
+            num_options = text_features.shape[1]
             # Process each option
             all_scores = []
-            total_loss = 0
-            
             for i in range(num_options):
-                option_pos = pos_features[:, i]
-                option_neg = neg_features[:, i]
-                
-                scores, f_loss, _ = frame_model(img_features, option_pos, option_neg)
+                scores, _ = frame_model(img_features, text_features[:, i])
                 all_scores.append(scores)
-                total_loss += f_loss
             
             # Stack scores for all options
             all_scores = torch.stack(all_scores, dim=1)  # [batch_size, num_options]
             
             # Compute cross-entropy loss
-            ce_loss = F.cross_entropy(all_scores, labels)
-            loss = ce_loss + total_loss
+            loss = F.cross_entropy(all_scores, labels)
             
             loss.backward()
             optimizer.step()
@@ -584,30 +498,24 @@ def train_clip_glasses_frame(cfg):
         val_correct = 0
         val_total = 0
         with torch.no_grad():
-            for img_features, pos_features, neg_features, labels in tqdm.tqdm(val_loader, desc="Validation"):
+            for img_features, text_features, _,  labels in tqdm.tqdm(val_loader, desc="Validation"):
                 img_features = img_features.to(device)
-                pos_features = pos_features.to(device)
-                neg_features = neg_features.to(device)
+                text_features = text_features.to(device)
                 labels = labels.to(device)
                 
+                # Get scores for all options
+                num_options = text_features.shape[1]
                 # Process each option
                 all_scores = []
-                total_loss = 0
-                
-                for i in range(pos_features.shape[1]):
-                    option_pos = pos_features[:, i]
-                    option_neg = neg_features[:, i]
-                    
-                    scores, f_loss, _ = frame_model(img_features, option_pos, option_neg)
+                for i in range(num_options):
+                    scores, _ = frame_model(img_features, text_features[:, i])
                     all_scores.append(scores)
-                    total_loss += f_loss
                 
                 # Stack scores for all options
                 all_scores = torch.stack(all_scores, dim=1)  # [batch_size, num_options]
                 
                 # Compute cross-entropy loss
-                ce_loss = F.cross_entropy(all_scores, labels)
-                loss = ce_loss + total_loss
+                loss = F.cross_entropy(all_scores, labels)
                 
                 val_loss += loss.item()
                 
@@ -653,9 +561,7 @@ def test_clip_glasses_frame(cfg):
     
     # Initialize and load CLIPGlassesFrame model
     frame_model = CLIPGlassesFrame(embed_dim=512, hidden_dim=128, 
-                                lambda_0=cfg.lambda_0, 
-                                reg_weight=cfg.reg_weight,
-                                ortho_weight=cfg.ortho_weight).to(device)
+                                lambda_0=cfg.lambda_0).to(device)
     frame_model.load_state_dict(torch.load(os.path.join(cfg.output_dir, cfg.frame_weights_path), map_location=device))
     frame_model.eval()
     
@@ -670,20 +576,17 @@ def test_clip_glasses_frame(cfg):
     all_labels = []
     
     with torch.no_grad():
-        for img_features, pos_features, neg_features, labels in tqdm.tqdm(test_loader, desc="Testing"):
+        for img_features, text_features, _,  labels in tqdm.tqdm(test_loader, desc="Validation"):
             img_features = img_features.to(device)
-            pos_features = pos_features.to(device)
-            neg_features = neg_features.to(device)
+            text_features = text_features.to(device)
             labels = labels.to(device)
             
+            # Get scores for all options
+            num_options = text_features.shape[1]
             # Process each option
             all_scores = []
-            
-            for i in range(pos_features.shape[1]):
-                option_pos = pos_features[:, i]
-                option_neg = neg_features[:, i]
-                
-                scores, _, _ = frame_model(img_features, option_pos, option_neg)
+            for i in range(num_options):
+                scores, _ = frame_model(img_features, text_features[:, i])
                 all_scores.append(scores)
             
             # Stack scores for all options
@@ -723,7 +626,7 @@ class Config:
 
 def main():
     # 设置随机种子
-    seed = 42
+    seed = 3407
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
@@ -733,20 +636,18 @@ def main():
     
     cfg = {
         # -----模型参数-----
-        'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/len-pretrained/final_clip_lens.pth',  # Path to CLIPGlassesLens weights
+        'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/len-pretrained/final_clip_lens_b32.pth',  # Path to CLIPGlassesLens weights
         'batch_size': 64,  # Batch size
         'epochs': 5,  # Number of epochs
         'learning_rate': 3e-4,  # Learning rate
-        'lambda_0': 0.8,  # Base penalty strength 62.48%
-        'reg_weight': 1,  # Regularization loss weight
-        'ortho_weight': 0.0005,  # Orthogonal constraint weight > ep1: 49.76 > ep3: 58.54% > ep5: 62.48% > ep7: 61.85% > ep10: 61.72% > ep20: 60.89%
+        'lambda_0': 0.8,  # Base penalty strength 61.63|b32 62.48%|b16
         
         # -----常规参数-----
         'csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv',  # Path to training CSV file
         'train_rate': 0.8,  # Training data ratio
         'num_workers': 4,  # Number of data loading workers
         'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/Voc2007Mcq-08-frame2-pretrained',  # Output directory for saving models
-        'frame_weights_path': f'best_clip_frame2.pth',  # 和 output_dir 拼接得到完整路径
+        'frame_weights_path': f'best_clip_b32_frame2.pth',  # 和 output_dir 拼接得到完整路径
         'test_csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv', # Path to test CSV file - 0-shot ACC: 59.73
         'test_only': False,  # Set to True to only run testing
     }
