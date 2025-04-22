@@ -30,7 +30,7 @@ config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB32-ep10-Caltech101
 Clip_model = build_clip_model(config_path=config_path) # 加载CLIP模型
 
 def extract_sentence_features(sentence:str):
-    """提取单个句子的CLIP文本特征"""
+    """原始CLIP提取单个句子的CLIP文本特征"""
     with torch.no_grad():  # 关闭梯度计算
         tokenized_text = tokenize(sentence) # [num_classes, context_length]
         tokenized_text = tokenized_text.to(Clip_model.device) # [num_classes, context_length]
@@ -38,7 +38,7 @@ def extract_sentence_features(sentence:str):
         return text_features.cpu().numpy()[0] # [embed_dim]
 
 def extract_img_features(image_path:str):
-    """提取单个图像的CLIP图像特征"""
+    """原始CLIP提取单个图像的CLIP图像特征"""
     # 加载图像，转为张量[batch_size, 3, input_size, input_size]
     img = Image.open(image_path)  # 打开图像
     transform = Compose([standard_image_transform(224, 'BICUBIC'), ToTensor()])  # 定义转换
@@ -202,7 +202,7 @@ class CLIPGlassesLens(nn.Module):
             h_pos: 肯定内容特征 [batch_size, embed_dim]
             h_neg: 否定内容特征 [batch_size, embed_dim]
         """
-        return h, h
+        return h, h # 直接返回原始CLIP提取的文本特征
     
         batch_size = h.shape[0]
         
@@ -354,7 +354,7 @@ class RetrievalDataset(Dataset):
             captions = eval(row['captions']) # 每个图片对应的数量不一致
 
             # 提取图像特征
-            img_feature = extract_img_features(img_path)
+            img_feature = extract_img_features(img_path) # 原始CLIP提取的图像特征
             self.image_features.append(img_feature)
             self.image_ids.append(image_id)
 
@@ -362,7 +362,7 @@ class RetrievalDataset(Dataset):
             neg_list = []
 
             for caption in captions:
-                text_feat = extract_sentence_features(caption)
+                text_feat = extract_sentence_features(caption) # 原始CLIP提取的文本特征
                 text_tensor = torch.tensor(text_feat, dtype=torch.float32).unsqueeze(0).to(self.device)
 
                 with torch.no_grad():
