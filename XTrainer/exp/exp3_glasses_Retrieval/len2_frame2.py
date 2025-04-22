@@ -741,8 +741,9 @@ def test_clip_glasses_frame_Retrieval(cfg):
                 
                 # Sort scores in descending order
                 _, indices = torch.sort(similarity_matrix[cap_idx], descending=True)
-                # # 改为随机猜
-                # indices = torch.randperm(batch_size)
+                print("text-to-image indices.shape=", indices.shape)
+                # # # 改为随机猜
+                # indices = torch.randperm(indices.shape[0])
                 
                 # Check if ground truth image is in top-k
                 for k in txt2img_recalls.keys(): # k = 1, 5, 10 代表 Recall@1, Recall@5, Recall@10
@@ -765,8 +766,8 @@ def test_clip_glasses_frame_Retrieval(cfg):
                 
                 # Sort caption scores for this image
                 _, indices = torch.sort(similarity_matrix[:, i], descending=True)
-                # # 改为随机猜
-                # indices = torch.randperm(batch_size)
+                # # # 改为随机猜
+                # indices = torch.randperm(indices.shape[0])
                 
                 # Check if any relevant caption is in top-k
                 for k in img2txt_recalls.keys(): # k = 1, 5, 10 代表 Recall@1, Recall@5, Recall@10
@@ -829,7 +830,7 @@ def main():
     
     cfg = {
         # -----baseline-原始CLIP-----
-        'raw_CLIP': True,  # Set to True to use original CLIP model
+        'raw_CLIP': False,  # Set to True to use original CLIP model
         
         # -----模型参数-----
         'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp3_glasses_Retrieval/len-pretrained/final_clip_lens.pth',  # Path to CLIPGlassesLens weights
@@ -844,7 +845,7 @@ def main():
         'num_workers': 4,  # Number of data loading workers
         'output_dir': '/root/NP-CLIP/XTrainer/exp/exp3_glasses_Retrieval/COCORetrieval-08-frame2-pretrained',  # Output directory for saving models
         'frame_weights_path': f'best_clip_b32_frame2_MCQ.pth',  # 和 output_dir 拼接得到完整路径
-        'test_csv_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv', # Path to test CSV file - 0-shot ACC: 59.73
+        'test_csv_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/s_COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv', # Path to test CSV file - 0-shot ACC: 59.73
         'test_only': True,  # Set to True to only run testing
     }
     
