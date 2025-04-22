@@ -29,7 +29,7 @@ import random
 from sklearn.metrics import average_precision_score
 import math
 
-
+# config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB16-ep50-Caltech101-SGD.yaml" # b16
 config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB32-ep10-Caltech101-AdamW.yaml"
 
 Clip_model = build_clip_model(config_path=config_path) # 加载CLIP模型
@@ -274,9 +274,9 @@ def load_clip_glasses_lens(weights_path, device=None):
     返回:
         model (CLIPGlassesLens): 初始化并加载权重的模型
     """
-    # 检查权重文件是否存在
-    if not os.path.exists(weights_path):
-        raise FileNotFoundError(f"未找到模型权重文件: {weights_path}")
+    # # 检查权重文件是否存在
+    # if not os.path.exists(weights_path):
+    #     raise FileNotFoundError(f"未找到模型权重文件: {weights_path}")
     
     # 默认配置
     config = {
@@ -290,9 +290,9 @@ def load_clip_glasses_lens(weights_path, device=None):
     # 初始化模型
     model = CLIPGlassesLens(config)
     
-    # 加载权重
-    state_dict = torch.load(weights_path, map_location=device)
-    model.load_state_dict(state_dict)
+    # # 加载权重
+    # state_dict = torch.load(weights_path, map_location=device)
+    # model.load_state_dict(state_dict)
     
     # 将模型移动到指定设备
     model = model.to(device)

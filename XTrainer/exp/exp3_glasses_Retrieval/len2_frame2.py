@@ -24,7 +24,8 @@ import torch.optim as optim
 import random
 
 
-config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB16-ep50-Caltech101-SGD.yaml"
+# config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB16-ep50-Caltech101-SGD.yaml" # b16
+config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB32-ep10-Caltech101-AdamW.yaml" # b32
 
 Clip_model = build_clip_model(config_path=config_path) # 加载CLIP模型
 
@@ -722,7 +723,15 @@ def test_clip_glasses_frame_Retrieval(cfg):
                         cap_pos = pos_features[j][c].unsqueeze(0)
                         cap_neg = neg_features[j][c].unsqueeze(0)
                         
-                        score, _ = frame_model(img_feature, cap_pos)
+                        # ========raw CLIP========
+                        if cfg.raw_CLIP:
+                            logit_scale = Clip_model.logit_scale.exp()
+                            score = logit_scale * img_feature @ cap_pos.T
+                        # ==========ours==========
+                        else: 
+                            score, _ = frame_model(img_feature, cap_pos)
+                        # ========================
+                        
                         similarity_matrix[cap_idx, i] = score
             
             # Evaluate text-to-image retrieval
@@ -739,6 +748,10 @@ def test_clip_glasses_frame_Retrieval(cfg):
                         txt2img_recalls[k] += 1
                 
                 total_txt_queries += 1
+                
+                # print("\ntext-to-image retrieval - Predictions and GT:")
+                # print(f"GT: {img_idx}")
+                # print(f"Predictions: {indices}")
             
             # Evaluate image-to-text retrieval
             for i in range(batch_size):
@@ -758,7 +771,12 @@ def test_clip_glasses_frame_Retrieval(cfg):
                         img2txt_recalls[k] += 1
                 
                 total_img_queries += 1
-    
+                
+                # # 打印预测结果和GT
+                # print("\nimage-to-text retrieval - Predictions and GT:")
+                # print(f"GT: {relevant_caption_indices}")
+                # print(f"Predictions: {indices}")
+                    
     # Compute final metrics
     for k in txt2img_recalls.keys():
         txt2img_recalls[k] = (txt2img_recalls[k] / total_txt_queries) * 100.0
@@ -807,6 +825,9 @@ def main():
     torch.backends.cudnn.benchmark = False
     
     cfg = {
+        # -----baseline-原始CLIP-----
+        'raw_CLIP': True,  # Set to True to use original CLIP model
+        
         # -----模型参数-----
         'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp3_glasses_Retrieval/len-pretrained/final_clip_lens.pth',  # Path to CLIPGlassesLens weights
         'batch_size': 32,  # Batch size
@@ -819,9 +840,9 @@ def main():
         'train_rate': 0.8,  # Training data ratio
         'num_workers': 4,  # Number of data loading workers
         'output_dir': '/root/NP-CLIP/XTrainer/exp/exp3_glasses_Retrieval/COCORetrieval-08-frame2-pretrained',  # Output directory for saving models
-        'frame_weights_path': f'best_clip_frame2.pth',  # 和 output_dir 拼接得到完整路径
+        'frame_weights_path': f'best_clip_b32_frame2_MCQ.pth',  # 和 output_dir 拼接得到完整路径
         'test_csv_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/s_COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv', # Path to test CSV file - 0-shot ACC: 59.73
-        'test_only': False,  # Set to True to only run testing
+        'test_only': True,  # Set to True to only run testing
     }
     
     cfg = Config(**cfg)
