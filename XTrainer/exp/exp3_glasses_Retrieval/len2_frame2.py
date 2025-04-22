@@ -737,18 +737,20 @@ def test_clip_glasses_frame_Retrieval(cfg):
             # Evaluate text-to-image retrieval
             for cap_idx in range(total_captions):
                 # Ground truth image index for this caption
-                img_idx = caption_to_img_idx[cap_idx]
+                gt_img_idx = caption_to_img_idx[cap_idx]
                 
                 # Sort scores in descending order
                 _, indices = torch.sort(similarity_matrix[cap_idx], descending=True)
+                # # 改为随机猜
+                # indices = torch.randperm(batch_size)
                 
                 # Check if ground truth image is in top-k
-                for k in txt2img_recalls.keys():
-                    if img_idx in indices[:k].tolist():
+                for k in txt2img_recalls.keys(): # k = 1, 5, 10 代表 Recall@1, Recall@5, Recall@10
+                    if gt_img_idx in indices[:k].tolist():
                         txt2img_recalls[k] += 1
-                
                 total_txt_queries += 1
                 
+                # # 打印预测结果和GT
                 # print("\ntext-to-image retrieval - Predictions and GT:")
                 # print(f"GT: {img_idx}")
                 # print(f"Predictions: {indices}")
@@ -756,20 +758,21 @@ def test_clip_glasses_frame_Retrieval(cfg):
             # Evaluate image-to-text retrieval
             for i in range(batch_size):
                 # Find indices of captions that belong to this image
-                relevant_caption_indices = [idx for idx, img_idx in enumerate(caption_to_img_idx) if img_idx == i]
+                gt_relevant_caption_indices = [idx for idx, img_idx in enumerate(caption_to_img_idx) if img_idx == i]
                 
-                if not relevant_caption_indices:
+                if not gt_relevant_caption_indices:
                     continue
                 
                 # Sort caption scores for this image
                 _, indices = torch.sort(similarity_matrix[:, i], descending=True)
+                # # 改为随机猜
+                # indices = torch.randperm(batch_size)
                 
                 # Check if any relevant caption is in top-k
-                for k in img2txt_recalls.keys():
+                for k in img2txt_recalls.keys(): # k = 1, 5, 10 代表 Recall@1, Recall@5, Recall@10
                     top_k_indices = indices[:k].tolist()
-                    if any(idx in top_k_indices for idx in relevant_caption_indices):
+                    if any(idx in top_k_indices for idx in gt_relevant_caption_indices):
                         img2txt_recalls[k] += 1
-                
                 total_img_queries += 1
                 
                 # # 打印预测结果和GT
@@ -841,7 +844,7 @@ def main():
         'num_workers': 4,  # Number of data loading workers
         'output_dir': '/root/NP-CLIP/XTrainer/exp/exp3_glasses_Retrieval/COCORetrieval-08-frame2-pretrained',  # Output directory for saving models
         'frame_weights_path': f'best_clip_b32_frame2_MCQ.pth',  # 和 output_dir 拼接得到完整路径
-        'test_csv_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/s_COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv', # Path to test CSV file - 0-shot ACC: 59.73
+        'test_csv_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv', # Path to test CSV file - 0-shot ACC: 59.73
         'test_only': True,  # Set to True to only run testing
     }
     
