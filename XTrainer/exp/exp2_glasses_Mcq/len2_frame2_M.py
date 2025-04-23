@@ -77,9 +77,9 @@ class CLIPGlassesFrame(nn.Module):
         super().__init__()
         
         # 可训练的 logit_scale = log(1 / τ) | CLIP 通过 可训练的 logit_scale 让模型自动调整 τ，适应不同数据和任务。
-        τ = 0.07 # CLIP 训练时的 softmax 温度参数 τ，较小的 τ(较大的 logit_scale)：分布更加陡峭，相似度高的样本更加突出
-        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / τ))  # 训练时学习的是 logit_scale，而不是 τ，直接学习 τ 可能会导致梯度更新过大或过小。
-
+        # τ = 0.07 # CLIP 训练时的 softmax 温度参数 τ，较小的 τ(较大的 logit_scale)：分布更加陡峭，相似度高的样本更加突出
+        # self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / τ))  # 训练时学习的是 logit_scale，而不是 τ，直接学习 τ 可能会导致梯度更新过大或过小。
+        self.logit_scale = Clip_model.logit_scale.detach() # 直接使用CLIP模型的训练好的logit_scale
         
         # 用于动态惩罚权重的MLP
         self.confidence_mlp = nn.Sequential(
@@ -88,7 +88,7 @@ class CLIPGlassesFrame(nn.Module):
             nn.Linear(hidden_dim, 1)
         )
         
-        # 图像正交投影矩阵 - 初始化为正交矩阵
+        # 图像正交投影矩阵
         self.W_adpt = nn.Parameter(torch.empty(embed_dim, embed_dim))
         
         # # kaiming初始化
@@ -97,7 +97,10 @@ class CLIPGlassesFrame(nn.Module):
         # nn.init.xavier_uniform_(self.W_adpt) # 65.05%
         
         # # 正交初始化
-        self.orthogonal_init(self.W_adpt, embed_dim) # 67.59% | kaiming初始化:64.54% | Xavier初始化:65.05%
+        # self.orthogonal_init(self.W_adpt, embed_dim) # 67.59% | kaiming初始化:64.54% | Xavier初始化:65.05%
+        
+        # 初始化为单位矩阵
+        nn.init.eye_(self.W_adpt)
         
         self.lambda_0 = lambda_0  # 基础惩罚强度
       
@@ -632,7 +635,7 @@ def test_clip_glasses_frame_MCQ(cfg):
     # Initialize and load CLIPGlassesFrame model
     frame_model = CLIPGlassesFrame(embed_dim=512, hidden_dim=128, 
                                 lambda_0=cfg.lambda_0).to(device)
-    frame_model.load_state_dict(torch.load(os.path.join(cfg.output_dir, cfg.frame_weights_path), map_location=device))
+    frame_model.load_state_dict(torch.load(os.path.join(cfg.output_dir, cfg.test_frame_weights_path), map_location=device))
     frame_model.eval()
     
     # Setup test dataset and loader
@@ -685,10 +688,8 @@ def main():
         'csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv',  # Path to training CSV file
         'train_rate': 0.8,  # Training data ratio
         'num_workers': 4,  # Number of data loading workers
-        # 'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/Voc2007Mcq-08-frame2-pretrained',  # Output directory for saving models
-        'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/CocoRetr-08-frame-pretrained',  # Output directory for saving models
-        # 'frame_weights_path': 'best_clip_frame2_62_23_Retr.pth',  # 和 output_dir 拼接得到完整路径
-        'frame_weights_path': 'best_clip_frame2_61_979741504664574_R.pth',  # 和 output_dir 拼接得到完整路径
+        'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/Voc2007Mcq-08-frame2-pretrained',  # Output directory for saving models
+        'test_frame_weights_path': 'best_clip_frame2_79_67013233064782_R.pth',  # 和 output_dir 拼接得到完整路径
         'test_csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv', # Path to test CSV file - 0-shot ACC: 59.73
         'test_only': True,  # Set to True to only run testing
     }
@@ -700,8 +701,8 @@ def main():
         return
     
     if cfg.test_csv_path:
-        if cfg.test_only and not cfg.frame_weights_path:
-            raise ValueError("When using --test_only, you must provide --frame_weights_path")
+        if cfg.test_only and not cfg.test_frame_weights_path:
+            raise ValueError("When using --test_only, you must provide --test_frame_weights_path")
         test_clip_glasses_frame_MCQ(cfg)
         return
 
