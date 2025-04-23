@@ -1,7 +1,3 @@
-"""
-改动:
-    - 给图像侧也使用正交投影，看看效果
-"""
 import sys
 import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -26,16 +22,15 @@ from pathlib import Path
 import hashlib
 import torch.optim as optim
 import random
-from sklearn.metrics import average_precision_score
-import math
+
 
 # config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB16-ep50-Caltech101-SGD.yaml" # b16
-config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB32-ep10-Caltech101-AdamW.yaml"
+config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB32-ep10-Caltech101-AdamW.yaml" # b32
 
 Clip_model = build_clip_model(config_path=config_path) # 加载CLIP模型
 
 def extract_sentence_features(sentence:str):
-    """提取单个句子的CLIP文本特征"""
+    """原始CLIP提取单个句子的CLIP文本特征"""
     with torch.no_grad():  # 关闭梯度计算
         tokenized_text = tokenize(sentence) # [num_classes, context_length]
         tokenized_text = tokenized_text.to(Clip_model.device) # [num_classes, context_length]
@@ -43,7 +38,7 @@ def extract_sentence_features(sentence:str):
         return text_features.cpu().numpy()[0] # [embed_dim]
 
 def extract_img_features(image_path:str):
-    """提取单个图像的CLIP图像特征"""
+    """原始CLIP提取单个图像的CLIP图像特征"""
     # 加载图像，转为张量[batch_size, 3, input_size, input_size]
     img = Image.open(image_path)  # 打开图像
     transform = Compose([standard_image_transform(224, 'BICUBIC'), ToTensor()])  # 定义转换
@@ -212,7 +207,7 @@ class CLIPGlassesLens(nn.Module):
             h_pos: 肯定内容特征 [batch_size, embed_dim]
             h_neg: 否定内容特征 [batch_size, embed_dim]
         """
-        return h, h
+        return h, h # 直接返回原始CLIP提取的文本特征
     
         batch_size = h.shape[0]
         
@@ -249,7 +244,6 @@ class CLIPGlassesLens(nn.Module):
         h_neg = beta * v_norm + (1 - beta) * h
         
         return h_pos, h_neg
-
 
 @torch.no_grad()
 def predict(model, sentence):
@@ -296,7 +290,7 @@ def load_clip_glasses_lens(weights_path, device=None):
     model = CLIPGlassesLens(config)
     
     # # 加载权重
-    # state_dict = torch.load(weights_path, map_location=device)
+    # state_dict = torch.load(weights_path, map_location=device, weights_only=True)
     # model.load_state_dict(state_dict)
     
     # 将模型移动到指定设备
@@ -309,9 +303,10 @@ def load_clip_glasses_lens(weights_path, device=None):
     
     return model
 
-
-class MCQDataset(Dataset):
-    """Multiple Choice Question dataset"""
+class RetrievalDataset(Dataset):
+    """
+    Dataset for retrieval task
+    """
     def __init__(self, csv_path, clip_model, lens_model, transform=None):
         """
         Args:
@@ -321,168 +316,216 @@ class MCQDataset(Dataset):
             transform: Optional transform to be applied on images
         """
         self.csv_path = csv_path
-        self.data = pd.read_csv(csv_path)
+        self.data = pd.read_csv(csv_path, encoding='gbk')
         self.clip_model = clip_model
         self.lens_model = lens_model
         self.transform = transform
-        self.device = next(lens_model.parameters()).device
+        self.device = clip_model.device
         
         # Preprocess all data
         self._preprocess_features()
         
-        
     def _preprocess_features(self):
         """
         Preprocess and cache all image and text features
-            - 如果有预处理数据文件，则直接加载
-            - 如果没有则提取，并保存预处理数据文件，下次直接加载
+            - Load from cache if available
+            - Otherwise extract features and save to cache
         """
         # Create cache file path based on CSV path
         csv_hash = hashlib.md5(self.data.to_json().encode()).hexdigest()[:10]
-        
-        dataset_name = "COCO" if "COCO" in self.csv_path else "VOC2007"
-        cache_path = f"{dataset_name}_mcq_features_cache_{csv_hash}.pt"
+        cache_path = f"retrieve_features_cache_{csv_hash}.pt"
         
         # Check if cache file exists
         if os.path.exists(cache_path):
             print(f"Loading preprocessed features from cache: {cache_path} of {self.csv_path} ...")
-            cached_data = torch.load(cache_path)
-            with torch.no_grad():
-                self.image_features = cached_data['image_features']
-                self.pos_features = cached_data['pos_features']
-                self.neg_features = cached_data['neg_features']
-                self.labels = cached_data['labels']
-            print(f"Loaded {len(self.labels)} samples from cache")
+            cached_data = torch.load(cache_path, weights_only=False)
+            self.image_features = cached_data['image_features']
+            self.caption_pos_features = cached_data['caption_pos_features']
+            self.caption_neg_features = cached_data['caption_neg_features']
+            self.image_ids = cached_data['image_ids']
+            print(f"Loaded {len(self.image_features)} samples from cache")
             return
         
         print(f"Preprocessing dataset features of {self.csv_path} ...")
+        
         self.image_features = []
-        self.pos_features = []  # List of lists (4 options per sample)
-        self.neg_features = []  # List of lists (4 options per sample)
-        self.labels = []
+        self.caption_pos_features = []
+        self.caption_neg_features = []
+        self.image_ids = []
         
         for idx, row in tqdm.tqdm(self.data.iterrows(), total=len(self.data)):
-            # Extract image features
-            img_path = row['image_path']
-            img_features = extract_img_features(img_path)
-            
-            # Extract text features for all options
-            option_pos_features = []
-            option_neg_features = []
-            
-            for i in range(4):
-                caption = row[f'caption_{i}']
-                text_features = extract_sentence_features(caption)
-                text_features_tensor = torch.tensor(text_features, dtype=torch.float32).unsqueeze(0).to(self.device)
-                
-                # Get positive and negative features using lens model
+            img_path = row['filepath']
+            image_id = row['image_id']
+            captions = eval(row['captions']) # 每个图片对应的数量不一致
+
+            # 提取图像特征
+            img_feature = extract_img_features(img_path) # 原始CLIP提取的图像特征
+            self.image_features.append(img_feature)
+            self.image_ids.append(image_id)
+
+            pos_list = []
+            neg_list = []
+
+            for caption in captions:
+                text_feat = extract_sentence_features(caption) # 原始CLIP提取的文本特征
+                text_tensor = torch.tensor(text_feat, dtype=torch.float32).unsqueeze(0).to(self.device)
+
                 with torch.no_grad():
-                    h_pos, h_neg = self.lens_model(text_features_tensor)
-                
-                option_pos_features.append(h_pos.cpu().numpy()[0])
-                option_neg_features.append(h_neg.cpu().numpy()[0])
-            
-            self.image_features.append(img_features)
-            self.pos_features.append(option_pos_features)
-            self.neg_features.append(option_neg_features)
-            self.labels.append(row['correct_answer'])
-        
-        # Save preprocessed features to cache
-        print(f"Saving preprocessed features to cache: {cache_path}")
+                    h_pos, h_neg = self.lens_model(text_tensor)
+
+                pos_list.append(h_pos.cpu().numpy()[0])
+                neg_list.append(h_neg.cpu().numpy()[0])
+
+            self.caption_pos_features.append(pos_list)
+            self.caption_neg_features.append(neg_list)
+
+        print(f"Saving features to cache: {cache_path}")
         torch.save({
             'image_features': self.image_features,
-            'pos_features': self.pos_features,
-            'neg_features': self.neg_features,
-            'labels': self.labels
+            'caption_pos_features': self.caption_pos_features,
+            'caption_neg_features': self.caption_neg_features,
+            'image_ids': self.image_ids
         }, cache_path)
-        print(f"Cached {len(self.labels)} samples")
-            
+        print(f"Cached {len(self.image_ids)} samples.")
+
     def __len__(self):
         return len(self.data)
-    
+
     def __getitem__(self, idx):
         """
         Returns:
             image_features: Image features [embed_dim]
-            pos_features: List of positive features for each option [4, embed_dim]
-            neg_features: List of negative features for each option [4, embed_dim]
-            label: Correct answer index (0-3)
+            pos_features: List of positive features for each caption [num_captions, embed_dim]
+            neg_features: List of negative features for each caption [num_captions, embed_dim]
+            image_id: Image ID
         """
-        img_features = torch.tensor(self.image_features[idx], dtype=torch.float32)
+        img_feature = torch.tensor(self.image_features[idx], dtype=torch.float32)
+        cap_pos = torch.tensor(np.stack(self.caption_pos_features[idx]), dtype=torch.float32)
+        cap_neg = torch.tensor(np.stack(self.caption_neg_features[idx]), dtype=torch.float32)
+        image_id = torch.tensor(int(self.image_ids[idx]))
         
-        # Stack all option features
-        pos_features = torch.tensor(np.stack(self.pos_features[idx]), dtype=torch.float32)
-        neg_features = torch.tensor(np.stack(self.neg_features[idx]), dtype=torch.float32)
-        
-        label = torch.tensor(self.labels[idx], dtype=torch.long)
-        
-        return img_features, pos_features, neg_features, label
+        return img_feature, cap_pos, cap_neg, image_id
 
+def retrieval_collate_fn(batch):
+    img_features, pos_features, neg_features, image_ids = zip(*batch)
+    return (
+        torch.stack(img_features),  # [B, embed_dim]
+        list(pos_features),         # list of [num_captions_i, embed_dim]
+        list(neg_features),         # list of [num_captions_i, embed_dim]
+        torch.stack(image_ids)      # [B]
+    )
 
-def _evaluate_model(frame_model, data_loader, device):
+# Validation
+def _evaluate_model(cfg, frame_model, data_loader, device):
     """
-    Evaluate the CLIPGlassesFrame model on the validation set.
+    Evaluate the model on the validation set.
     
-    参数:
-        - frame_model: The CLIPGlassesFrame model
-        - data_loader: DataLoader for the validation set
-        - device: Device to run the model on (CPU or GPU)
-        
-    返回:
-        - val_acc: Validation accuracy
-        - val_loss: Validation loss
-        - all_predictions: List of all predictions
-        - all_labels: List of all true labels
+    参数：
+        - cfg: 配置对象
+        - frame_model: CLIPGlassesFrame模型
+        - data_loader: 验证数据加载器
+        - device: 设备（CPU或GPU）
+    
+    返回：
+        - results: 评估结果字典，包含文本到图像和图像到文本的召回率
+            - txt2img: 文本到图像的召回率 | txt2img[k]表示recall@k
+            - img2txt: 图像到文本的召回率 | img2txt[k]表示recall@k
+            - mean: 平均召回率 | mean[k]表示recall@k
     """
-    frame_model.eval()
-    val_loss = 0
-    val_correct = 0
-    val_total = 0
-    all_predictions = []
-    all_labels = []
+    # Metrics
+    txt2img_recalls = {1: 0, 5: 0, 10: 0}
+    img2txt_recalls = {1: 0, 5: 0, 10: 0}
+    all_image_feats = []
+    all_text_feats  = []
+    caption_to_img  = []
     
     with torch.no_grad():
-        for img_features, text_features, _,  labels in tqdm.tqdm(data_loader, desc="Validation"):
-            img_features = img_features.to(device) # [batch_size, embed_dim]
-            text_features = text_features.to(device) # [batch_size, num_options, embed_dim]
-            labels = labels.to(device)
+        img_count = 0
+        for img_feats, pos_text_feats, neg_text_feats, image_ids in tqdm.tqdm(data_loader, desc="Extract feats"):
+            assert torch.equal(pos_text_feats[0], neg_text_feats[0]), "未采用双投影，因此文本特征中的肯定特征pos_text_feats应该等于否定特征neg_text_features等于文本特征"
+            img_feats = img_feats.to(device)                        # [B, D]
+            # text_feats_list: list of length B, 每项 [C_i, D]
+            # 收集图像特征
+            for i in range(img_feats.size(0)):
+                all_image_feats.append(img_feats[i].cpu())
+                # 收集这个图的所有 caption 特征 & 映射
+                for cap in pos_text_feats[i]:
+                    all_text_feats.append(cap.cpu())
+                    caption_to_img.append(img_count) # 文本到图像的映射，示例： [0, 0, 1, 1, 2, 2]
+                img_count += 1
             
-            # Get scores for all options
-            num_options = text_features.shape[1]
-            # Process each option
-            all_scores = [None] * num_options  # [batch_size, batch_size] * num_options
-            for i in range(num_options):
-                # mini-batch中每个图像和第i个选项文本特征的匹配得分
-                choice_features = text_features[:, i] # [batch_size, embed_dim]
-                scores, _ = frame_model(img_features, choice_features) # [batch_size, batch_size]
-                all_scores[i] = scores # [batch_size, batch_size]
-            
-            # # 错误方式（直接使用全矩阵）
-            # logits = torch.stack(all_scores, dim=1)  # 得到 [B, C, B]
-            # 正确方式（取对角线）
-            logits = torch.stack([s.diag() for s in all_scores], dim=1) # 只计算和图片对应的选项得分 [B, C]
-            
-            # Compute cross-entropy loss
-            loss = F.cross_entropy(logits, labels)
-            
-            val_loss += loss.item()
-            
-            # Compute accuracy
-            _, predicted = torch.max(logits, 1)
-            
-            all_predictions.extend(predicted.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
-            
-            val_total += labels.size(0)
-            val_correct += (predicted == labels).sum().item()
+        # 转为大张量
+        I = torch.stack(all_image_feats, dim=0).to(device)  # [N_imgs, D]
+        C = torch.stack(all_text_feats,  dim=0).to(device)  # [N_caps, D]
+        N_imgs, N_caps = I.size(0), C.size(0)
+
+        # —— 3. 计算全量相似度 —— 
+        # raw CLIP 版
+        if cfg.raw_CLIP:
+            Clip_model.eval()
+            # 标准化
+            I = I / I.norm(dim=-1, keepdim=True) # [N_imgs, D]
+            C = C / C.norm(dim=-1, keepdim=True) # [N_caps, D]
+            logit_scale = Clip_model.logit_scale.exp()
+            sim_matrix = logit_scale * (C @ I.T) # [N_caps, N_imgs]
+        # Frame 模型版
+        else:
+            frame_model.eval()
+            sim_matrix, neg_text_feats = frame_model(I, C) # [N_caps, N_imgs]
+                
+        # —— 4. 评估 Recall@1/5/10 —— 
+        txt2img_hits = {1:0, 5:0, 10:0}
+        img2txt_hits = {1:0, 5:0, 10:0}
+
+        # Text→Image
+        for cap_idx, gt_img in enumerate(caption_to_img):
+            scores = sim_matrix[cap_idx] # [N_imgs=149]
+            # top-k 图像索引
+            neg_text_feats, topk = torch.topk(scores, k=10, largest=True)
+            for k in txt2img_hits:
+                if gt_img in topk[:k]:
+                    txt2img_hits[k] += 1
+
+        # Image→Text
+        # 先构造每张图的 caption 索引列表
+        img2cap = [[] for _ in range(N_imgs)]  # 例如访问 img2cap[0]，得到图像 0 的所有 caption 索引
+        for cap_idx, img_idx in enumerate(caption_to_img):
+            img2cap[img_idx].append(cap_idx)
+
+        for img_idx in range(N_imgs):
+            if not img2cap[img_idx]:
+                continue
+            scores = sim_matrix[:, img_idx] # [N_caps]
+            neg_text_feats, topk = torch.topk(scores, k=10, largest=True)
+            for k in img2txt_hits:
+                # 只要有任一 gt caption 在 top-k 中，就算命中
+                if any(cap in topk[:k] for cap in img2cap[img_idx]):
+                    img2txt_hits[k] += 1
+
+    # —— 5. 计算并打印百分比 —— 
+    total_caps = float(N_caps)
+    total_imgs = float(N_imgs)
+    txt2img_recalls = {k: txt2img_hits[k]/total_caps*100 for k in txt2img_hits}
+    img2txt_recalls = {k: img2txt_hits[k]/total_imgs*100 for k in img2txt_hits}
+
+    print("\nText→Image Retrieval:")
+    for k,v in txt2img_recalls.items():
+        print(f"  Recall@{k}: {v:.2f}%")
+    print("\nImage→Text Retrieval:")
+    for k,v in img2txt_recalls.items():
+        print(f"  Recall@{k}: {v:.2f}%")
+    print("\nMean Retrieval:")
+    for k in [1,5,10]:
+        print(f"  Recall@{k}: {(txt2img_recalls[k]+img2txt_recalls[k])/2:.2f}%")
+
+    return {
+        'txt2img': txt2img_recalls,
+        'img2txt': img2txt_recalls,
+        'mean':   {k:(txt2img_recalls[k]+img2txt_recalls[k])/2 for k in txt2img_recalls}
+    }
     
-    # Print metrics
-    val_acc = 100. * val_correct / val_total
-    return val_acc, val_loss, all_predictions, all_labels
-
-
-def train_clip_glasses_frame_MCQ(cfg):
-    """Train the CLIPGlassesFrame model"""
+def train_clip_glasses_frame_Retrieval(cfg):
+    """Train the CLIPGlassesFrame model on a test dataset on Retrieval"""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
@@ -497,25 +540,29 @@ def train_clip_glasses_frame_MCQ(cfg):
 
     # Initialize CLIPGlassesFrame model
     frame_model = CLIPGlassesFrame(embed_dim=512, hidden_dim=128, 
-                                   lambda_0=cfg.lambda_0).to(device)
+                                    lambda_0=cfg.lambda_0).to(device)
 
     # Setup dataset and dataloader
-    dataset = MCQDataset(cfg.csv_path, Clip_model, lens_model) # Clip_model, lens_model 用于预加载数据过程中的特征提取
+    dataset = RetrievalDataset(cfg.csv_path, Clip_model, lens_model)
     
     # Split dataset into train and validation sets (80/20)
     train_size = int(cfg.train_rate * len(dataset))
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
     
-    train_loader = DataLoader(train_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers)
-    val_loader = DataLoader(val_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
+    train_loader = DataLoader(train_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers, collate_fn=retrieval_collate_fn)
+    val_loader = DataLoader(val_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers, collate_fn=retrieval_collate_fn)
     
     # Setup optimizer
     optimizer = optim.AdamW(frame_model.parameters(), lr=cfg.learning_rate, betas=(0.9, 0.98))
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.epochs)
     
+    # begin training model evaluation _evaluate_model(frame_model, val_loader, device)
+    print("Evaluating initial model performance...")
+    _evaluate_model(cfg, frame_model, val_loader, device)
+    
     # Training loop
-    best_val_acc = 0
+    best_recall5 = 0
     save_dir = Path(cfg.output_dir)
     save_dir.mkdir(exist_ok=True, parents=True)
     
@@ -523,139 +570,137 @@ def train_clip_glasses_frame_MCQ(cfg):
         # Training
         frame_model.train()
         train_loss = 0
-        train_correct = 0
-        train_total = 0
         
-        for img_features, text_features, _, labels in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{cfg.epochs}"):
-            img_features = img_features.to(device) # [batch_size, embed_dim]
-            text_features = text_features.to(device) # [num_options, embed_dim]
-            labels = labels.to(device) # [batch_size]
+        for img_features, pos_text_feats, neg_text_feats, image_ids in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{cfg.epochs}"):
             
+            # 1. 准备特征
+            img_features = img_features.to(device) # [B, D]
+            # text_feats_list 是 list 长度 B，每项 [Ci, D]
+            text_feats_list = [t.to(device) for t in pos_text_feats]
+            
+            # 2. 扁平化所有 caption 特征
+            caption_counts = [t.shape[0] for t in text_feats_list] # list of Ci
+            flat_captions  = torch.cat(text_feats_list, dim=0) # [N_caps=B*Ci, D]
+            
+            # 3. 构造 caption→image 的 ground-truth 索引
+            caption_to_img = []
+            for img_idx, cnt in enumerate(caption_counts):
+                caption_to_img += [img_idx] * cnt
+            caption_to_img = torch.tensor(caption_to_img, device=device, dtype=torch.long)  # [N_caps]
+
             optimizer.zero_grad()
             
-            # Get scores for all options
-            num_options = text_features.shape[1]
-            # Process each option
-            all_scores = [None] * num_options  # [batch_size, batch_size] * num_options
-            for i in range(num_options):
-                # mini-batch中每个图像和第i个选项文本特征的匹配得分
-                choice_features = text_features[:, i] # [batch_size, embed_dim]
-                scores, _ = frame_model(img_features, choice_features) # [batch_size, batch_size]
-                all_scores[i] = scores # [batch_size, batch_size]
+            # 4. 一次性计算所有相似度
+            sim_matrix, neg_text_feats = frame_model(img_features, flat_captions)  # [N_caps, N_imgs=B]
             
-            # # 错误方式（直接使用全矩阵）
-            # logits = torch.stack(all_scores, dim=1)  # 得到 [B, C, B]
-            # 正确方式（取对角线）
-            logits = torch.stack([s.diag() for s in all_scores], dim=1) # 只计算和图片对应的选项得分 [B, C]
+            # 5. Text→Image contrastive loss
+            loss_txt2img = F.cross_entropy(sim_matrix, caption_to_img)
             
-            # Compute cross-entropy loss
-            loss = F.cross_entropy(logits, labels)
+            # 6. Image→Text contrastive loss
+            exp_sim = sim_matrix.exp() # [N_caps, B]
+            all_exp = exp_sim.sum(dim=0) # [B]
+            # mask[c, i] = 1 if caption c 属于图 i
+            mask = torch.zeros_like(exp_sim)
+            mask[torch.arange(exp_sim.size(0), device=device), caption_to_img] = 1
+            pos_exp = (exp_sim * mask).sum(dim=0)     # [B]
+            loss_img2txt = - (pos_exp / all_exp).log().mean()
             
+            # Total loss
+            contrastive_loss = 0.5*(loss_txt2img + loss_img2txt)
+            loss = contrastive_loss
+
             loss.backward()
             optimizer.step()
             
-            train_loss += loss.item()
-            
-            # Compute accuracy
-            _, predicted = torch.max(logits, 1)
-            train_total += labels.size(0)
-            train_correct += (predicted == labels).sum().item()
+            train_loss += loss
         
-        train_acc = 100. * train_correct / train_total
+        train_loss /= len(train_loader)
         scheduler.step()
-                
-        # Validation
-        val_acc, val_loss, _, _ = _evaluate_model(frame_model, val_loader, device)
         
-        print(f"Epoch {epoch+1}/{cfg.epochs}")
-        print(f"Train Loss: {train_loss/len(train_loader):.4f}, Train Acc: {train_acc:.2f}%")
-        print(f"Val Loss: {val_loss/len(train_loader):.4f}, Val Acc: {val_acc:.2f}%")
+        # Validation
+        print("Evaluating model performance...")
+        res = _evaluate_model(cfg, frame_model, val_loader, device)
+        recall5 = res['mean'][5]
         
         # Save best model
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            str_val_acc = str(val_acc).replace('.', '_')
+        if recall5 > best_recall5:
+            best_recall5 = recall5
+            str_val_r5 = str(recall5).replace('.', '_')
             # 删除旧模型
             for file in save_dir.glob("best_clip_frame2_*.pth"):
                 file.unlink()
             # 保存新模型
-            torch.save(frame_model.state_dict(), save_dir / f"best_clip_frame2_{str_val_acc}_M.pth")
-            print(f"Saved best model with val acc: {val_acc:.2f}%")
+            torch.save(frame_model.state_dict(), save_dir / f"best_clip_frame2_{str_val_r5}_R.pth")
+            print(f"Saved best model with re acc: {best_recall5:.2f}%")
         
         # Save checkpoint
-        if epoch % 20 == 0 or epoch == cfg.epochs - 1:
+        if epoch % 5 == 0 or epoch == cfg.epochs - 1:
             checkpoint = {
                 'epoch': epoch + 1,
                 'model_state_dict': frame_model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
-                'best_val_acc': best_val_acc,
+                'best_recall5': best_recall5,
             }
-            torch.save(checkpoint, save_dir / f"checkpoint-{epoch+1}-{val_acc}.pth")
-    print(f"Training completed. Best validation accuracy: {best_val_acc:.2f}%")
+            torch.save(checkpoint, save_dir / f"checkpoint-{epoch+1}-{recall5}.pth")
     
+    print(f"Training completed. Best validation loss: {best_recall5:.4f}")
+
     # ----训练后测试模型------
     print("Evaluating final model performance...")
     frame_model.eval()
-    test_dataset = MCQDataset(cfg.test_csv_path, Clip_model, lens_model)
-    test_loader = DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
-    test_acc, _, all_predictions, all_labels = _evaluate_model(frame_model, test_loader, device)
-    # Print test metrics
-    print(f"Test Accuracy: {test_acc:.2f}%")
-    # Save results
-    results = {
-        'test_accuracy': float(test_acc),  # 如果 test_acc 是 numpy.float
-        'predictions': [int(p) for p in all_predictions],
-        'labels': [int(l) for l in all_labels]
-    }
-    with open(cfg.output_dir + "/test_results.json", 'w') as f:
-        json.dump(results, f)
-    print(f"Test results saved to {cfg.output_dir}/test_results.json")
-    # 将最佳模型以测试结果命名
-    str_test_acc = str(test_acc).replace('.', '_')
+    test_dataset = RetrievalDataset(cfg.test_csv_path, Clip_model, lens_model)
+    test_loader = DataLoader(test_dataset, batch_size=cfg.batch_size, 
+                            shuffle=False, num_workers=cfg.num_workers, 
+                            collate_fn=retrieval_collate_fn)
+    
+    res = _evaluate_model(cfg, frame_model, test_loader, device)
+    mean_recall5 = res['mean'][5]
+    str_test_recall5 = str(mean_recall5).replace('.', '_')
     # 删除旧模型
     for file in save_dir.glob("best_clip_frame2_*.pth"):
         file.unlink()
     # 保存新模型
-    torch.save(frame_model.state_dict(), save_dir / f"best_clip_frame2_{str_test_acc}_M.pth")
-    print(f"Saved best model with test acc: {test_acc:.2f}%")
-    return test_acc
+    torch.save(frame_model.state_dict(), save_dir / f"best_clip_frame2_{str_test_recall5}_R.pth")
+    print(f"Saved final model with test recall: {mean_recall5:.2f}%")
+    return res
+    
 
-
-def test_clip_glasses_frame_MCQ(cfg):
-    """Test the CLIPGlassesFrame model on a test dataset"""
+def test_clip_glasses_frame_Retrieval(cfg):
+    """
+    Test the CLIPGlassesFrame model on a test dataset on Retrieval
+    
+    指标： 
+        - Recall@1
+        - Recall@5
+        - Recall@10
+    """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
     
     # Load CLIPGlassesLens model
     lens_model = load_clip_glasses_lens(cfg.lens_weights_path, device)
-    
-    # Initialize and load CLIPGlassesFrame model
+    for param in lens_model.parameters():
+        param.requires_grad = False
+        
+    # Initialize CLIPGlassesFrame model
     frame_model = CLIPGlassesFrame(embed_dim=512, hidden_dim=128, 
-                                lambda_0=cfg.lambda_0).to(device)
-    frame_model.load_state_dict(torch.load(os.path.join(cfg.output_dir, cfg.frame_weights_path), map_location=device))
+                                    lambda_0=cfg.lambda_0).to(device)
+    
+    # Load the trained model weights
+    model_path = Path(cfg.output_dir) / cfg.frame_weights_path
+    state_dict = torch.load(model_path, map_location=device, weights_only=True)
+    frame_model.load_state_dict(state_dict)
     frame_model.eval()
+    print(f"Loaded model from {model_path}")
     
-    # Setup test dataset and loader
-    test_dataset = MCQDataset(cfg.test_csv_path, Clip_model, lens_model)
-    test_loader = DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers)
+    # Setup test dataset and dataloader
+    test_dataset = RetrievalDataset(cfg.test_csv_path, Clip_model, lens_model)
+    test_loader = DataLoader(test_dataset, batch_size=cfg.batch_size, 
+                            shuffle=False, num_workers=cfg.num_workers, 
+                            collate_fn=retrieval_collate_fn)
     
-    test_acc, _, all_predictions, all_labels = _evaluate_model(frame_model, test_loader, device)
-    
-    # Print test metrics
-    print(f"Test Accuracy: {test_acc:.2f}%")
-    
-    # Save results
-    results = {
-        'test_accuracy': float(test_acc),  # 如果 test_acc 是 numpy.float
-        'predictions': [int(p) for p in all_predictions],
-        'labels': [int(l) for l in all_labels]
-    }
-    
-    with open(cfg.output_dir + "/test_results.json", 'w') as f:
-        json.dump(results, f)
-    
-    print(f"Test results saved to {cfg.output_dir}/test_results.json")
-    return test_acc
+    return _evaluate_model(cfg, frame_model, test_loader, device)
 
 
 class Config:
@@ -671,38 +716,38 @@ def main():
     random.seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    # 
     
     cfg = {
+        # -----baseline-原始CLIP-----
+        'raw_CLIP': False,  # Set to True to use original CLIP model
+        
         # -----模型参数-----
-        'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/len-pretrained/final_clip_lens_b32.pth',  # Path to CLIPGlassesLens weights
+        'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp3_glasses_Retrieval/len-pretrained/final_clip_lens.pth',  # Path to CLIPGlassesLens weights
         'batch_size': 64,  # Batch size
-        'epochs': 5,  # Number of epochs
+        'epochs': 30,  # Number of epochs
         'learning_rate': 3e-4,  # Learning rate
-        'lambda_0': 0.8,  # Base penalty strength 61.63|b32 62.48%|b16
+        'lambda_0': 0.8,  # Base penalty strength 62.48%
         
         # -----常规参数-----
-        'csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv',  # Path to training CSV file
+        'csv_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv',  # Path to training CSV file
         'train_rate': 0.8,  # Training data ratio
         'num_workers': 4,  # Number of data loading workers
-        # 'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/Voc2007Mcq-08-frame2-pretrained',  # Output directory for saving models
-        'output_dir': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/CocoRetr-08-frame-pretrained',  # Output directory for saving models
-        # 'frame_weights_path': 'best_clip_frame2_62_23_Retr.pth',  # 和 output_dir 拼接得到完整路径
-        'frame_weights_path': 'best_clip_frame2_61_979741504664574_R.pth',  # 和 output_dir 拼接得到完整路径
-        'test_csv_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv', # Path to test CSV file - 0-shot ACC: 59.73
-        'test_only': True,  # Set to True to only run testing
+        'output_dir': '/root/NP-CLIP/XTrainer/exp/exp3_glasses_Retrieval/COCORetrieval-08-frame2-pretrained',  # Output directory for saving models
+        'frame_weights_path': 'best_clip_frame2_0_14001681299619512_R.pth',  # 和 output_dir 拼接得到完整路径
+        'test_csv_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv', # Path to test CSV file - 0-shot ACC: 59.73
+        'test_only': False,  # Set to True to only run testing
     }
     
     cfg = Config(**cfg)
     
     if not cfg.test_only:
-        train_clip_glasses_frame_MCQ(cfg)
+        train_clip_glasses_frame_Retrieval(cfg)
         return
     
     if cfg.test_csv_path:
         if cfg.test_only and not cfg.frame_weights_path:
             raise ValueError("When using --test_only, you must provide --frame_weights_path")
-        test_clip_glasses_frame_MCQ(cfg)
+        test_clip_glasses_frame_Retrieval(cfg)
         return
 
 

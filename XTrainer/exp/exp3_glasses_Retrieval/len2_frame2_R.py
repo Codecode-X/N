@@ -453,12 +453,11 @@ def _evaluate_model(cfg, frame_model, data_loader, device):
                     all_text_feats.append(cap.cpu())
                     caption_to_img.append(img_count) # 文本到图像的映射，示例： [0, 0, 1, 1, 2, 2]
                 img_count += 1
-
+            
         # 转为大张量
         I = torch.stack(all_image_feats, dim=0).to(device)  # [N_imgs, D]
         C = torch.stack(all_text_feats,  dim=0).to(device)  # [N_caps, D]
         N_imgs, N_caps = I.size(0), C.size(0)
-        print(f"Total images: {N_imgs}, total captions: {N_caps}")
 
         # —— 3. 计算全量相似度 —— 
         # raw CLIP 版
@@ -573,71 +572,40 @@ def train_clip_glasses_frame_Retrieval(cfg):
         train_loss = 0
         
         for img_features, pos_text_feats, neg_text_feats, image_ids in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{cfg.epochs}"):
-            assert torch.equal(pos_text_feats[0], neg_text_feats[0]), "未采用双投影，因此文本特征中的肯定特征pos_text_feats应该等于否定特征neg_text_features等于文本特征" 
-            img_features = img_features.to(device)  # [B, embed_dim]
-            pos_text_feats = [f.to(device) for f in pos_text_feats] # list of [num_captions_i, embed_dim]
-            neg_text_feats = [f.to(device) for f in neg_text_feats] # list of [num_captions_i, embed_dim]
             
-            batch_size = img_features.shape[0]
+            # 1. 准备特征
+            img_features = img_features.to(device) # [B, D]
+            text_feats_list = [t.to(device) for t in pos_text_feats] # B*[Ci, D]
             
-            # Get caption counts for each image
-            caption_counts = [pos_feat.shape[0] for pos_feat in pos_text_feats]
-            total_captions = sum(caption_counts)
+            # 2. 扁平化所有 caption 特征
+            caption_counts = [t.shape[0] for t in text_feats_list] # list of Ci
+            flat_captions  = torch.cat(text_feats_list, dim=0) # [N_caps=B*Ci, D]
             
+            # 3. 构造 caption→image 的 ground-truth 索引
+            caption_to_img = []
+            for img_idx, cnt in enumerate(caption_counts):
+                caption_to_img += [img_idx] * cnt
+            caption_to_img = torch.tensor(caption_to_img, device=device, dtype=torch.long)  # [N_caps]
+
             optimizer.zero_grad()
             
-            # Create a similarity matrix of size [total_captions, total_images]
-            similarity_matrix = torch.zeros(total_captions, batch_size).to(device)
+            # 4. 一次性计算所有相似度
+            sim_matrix, _ = frame_model(img_features, flat_captions)  # [N_caps, N_imgs=B]
             
-            # Create caption-to-image mapping
-            caption_to_img_idx = []
-            for i, count in enumerate(caption_counts):
-                caption_to_img_idx.extend([i] * count)
-                
-            # Process each image with all captions
-            cap_start_idx = 0
-            for i in range(batch_size):
-                img_feature = img_features[i].unsqueeze(0)  # [1, embed_dim]
-                
-                # Process all captions for all images
-                for j in range(batch_size):
-                    for c in range(caption_counts[j]):
-                        cap_idx = cap_start_idx + sum(caption_counts[:j]) + c
-                        cap_pos = pos_text_feats[j][c].unsqueeze(0)  # [1, embed_dim]
-                        cap_neg = neg_text_feats[j][c].unsqueeze(0)  # [1, embed_dim]
-                        
-                        # Get score and loss from frame model
-                        score, _ = frame_model(img_feature, cap_pos)
-                        # Store score in the similarity matrix
-                        similarity_matrix[cap_idx, i] = score
-
-            # Calculate text-to-image contrastive loss
-            # For each caption, find its positive image
-            txt2img_loss = 0
-            for cap_idx in range(total_captions):
-                # Positive image for this caption is its corresponding image
-                img_idx = caption_to_img_idx[cap_idx]
-                txt2img_loss += -torch.log(
-                    torch.exp(similarity_matrix[cap_idx, img_idx]) / 
-                    torch.sum(torch.exp(similarity_matrix[cap_idx, :]))
-                )
-            txt2img_loss /= total_captions
+            # 5. Text→Image contrastive loss -> 可简化为CrossEntropyLoss
+            loss_txt2img = F.cross_entropy(sim_matrix, caption_to_img)
             
-            # Calculate image-to-text contrastive loss
-            # For each image, find all its positive captions
-            img2txt_loss = 0
-            for i in range(batch_size):
-                # Find indices of positive captions for image i
-                pos_cap_indices = [idx for idx, img_idx in enumerate(caption_to_img_idx) if img_idx == i]
-                pos_exp_sum = torch.sum(torch.exp(similarity_matrix[pos_cap_indices, i]))
-                all_exp_sum = torch.sum(torch.exp(similarity_matrix[:, i]))
-                img2txt_loss += -torch.log(pos_exp_sum / all_exp_sum)
-            img2txt_loss /= batch_size
-            
-            # Symmetric contrastive loss
-            contrastive_loss = 0.5 * (txt2img_loss + img2txt_loss)
+            # 6. Image→Text contrastive loss -> 由于一个图片可能对应多个 caption，因此需要对每个图像的所有 caption 特征进行 softmax
+            exp_sim = sim_matrix.exp() # [N_caps, B]
+            all_exp = exp_sim.sum(dim=0) # [B]
+            # mask[c, i] = 1 -> caption c 属于图 i
+            mask = torch.zeros_like(exp_sim)
+            mask[torch.arange(exp_sim.size(0), device=device), caption_to_img] = 1
+            pos_exp = (exp_sim * mask).sum(dim=0) # [B]
+            loss_img2txt = - (pos_exp / all_exp).log().mean()
             
             # Total loss
+            contrastive_loss = 0.5*(loss_txt2img + loss_img2txt)
             loss = contrastive_loss
 
             loss.backward()
@@ -754,8 +722,8 @@ def main():
         
         # -----模型参数-----
         'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp3_glasses_Retrieval/len-pretrained/final_clip_lens.pth',  # Path to CLIPGlassesLens weights
-        'batch_size': 32,  # Batch size
-        'epochs': 15,  # Number of epochs
+        'batch_size': 64,  # Batch size
+        'epochs': 30,  # Number of epochs
         'learning_rate': 3e-4,  # Learning rate
         'lambda_0': 0.8,  # Base penalty strength 62.48%
         
