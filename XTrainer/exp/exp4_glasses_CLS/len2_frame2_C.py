@@ -529,7 +529,7 @@ def main():
     
     cfg = {
         # -----baseline-原始CLIP-----
-        'raw_CLIP': False,  # Set to True to use original CLIP model
+        'raw_CLIP': True,  # Set to True to use original CLIP model ACC:53.66%
         
         # -----模型参数-----
         'lens_weights_path': '/root/NP-CLIP/XTrainer/exp/exp2_glasses_Mcq/len-pretrained/final_clip_lens_b32.pth',  # Path to CLIPGlassesLens weights
@@ -543,8 +543,8 @@ def main():
         'train_rate': 0.8,  # Training data ratio
         'num_workers': 4,  # Number of data loading workers
         'output_dir': '/root/NP-CLIP/XTrainer/exp/exp4_glasses_CLS/COCORetr_pretrained',  # Output directory for saving models
-        'frame_weights_path': f'best_clip_frame2_79_67013233064782_R.pth',  # 和 output_dir 拼接得到完整路径
-        'test_csv_path': '/root/NP-CLIP/NegBench/data/CLS_Imagenet/imagenet_train.csv', # Path to test CSV file - 0-shot ACC: 59.73
+        'frame_weights_path': f'best_clip_frame2_79_67013233064782_R.pth',  # 和 output_dir 拼接得到完整路径 0-shot ACC:50.94%
+        'test_csv_path': '/root/NP-CLIP/NegBench/data/CLS_Imagenet/imagenet_train.csv', # Path to test CSV file
         'test_only': True,  # Set to True to only run testing
     }
     

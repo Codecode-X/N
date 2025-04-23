@@ -244,7 +244,7 @@ class CLIPLensLoss(nn.Module):
         # 计算余弦相似度
         cos_h_pos_l_pos = F.cosine_similarity(h_pos, l_pos, dim=1, eps=1e-8)
         cos_h_neg_l_neg = F.cosine_similarity(h_neg, l_neg, dim=1, eps=1e-8)
-        cos_h_pos_h_neg = F.cosine_similarity(h_pos, h_neg, dim=1, eps=1e-8)
+        # cos_h_pos_h_neg = F.cosine_similarity(h_pos, h_neg, dim=1, eps=1e-8)
         
         # 1. 语义对齐损失
         align_loss_pos = 1.0 - cos_h_pos_l_pos
@@ -260,7 +260,28 @@ class CLIPLensLoss(nn.Module):
         align_loss = torch.mean(align_loss)
         
         # 2. 正交对抗损失
-        ortho_loss = torch.mean(torch.clamp(cos_h_pos_h_neg**2 - self.ortho_eps, min=0.0))
+        # ortho_loss = torch.mean(torch.clamp(cos_h_pos_h_neg**2 - self.ortho_eps, min=0.0))
+        
+        # 2. 非语义维度正交损失
+        # 计算语义核心方向（单位向量）
+        c_pos = F.normalize(l_pos, dim=1)  # [batch_size, embed_dim]
+        c_neg = F.normalize(l_neg, dim=1)  # [batch_size, embed_dim]
+        
+        # 计算h_pos在c_pos上的投影
+        h_pos_proj_on_c_pos = torch.sum(h_pos * c_pos, dim=1, keepdim=True) * c_pos
+        # 计算h_neg在c_neg上的投影
+        h_neg_proj_on_c_neg = torch.sum(h_neg * c_neg, dim=1, keepdim=True) * c_neg
+        
+        # 计算非语义方向上的正交投影
+        h_pos_tilde = h_pos - h_pos_proj_on_c_pos  # 移除h_pos在语义核心方向上的分量
+        h_neg_tilde = h_neg - h_neg_proj_on_c_neg  # 移除h_neg在语义核心方向上的分量
+        
+        # 计算非语义方向上的余弦相似度
+        cos_h_pos_tilde_h_neg_tilde = F.cosine_similarity(h_pos_tilde, h_neg_tilde, dim=1, eps=1e-8)
+        # print(f"cos_h_pos_tilde_h_neg_tilde: {cos_h_pos_tilde_h_neg_tilde}")
+        
+        # 计算非语义维度正交损失
+        ortho_loss = torch.mean(torch.clamp(cos_h_pos_tilde_h_neg_tilde - self.ortho_eps, min=0.0))
         
         # 3. 计算动态权重
         lambda2 = self.lambda2_max * (1.0 - torch.exp(torch.tensor(-5.0 * self.current_step / self.total_steps)))
@@ -310,6 +331,21 @@ def prepare_features(dataset, batch_size=32):
     """提取数据集中每个样本的CLIP文本特征"""
     features = []
     
+    # Create cache directory if it doesn't exist
+    cache_dir = os.path.join(current_dir, 'cache')
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    # Define cache filepath
+    cache_filepath = os.path.join(cache_dir, f'features_cache_{hash(str(dataset))}.pt')
+    
+    # Check if cache exists
+    if os.path.exists(cache_filepath):
+        print(f"Loading features from cache: {cache_filepath}")
+        features = torch.load(cache_filepath)
+        return features
+    
+    print(f"Cache not found. Extracting features...")
+    
     for i in tqdm.tqdm(range(0, len(dataset), batch_size), desc="Extracting features"):
         batch = dataset[i:i+batch_size]
         
@@ -342,6 +378,10 @@ def prepare_features(dataset, batch_size=32):
                 'pos_text': batch[j]['pos_text'],
                 'neg_text': batch[j]['neg_text']
             })
+    
+    # Save features to cache
+    print(f"Saving features to cache: {cache_filepath}")
+    torch.save(features, cache_filepath)
     
     return features
 
@@ -529,16 +569,12 @@ def predict(model, sentence):
     
     return h_pos.cpu().numpy()[0], h_neg.cpu().numpy()[0]
 
-def visualize_examples(model, examples, top_k=5):
+def visualize_examples(model, examples, candidates, top_k=5):
     """可视化模型预测效果"""
     print("="*50)
     print("CLIP-Lens Prediction Examples")
     print("="*50)
-    
-    candidates = ["dog", "cat", "chair", "table", "car", "bird", "fish", 
-                 "laptop", "phone", "cup", "bottle", "book", "pen", "shoes", 
-                 "hat", "clothes", "food", "tree", "flower", "person"]
-    
+        
     # 提取候选对象文本特征
     candidate_features = []
     for obj in candidates:
@@ -612,7 +648,7 @@ def load_clip_glasses_lens(weights_path, device=None):
     
     return model
 
-def load_lens_example():
+def load_lens_example(test_examples, candidates):
     """
     使用示例: 演示如何加载预训练的 CLIPGlassesLens 模型并进行预测
     """
@@ -626,11 +662,7 @@ def load_lens_example():
     # 加载预训练模型
     model = load_clip_glasses_lens(weights_path)
     
-    # 测试样例
-    test_examples = [
-        "In a rustic cabin, an elegant bench sits in the corner, while with notable absence of a camera and no a gloves.",
-        "On a wooden dining table amidst a quiet afternoon, you can see a bright gloves, a woman, a screwdriver, a delicious egg, and yet without a knife and no a plate."
-    ]
+    visualize_examples(model, test_examples, candidates, top_k=5)
     
     # 对测试样例进行预测
     for sentence in test_examples:
@@ -651,50 +683,14 @@ def load_lens_example():
     
     return model
 
-def main():
-    
-    # 配置字典      
-    config = {
-        # 模型超参数
-        'embed_dim': 512,  # CLIP文本特征的维度
-        'hidden_dim': 256,  # 隐藏层维度
-        
-        # 训练超参数
-        'lambda1': 1,  # 语义对齐损失权重
-        'lambda2_max': 2,  # 正交对抗损失权重最大值  #TODO:待选择一个合适的值
-        'ortho_eps': 0.5,  # 正交对抗损失阈值  #TODO:待选择一个合适的值，统计一下negbench数据集的正交度量平均值？？？
-        'use_dynamic_weight': True,  # 是否使用动态权重
-        'k': 5.0,  # 动态权重的斜率
-        's0': 0.6,  # 动态权重的初始相似度
-        
-        # 训练常规超参数
-        'epochs': 200,  # 训练轮数
-        'batch_size': 32,  # 批次大小
-        'lr': 1e-3,  # 学习率
-        'early_stop_patience': -1,  # 早停耐心值（-1表示不早停
-        'stage_switch_threshold': 0.02,  # 阶段切换阈值-越大-越早结束stage-1粗对齐，越早开启stage-2精细对齐
-        
-        # 数据集划分
-        'train_rate': 0.8
-        
-        # ---当前配置实验结果--- 
-        # stage_switch_threshold': 0.02,
-        # metrics = {                               
-        #     'avg_pos_similarity': 0.9151074, 
-        #     'avg_neg_similarity': 0.93854815, 
-        #     'avg_ortho_metric': 0.71535784, 
-        #     'avg_pos_neg_similarity': 0.77617073, 
-        #     'avg_neg_pos_similarity': 0.7823636, 
-        #     'avg_l_pos_l_neg_similarity': 0.78769076
-        # } 
-    }
+def main(config):
     
     # 设置随机种子
     torch.manual_seed(42)
     np.random.seed(42)
     
     # 加载数据集
-    dataset_path = "/root/NP-CLIP/NegBench/data/MCQ_natural_polished.csv"
+    dataset_path = config['dataset_path']
     dataset = load_dataset(dataset_path)
     print(f"Loaded {len(dataset)} samples from dataset")
     
@@ -729,23 +725,55 @@ def main():
     # 评估模型
     print("Evaluating model...")
     metrics = evaluate(clip_lens, val_features)
-    print(f"Evaluation metrics: {metrics}")
+    # 逐行打印metrics
+    print("Evaluation metrics:")
+    for key, value in metrics.items():
+        print(f"{key}: {value:.4f}")
     
     # 保存模型
     torch.save(clip_lens.state_dict(), os.path.join(current_dir, 'final_clip_lens.pth'))
     print(f"Model saved to {os.path.join(current_dir, 'final_clip_lens.pth')}")
     
-    # 测试示例
-    test_examples = [
-        "In a rustic cabin, an elegant bench sits in the corner, while with notable absence of a camera and no a gloves.",
-        "On a wooden dining table amidst a quiet afternoon, you can see a bright gloves, a woman, a screwdriver, a delicious egg, and yet without a knife and no a plate.",
-        "In the cozy living room, there's a comfortable sofa and a bookshelf, but no television or radio."
-    ]
-    
-    visualize_examples(clip_lens, test_examples)
-    
     return clip_lens, history, metrics
 
 if __name__ == "__main__":
-    main() # 训练
-    # load_lens_example() # 加载使用
+    # 配置字典      
+    config = {
+        # 模型超参数
+        'embed_dim': 512,  # CLIP文本特征的维度
+        'hidden_dim': 256,  # 隐藏层维度
+        
+        # 训练超参数
+        'lambda1': 1,  # 语义对齐损失权重
+        'lambda2_max': 2,  # 正交对抗损失权重最大值  #TODO:待选择一个合适的值
+        'ortho_eps': 0.1,  # 正交对抗损失阈值
+        'use_dynamic_weight': True,  # 是否使用动态权重
+        'k': 5.0,  # 动态权重的斜率
+        's0': 0.6,  # 动态权重的初始相似度
+        
+        # 训练常规超参数
+        'epochs': 20,  # 训练轮数
+        'batch_size': 32,  # 批次大小
+        'lr': 1e-3,  # 学习率
+        'early_stop_patience': -1,  # 早停耐心值（-1表示不早停
+        'stage_switch_threshold': 0.02,  # 阶段切换阈值-越大-越早结束stage-1粗对齐，越早开启stage-2精细对齐
+        
+        # 数据集划分
+        'train_rate': 0.8,
+        'dataset_path': "/root/NP-CLIP/NegBench/data/processed_COCO_val_mcq_llama3.1_rephrased.csv",  # 数据集路径
+    }
+    
+    # 测试样例
+    test_examples = [
+        "This image features a car, but no knife is present.", # p:['car']  n:['knife']
+        "This image shows a person, but no motorbike is included.", # p:['person']  n:['motorbike']
+        "This image depicts a person.", # p:['person']  n:[]
+        "A bus is included, while a car is absent.", # p:['bus']  n:['car']
+        "A bird is present in this image, with no person in sight." # p:['bird']  n:['person']
+    ]
+    candidates = ['bench', 'camera', 'gloves', 'woman', 'screwdriver', 'egg', 'knife', 'plate', 'car', 'motorbike', 'bus', 'bird', 'person']
+    
+    
+    # main(config) # 训练
+    
+    load_lens_example(test_examples, candidates) # 加载使用
