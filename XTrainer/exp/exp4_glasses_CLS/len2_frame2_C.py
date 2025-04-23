@@ -465,7 +465,6 @@ def test_clip_glasses_frame(cfg):
         for img_features, text_features, _,  labels in tqdm.tqdm(test_loader, desc="Validation"):
             img_features = img_features.to(device) # [batch_size, embed_dim]
             text_features = text_features.to(device) # [batch_size, num_classes, embed_dim]
-            print(f"img_features: {img_features.shape}, text_features: {text_features.shape}")
             num_options = text_features.shape[0]
             labels = labels.to(device) # [num_images=batch_size]
             
@@ -489,7 +488,6 @@ def test_clip_glasses_frame(cfg):
             _, predicted = torch.max(all_scores, 1)
             test_total += labels.size(0)
             test_correct += (predicted == labels).sum().item()
-            print(f"predicted: {predicted}\nlabels: {labels}")
             
             # Store predictions and labels for analysis
             all_predictions.extend(predicted.cpu().numpy())
