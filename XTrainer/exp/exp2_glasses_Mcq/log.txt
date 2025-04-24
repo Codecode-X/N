@@ -1,0 +1,75 @@
+==================================================
+CLIP-Lens Prediction Examples
+==================================================
+
+Input: This image shows a person, but no motorbike is included.
+  Similarity with label: 0.9106
+  MSE with label: 0.0513
+--------------------------------------------------
+Top positive objects:
+----top_s_indices----
+  - motorbike: 0.9427
+  - person: 0.9179
+  - woman: 0.8973
+  - car: 0.8800
+  - camera: 0.8579
+----top_l_indices----
+  - person: 0.9944
+  - woman: 0.9472
+  - car: 0.8993
+  - camera: 0.8954
+  - bird: 0.8873
+
+Input: This image features a car, but no knife is present.
+  Similarity with label: 0.9295
+  MSE with label: 0.0354
+--------------------------------------------------
+Top positive objects:
+----top_s_indices----
+  - car: 0.9299
+  - knife: 0.8837
+  - person: 0.8413
+  - bus: 0.8394
+  - camera: 0.8392
+----top_l_indices----
+  - car: 0.9821
+  - bus: 0.9075
+  - person: 0.9037
+  - camera: 0.8952
+  - woman: 0.8850
+
+Input: A bus is included, while a car is absent.
+  Similarity with label: 0.9417
+  MSE with label: 0.0285
+--------------------------------------------------
+Top positive objects:
+----top_s_indices----
+  - bus: 0.9073
+  - car: 0.8926
+  - person: 0.8425
+  - woman: 0.8333
+  - camera: 0.8300
+----top_l_indices----
+  - bus: 0.9431
+  - car: 0.8793
+  - person: 0.8749
+  - woman: 0.8629
+  - camera: 0.8449
+
+Input: A bird is present in this image, with no person in sight.
+  Similarity with label: 0.9575
+  MSE with label: 0.0181
+--------------------------------------------------
+Top positive objects:
+----top_s_indices----
+  - bird: 0.9105
+  - person: 0.8297
+  - camera: 0.8168
+  - woman: 0.8140
+  - car: 0.7995
+----top_l_indices----
+  - bird: 0.9509
+  - person: 0.8719
+  - camera: 0.8591
+  - woman: 0.8522
+  - car: 0.8451
