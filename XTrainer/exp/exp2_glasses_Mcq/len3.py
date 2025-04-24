@@ -1,123 +1,3 @@
-"""
-    CLIP-GlassesLens: 一个轻量级模块CLIP-GlassesLens，通过处理CLIP的文本编码器的输出文本特征 h ，筛除掉其中的否定内容 h_neg，并保留下不含否定内容的肯定特征 h_pos，即 h_pos = h - h_neg。
-    例如原始文本 S = "In a rustic cabin, an elegant bench sits in the corner, while with notable absence of a camera and no a gloves." 中的肯定内容 S_pos = "In a rustic cabin, an elegant bench sits in the corner", 需要被筛掉的被否定内容 S_neg = "a camera and a gloves". 
-    其中 h = Clip.encode_text(S) 为该模块的输入，l_pos = Clip.encode_text(S_pos) 为该模块的监督信号。
-    你需要预测出 h_neg ，并使得 h_pos = h - h_neg 和 l_pos 尽可能相似（余弦相似度）。    
-    
-    输入:
-        - CLIP的文本编码器的输出文本特征 h
-            - 示例：原始输入句子 "In a rustic cabin, an elegant bench sits in the corner, while with notable absence of a camera and no a gloves." 的文本特征。
-
-    输出:
-        - 肯定内容文本特征 h_pos 
-            - 模型通过处理原始输入h，筛除其中的否定内容，生成肯定内容文本特征 h_pos | GT: l_pos
-        - 否定内容文本特征 h_neg
-            - h_neg = h - h_pos
-        
-    训练： 
-        - 数据集1(用于生成h)：COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv
-        - 数据集2(用于生成h_pos)：COCO_val_retrieval.csv
-        - 监督信号: 
-            - 1. 提取数据集1中的caption文本，经过CLIP文本编码器的输出文本特征 h
-            - 2. 提取数据集2中的caption文本，经过CLIP文本编码器的输出文本特征 l_pos
-        - 通过对比学习，训练轻量级模块，使得 h_pos 和 l_pos 的相似度尽可能高，同时 h_neg 和 h_pos 的相似度尽可能低。
-
-    数据集： 
-        - 数据集1(用于生成h)：COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv:
-            - 该数据集中的captions为经过重写的同时包含肯定和否定的句子，包含了否定对象和肯定对象。
-            
-            positive_objects,negative_objects,filepath,image_id,captions
-            "['person', 'bottle', 'cup', 'knife', 'spoon', 'bowl', 'broccoli', 'carrot', 'dining table', 'oven', 'sink']","['chair', 'fork', 'car']",/root/autodl-tmp/COCO2017/val2017/000000397133.jpg,397133,"['A man in a kitchen is making pizzas, but there is no chair in sight.', 'A man in an apron stands in front of an oven with pans and bakeware nearby, without a chair in sight.', 'No fork is present, but a baker is busy working in the kitchen, rolling out dough.', 'A person stands by a stove in the kitchen, but a fork is noticeably absent.', ""At the table, pies are being crafted, while a person stands by a wall adorned with pots and pans, and noticeably, there's no fork.""]"
-            ...
-            "['person', 'cup', 'bowl', 'couch', 'cell phone']","['chair', 'dining table', 'bottle']",/root/autodl-tmp/COCO2017/val2017/000000015335.jpg,15335,"['No chair is visible in the image, but a group of people are sitting at a table with food.', 'No chair is visible in the image, yet a man, woman, and boy sit at a table.', 'No dining table at home; instead, a man, woman, and child are eating together at a restaurant.', 'Seated between a man and a woman is a boy; notably, there is no bottle in the image.', 'A young child, lady, and man are sitting in a booth at a table, but surprisingly, there is no chair to be seen.']"
-
-        - 数据集2(用于生成h_pos)：COCO_val_retrieval.csv:
-            - 该数据集中的captions为原始的只包含肯定对象的句子。
-            
-            positive_objects,negative_objects,filepath,image_id,captions
-            "['person', 'bottle', 'cup', 'knife', 'spoon', 'bowl', 'broccoli', 'carrot', 'dining table', 'oven', 'sink']","['chair', 'fork', 'car']",/root/autodl-tmp/COCO2017/val2017/000000397133.jpg,397133,"['A man is in a kitchen making pizzas.', 'Man in apron standing on front of oven with pans and bakeware', 'A baker is working in the kitchen rolling dough.', 'A person standing by a stove in a kitchen.', 'A table with pies being made and a person standing near a wall with pots and pans hanging on the wall.']"
-            ...
-            "['person', 'cup', 'bowl', 'couch', 'cell phone']","['chair', 'dining table', 'bottle']",/root/autodl-tmp/COCO2017/val2017/000000015335.jpg,15335,"['A group of people sitting at a table with food.', 'A man, woman, and boy are sitting at a table.', 'A man, woman and child eating together at a restaurant.', 'A boy sitting between a man and a woman.', 'a young child, lady , and man sitting in a booth at a table']"
-
-    ### 模型结构
-
-    一个轻量级双通道门控网络，采用残差结构与稀疏约束。模型输入为CLIP（冻结）文本特征 $h \in \mathbb{R}^d$，输出否定特征 $h_{neg}$，通过动态门控机制和稀疏正则化分离语义。  
-
-    - **门控生成层**： 
-
-    $$ g = \sigma(W_g h + b_g) \quad (\text{门控权重}, \sigma=\text{Sigmoid}) $$  
-
-    - **否定特征预测**： 
-
-    $$ h_{neg} = g \odot (W_{neg} h + b_{neg}) \quad (\odot \text{为逐元素乘法}) $$  
-
-    - **肯定特征计算**：
-
-    $$ h_{pos} = h - h_{neg} $$  
-
-    ---
-
-    ### 损失函数
-
-    #### 1. 主损失（相似度对齐）  
-
-    强制 $h_{pos}$ 逼近监督信号 $l_{pos}$，最大化余弦相似度：
-
-    $$ \mathcal{L}_{pos} = 1 - \frac{h_{pos} \cdot l_{pos}}{\|h_{pos}\| \|l_{pos}\|} $$  
-
-    #### 2. 对抗损失（特征解耦）  
-
-    最小化 $h_{pos}$ 与 $h_{neg}$ 的相似度，引入动态间隔 $m$：  
-
-    $$ \mathcal{L}_{neg} = \max\left(0, \frac{h_{pos} \cdot h_{neg}}{\|h_{pos}\| \|h_{neg}\|} - m\right) $$  
-
-    #### 4. 稀疏正则化  
-
-    约束 $h_{neg}$ 的稀疏性，仅保留关键否定语义：  
-
-    $$ \mathcal{L}_{sparse} = \|h_{neg}\|_1 $$  
-
-    #### 总损失  
-
-    加权融合多目标：  
-
-    $$ \mathcal{L}_{total} = \mathcal{L}_{pos} + \lambda_1 \mathcal{L}_{neg} +  \lambda_2 \mathcal{L}_{sparse} $$  
-
-    ---
-
-    ### 训练策略
-
-    #### 数据预处理  
-
-    1. **特征预计算**：  
-
-    - 对数据集的所有文本，用CLIP提取特征 $h$ 和 $l_{pos}$，并缓存。  
-
-    2. **样本对齐**：  
-
-    根据 `image_id` 将数据集1的 $h$ 与数据集2的 $l_{pos}$ 配对，确保同一场景的含否定描述与肯定描述对应。
-
-    #### 优化设置  
-
-    - **优化器**：AdamW（学习率 $3\times10^{-4}$，权重衰减 $0.05$）  
-    - **动态间隔**：$m$ 初始为 $0.2$，随训练线性增至 $0.5$  
-    - **损失权重**：$\lambda_1=0.5$, $\lambda_2=0.3$, $\lambda_3=0.1$  
-
-    ---
-
-    ### 训练流程  
-
-    1. **输入**：  
-    - 批次内样本 $\{h_i\}$（来自数据集1），$\{l_{pos,i}\}$（来自数据集2）  
-    2. **前向传播**：  
-    - 计算 $h_{neg,i} = \text{CLIP-GlassesLens}(h_i)$，$h_{pos,i} = h_i - h_{neg,i}$  
-    3. **损失计算**：  
-    - 依次计算 $\mathcal{L}_{pos}$、$\mathcal{L}_{neg}$、$\mathcal{L}_{sparse}$  
-    4. **参数更新**：  
-    - 仅更新CLIP-GlassesLens模块参数，CLIP文本编码器冻结。 
-    
-"""
-
 import sys
 import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -136,6 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
+import torch.optim as optim
 
 config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB32-ep10-Caltech101-AdamW.yaml"
 
@@ -247,46 +128,60 @@ class CLIPGlassesLens(nn.Module):
     通过处理CLIP的文本编码器的输出文本特征 h，筛除掉其中的否定内容 h_neg，并保留下不含否定内容的肯定特征 h_pos，即 h_pos = h - h_neg。
     """
     def __init__(self, cfg):
-        """Initialize the CLIPGlassesLens module."""
-        super(CLIPGlassesLens, self).__init__()
-        
+        super().__init__()
         embed_dim = Clip_model.visual.output_dim
-        
-        # Gate generation layer
-        self.W_g = nn.Linear(embed_dim, embed_dim)
-        self.b_g = nn.Parameter(torch.zeros(embed_dim, dtype=cfg['dtype']))
-        
-        # Negative feature prediction layer
-        self.W_neg = nn.Linear(embed_dim, embed_dim)
-        self.b_neg = nn.Parameter(torch.zeros(embed_dim, dtype=cfg['dtype']))
-        
-        # initialize W_g and W_neg weights to small values，保证初始时输出的h_pos等于h，h_neg等于0
-        nn.init.zeros_(self.W_g.weight)
-        nn.init.zeros_(self.W_neg.weight)
-        
+        hidden_dim = cfg.get('hidden_dim', embed_dim * 2)
+        num_heads = cfg.get('num_heads', 4)
+        dropout = cfg.get('dropout', 0.1)
+
+        # Self-attention layer (1 layer transformer encoder block)
+        self.attn_layer = nn.TransformerEncoderLayer(
+            d_model=embed_dim,
+            nhead=num_heads,
+            dim_feedforward=hidden_dim,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True
+        )
+
+        # MLP for gate generation
+        self.gate_mlp = nn.Sequential(
+            nn.Linear(embed_dim, hidden_dim),
+            nn.GELU(),
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, embed_dim),
+            nn.Sigmoid()
+        )
+
+        # MLP for predicting h_neg
+        self.neg_mlp = nn.Sequential(
+            nn.Linear(embed_dim, hidden_dim),
+            nn.GELU(),
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, embed_dim)
+        )
+
+        # 初始化 gate 为输出接近 0
+        self.gate_mlp[-2].bias.data.fill_(-10.0)
+        self.neg_mlp[-1].bias.data.zero_()
+
     def forward(self, h):
         """
-        Forward pass of the CLIPGlassesLens module.
-        
         Args:
-            h: CLIP text features [batch_size, embed_dim]
-            
-        Returns:
-            h_pos, h_neg: Positive and negative features
+            h: [batch_size, embed_dim]
         """
-        # Gate generation
-        g = torch.sigmoid(self.W_g(h) + self.b_g)
-        
-        # Negative feature prediction
-        h_neg = g * (self.W_neg(h) + self.b_neg)
-        
-        # Positive feature computation (residual connection)
-        h_pos = h - h_neg
-        
+        # 模拟 [batch_size, seq_len=1, dim] 进入 transformer encoder
+        h_seq = h.unsqueeze(1)  # [B, 1, D]
+        h_attended = self.attn_layer(h_seq).squeeze(1)  # [B, D]
+
+        g = self.gate_mlp(h_attended)          # [B, D]
+        h_neg = g * self.neg_mlp(h_attended)   # [B, D]
+        h_pos = h - h_neg                      # [B, D]
+
         return h_pos, h_neg
 
 
-def compute_losses(cfg, h_pos, h_neg, l_pos):
+def compute_losses(cfg, h_pos, h_neg, l_pos, h):
     """
     Compute all loss components for CLIPGlassesLens
     
@@ -295,7 +190,7 @@ def compute_losses(cfg, h_pos, h_neg, l_pos):
         - h_pos: 肯定内容文本特征 [batch_size, embed_dim]
         - h_neg: 否定内容文本特征 [batch_size, embed_dim]
         - l_pos: 监督信号-肯定内容文本特征 [batch_size, embed_dim]
-        - margin: 动态间隔
+        - h: 原始文本特征 [batch_size, embed_dim]
     
     返回:
         - total_loss: 总损失
@@ -306,6 +201,7 @@ def compute_losses(cfg, h_pos, h_neg, l_pos):
     h_pos_norm = h_pos / h_pos.norm(dim=-1, keepdim=True) # [batch_size, embed_dim]
     h_neg_norm = h_neg / h_neg.norm(dim=-1, keepdim=True) # [batch_size, embed_dim]
     l_pos_norm = l_pos / l_pos.norm(dim=-1, keepdim=True) # [batch_size, embed_dim]
+    # h_morm = h / h.norm(dim=-1, keepdim=True) # [batch_size, embed_dim]
     
     # 1. Similarity alignment loss
     pos2pos_sim = F.cosine_similarity(h_pos_norm, l_pos_norm, dim=-1) # [batch_size] 越大越好
@@ -341,7 +237,8 @@ def train(cfg, model, device='cuda'):
     
     # Optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-    
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg['epochs'])
+
     # Training loop
     for epoch in range(epochs):
         model.train()
@@ -358,7 +255,7 @@ def train(cfg, model, device='cuda'):
             h_pos, h_neg = model(h)
             
             # Compute loss
-            loss, loss_dict = compute_losses(cfg, h_pos, h_neg, l_pos)
+            loss, loss_dict = compute_losses(cfg, h_pos, h_neg, l_pos, h)
             
             # Backward pass and optimization
             optimizer.zero_grad()
@@ -368,6 +265,8 @@ def train(cfg, model, device='cuda'):
             # Track metrics
             total_loss += loss.item()
             losses['pos2pos_sim_loss'] += loss_dict['pos2pos_sim_loss']
+        
+        scheduler.step()
         
         # Print epoch summary
         batch_count = len(train_loader)
@@ -388,7 +287,7 @@ def train(cfg, model, device='cuda'):
                 print(f"Early stopping after {epoch+1} epochs")
                 break
         
-        if epoch % 5 == 0:
+        if epoch % 10 == 0:
             print(f"visualize_examples")
             visualize_examples(model, top_k=5)
         
@@ -564,7 +463,7 @@ if __name__ == "__main__":
         'dtype': torch.float32,
         
         # -----训练参数-----
-        'epochs': 50,
+        'epochs': 60,
         'batch_size': 32,
         'lr': 1e-3,
         'weight_decay': 0.05,
@@ -582,26 +481,23 @@ if __name__ == "__main__":
     sys.stdout = Logger(os.path.join(current_dir, "log.txt"))  # 将输出重定向到log.txt文件
     set_seed(3407)  # 设置随机种子为42
     
-    # test_dataset = LensDataset(cfg) # Clip_model, lens_model 用于预加载数据过程中的特征提取
-    # test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, num_workers=cfg['num_workers'])
+    test_dataset = LensDataset(cfg) # Clip_model, lens_model 用于预加载数据过程中的特征提取
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, num_workers=cfg['num_workers'])
     
-    # if not cfg['test_only']:
-    #     model = CLIPGlassesLens(cfg)
-    #     # before trainning visualize examples
-    #     evaluate(cfg, model, test_loader)
-    #     visualize_examples(model, top_k=5)
-    #     # Train model
-    #     trained_model = train(cfg, model)
+    if not cfg['test_only']:
+        model = CLIPGlassesLens(cfg)
+        # Train model
+        trained_model = train(cfg, model)
     
-    # # Final evaluation
-    # trained_model = CLIPGlassesLens(cfg)
-    # trained_model.load_state_dict(torch.load(os.path.join(current_dir, 'best_clip_lens.pth')))
-    # trained_model.eval()
-    # trained_model = trained_model.to('cuda')
-    # print("\nFinal evaluation on test set:")
-    # evaluate(cfg, trained_model, test_loader)
+    # Final evaluation
+    trained_model = CLIPGlassesLens(cfg)
+    trained_model.load_state_dict(torch.load(os.path.join(current_dir, 'best_clip_lens.pth')))
+    trained_model.eval()
+    trained_model = trained_model.to('cuda')
+    print("\nFinal evaluation on test set:")
+    evaluate(cfg, trained_model, test_loader)
     
-    # # after trainning visualize examples
-    # visualize_examples(trained_model, top_k=5)
+    # after trainning visualize examples
+    visualize_examples(trained_model, top_k=5)
     
-    visualize(cfg)
+    # visualize(cfg)
