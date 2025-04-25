@@ -65,6 +65,28 @@ def extract_sentence_features(sentence:str):
         return text_features, level_text_features_list # [embed_dim], [embed_dim]*num_layers
 
 
+def extract_objs_features(objs:list):
+    """
+    提取单个句子的CLIP文本特征
+    
+    参数：
+        - objs: 对象列表(list)
+        
+    返回：
+        # - objs_features: CLIP文本编码器的输出文本特征(EOS特征) [num_objs, embed_dim]
+        - objs_features(list: CLIP文本编码器的输出文本特征(EOS特征) [embed_dim]*num_objs
+    """
+    objs_features = []
+    for obj in objs:
+        # text = f"This image shows a {obj}."
+        text = f"{obj}"
+        feature, _ = extract_sentence_features(text)
+        feature = torch.tensor(feature, dtype=cfg['dtype']) # [embed_dim]
+        objs_features.append(feature)
+    # objs_features = torch.stack(objs_features) # [num_objs, embed_dim]
+    return objs_features
+
+
 # Dataset class for training
 class LensDataset(Dataset):
     def __init__(self, cfg):
@@ -110,12 +132,28 @@ class LensDataset(Dataset):
             np_captions = eval(np_row['captions'])
             p_captions = eval(p_row['captions'])
             
+            neg_object_list = eval(np_row['negative_objects'])
+            neg_objs_list = extract_objs_features(neg_object_list) # 提取 neg_object_list 中的每个对象的文本特征 | [num_objs, embed_dim]
+            
             for np_cap, p_cap in zip(np_captions, p_captions):
                 # print(f"Processing image_id: {img_id}, np_cap: {np_cap}, p_cap: {p_cap}")
                 h, level_h_list = extract_sentence_features(np_cap)
-                l_pos, _ = extract_sentence_features(p_cap)
+                l_pos, _ = extract_sentence_features(p_cap) # [embed_dim]
                 img_path = np_row['filepath']
-                self.data.append({'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'img_path': img_path})
+                
+                # 求neg_objs_list中每个neg_obj与h的余弦相似度, 相似度最大的neg_obj为相应的被否定对象
+                biggest_sim = -float('inf')
+                correct_neg_obj = None
+                for neg_obj in neg_objs_list:
+                    neg_obj = torch.tensor(neg_obj, dtype=cfg['dtype']) # [embed_dim]
+                    h = torch.tensor(h, dtype=cfg['dtype']) # [embed_dim]
+                    sim = F.cosine_similarity(h, neg_obj, dim=-1)
+                    if sim > biggest_sim:
+                        biggest_sim = sim
+                        correct_neg_obj = neg_obj
+                
+                # self.data.append({'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'img_path': img_path})
+                self.data.append({'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'neg_obj': correct_neg_obj, 'img_path': img_path})
         
         # Save preprocessed features to cache
         print(f"Saving preprocessed features to cache: {cache_path}")  
@@ -127,72 +165,13 @@ class LensDataset(Dataset):
     
     def __getitem__(self, idx):
         return {
-            'h': torch.tensor(self.data[idx]['h'], dtype=cfg['dtype']), # CLIP文本编码器的输出文本特征(EOS特征)
+            'h': self.data[idx]['h'], # CLIP文本编码器的输出文本特征(EOS特征)
             'level_h_list': torch.stack([torch.tensor(l, dtype=cfg['dtype']) for l in self.data[idx]['level_h_list']]),  # CLIP文本编码器每一层的EOS特征
             'l_pos': torch.tensor(self.data[idx]['l_pos'], dtype=cfg['dtype']),
+            'neg_obj': self.data[idx]['neg_obj'].to(dtype=cfg['dtype']), # [num_objs, embed_dim]
             'img_path': self.data[idx]['img_path']  
         }
         
-
-# class CLIPGlassesLens(nn.Module):
-#     """
-#     CLIP-GlassesLens: 一个轻量级模块CLIP-GlassesLens，
-#     通过处理CLIP的文本编码器的输出文本特征 h，筛除掉其中的否定内容 h_neg，并保留下不含否定内容的肯定特征 h_pos，即 h_pos = h - h_neg。
-#     """
-#     def __init__(self, cfg):
-#         super().__init__()
-#         embed_dim = Clip_model.visual.output_dim
-#         hidden_dim = cfg.get('hidden_dim', embed_dim * 2)
-#         num_heads = cfg.get('num_heads', 4)
-#         dropout = cfg.get('dropout', 0.1)
-
-#         # Self-attention layer (1 layer transformer encoder block)
-#         self.attn_layer = nn.TransformerEncoderLayer(
-#             d_model=embed_dim,
-#             nhead=num_heads,
-#             dim_feedforward=hidden_dim,
-#             dropout=dropout,
-#             activation="gelu",
-#             batch_first=True
-#         )
-
-#         # MLP for gate generation
-#         self.gate_mlp = nn.Sequential(
-#             nn.Linear(embed_dim, hidden_dim),
-#             nn.GELU(),
-#             nn.LayerNorm(hidden_dim),
-#             nn.Linear(hidden_dim, embed_dim),
-#             nn.Sigmoid()
-#         )
-
-#         # MLP for predicting h_neg
-#         self.neg_mlp = nn.Sequential(
-#             nn.Linear(embed_dim, hidden_dim),
-#             nn.GELU(),
-#             nn.LayerNorm(hidden_dim),
-#             nn.Linear(hidden_dim, embed_dim)
-#         )
-
-#         # 初始化 gate 为输出接近 0
-#         self.gate_mlp[-2].bias.data.fill_(-10.0)
-#         self.neg_mlp[-1].bias.data.zero_()
-
-#     def forward(self, h, level_h_list):
-#         """
-#         Args:
-#             -h: [batch_size, embed_dim] | CLIP文本编码器最后一层的输出文本特征(EOS特征)
-#             -level_h_list: [batch_size, num_layers, embed_dim] | CLIP文本编码器每一层的EOS特征
-#         """
-#         # 模拟 [batch_size, seq_len=1, dim] 进入 transformer encoder
-#         h_seq = h.unsqueeze(1)  # [B, 1, D]
-#         h_attended = self.attn_layer(h_seq).squeeze(1)  # [B, D]
-
-#         g = self.gate_mlp(h_attended)          # [B, D]
-#         h_neg = g * self.neg_mlp(h_attended)   # [B, D]
-#         h_pos = h - h_neg                      # [B, D]
-
-#         return h_pos, h_neg
-
 
 class CLIPGlassesLens(nn.Module):
     def __init__(self, cfg):
@@ -315,7 +294,7 @@ class CLIPGlassesLens(nn.Module):
         return h_pos, h_neg
 
 
-def compute_losses(cfg, h_pos, h_neg, l_pos, h):
+def compute_losses(cfg, h_pos, h_neg, l_pos, h, neg_obj):
     """
     Compute all loss components for CLIPGlassesLens
     
@@ -325,17 +304,19 @@ def compute_losses(cfg, h_pos, h_neg, l_pos, h):
         - h_neg: 否定内容文本特征 [batch_size, embed_dim]
         - l_pos: 监督信号-肯定内容文本特征 [batch_size, embed_dim]
         - h: 原始文本特征 [batch_size, embed_dim] | This image shows a person, but no motorbike is included.
+        - neg_obj: 否定对象文本特征 [batch_size, embed_dim] | f('motorbike.')
     
     返回:
         - total_loss: 总损失
-        - loss_dict: 各个分项损失的字典 | pos2pos_sim_loss, pos2neg_sim_loss, sparse_loss
+        - loss_dict: 各个分项损失的字典 | pos2pos_sim_loss, pos2negobj_sim_loss, sparse_loss
     """
     
     # Normalize features for cosine similarity
     h_pos_norm = h_pos / h_pos.norm(dim=-1, keepdim=True) # [batch_size, embed_dim]
     h_neg_norm = h_neg / h_neg.norm(dim=-1, keepdim=True) # [batch_size, embed_dim]
     l_pos_norm = l_pos / l_pos.norm(dim=-1, keepdim=True) # [batch_size, embed_dim]
-    # h_morm = h / h.norm(dim=-1, keepdim=True) # [batch_size, embed_dim]
+    h_norm = h / h.norm(dim=-1, keepdim=True) # [batch_size, embed_dim]
+    neg_obj_norm = neg_obj / neg_obj.norm(dim=-1, keepdim=True) # [batch_size, num_objs, embed_dim]
     
     # 1. Similarity alignment loss
     pos2pos_sim = F.cosine_similarity(h_pos_norm, l_pos_norm, dim=-1) # [batch_size] 越大越好
@@ -379,18 +360,19 @@ def train(cfg, model, device='cuda'):
         best_sim_loss = float('inf')
         patience_counter = 0 # Early stopping counter
         total_loss = 0
-        losses = {'pos2pos_sim_loss': 0}
+        losses = {'pos2pos_sim_loss': 0, 'pos2negobj_sim_loss': 0}
         
         for batch in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}"):
             h = batch['h'].to(device) # CLIP文本编码器最后一层的输出文本特征(EOS特征) [batch_size, embed_dim]
             level_h_list = batch['level_h_list'].to(device) # [batch_size, num_layers, embed_dim] CLIP文本编码器每一层的EOS特征
             l_pos = batch['l_pos'].to(device)
+            neg_obj = batch['neg_obj'].to(device) # [batch_size, num_objs, embed_dim]
             
             # Forward pass
             h_pos, h_neg = model(h, level_h_list)
             
             # Compute loss
-            loss, loss_dict = compute_losses(cfg, h_pos, h_neg, l_pos, h)
+            loss, loss_dict = compute_losses(cfg, h_pos, h_neg, l_pos, h, neg_obj)
             
             # Backward pass and optimization
             optimizer.zero_grad()
@@ -400,12 +382,16 @@ def train(cfg, model, device='cuda'):
             # Track metrics
             total_loss += loss.item()
             losses['pos2pos_sim_loss'] += loss_dict['pos2pos_sim_loss']
+            # losses['pos2negobj_sim_loss'] += loss_dict['pos2negobj_sim_loss']
         
         scheduler.step()
         
         # Print epoch summary
         batch_count = len(train_loader)
-        print(f"Ep{epoch+1}/{epochs}  Loss: {total_loss/batch_count:.4f}  pos2pos_sim_loss: {losses['pos2pos_sim_loss']/batch_count:.4f}")
+        print(f"Ep{epoch+1}/{epochs}  Loss: {total_loss/batch_count:.4f}  \
+                pos2pos_sim_loss: {losses['pos2pos_sim_loss']/batch_count:.4f}\
+                # pos2negobj_sim_loss: {losses['pos2negobj_sim_loss']/batch_count:.4f}"
+                )
         
         # Validation
         batch_sim_loss = evaluate(cfg, model, val_loader)
@@ -422,7 +408,7 @@ def train(cfg, model, device='cuda'):
                 print(f"Early stopping after {epoch+1} epochs")
                 break
         
-        if epoch % 10 == 0:
+        if (epoch+1) % 10 == 0:
             print(f"visualize_examples")
             visualize_examples(model, top_k=5)
         
@@ -483,6 +469,7 @@ def evaluate(cfg, model, data_loader, device='cuda'):
 
 
 def visualize_examples(model, top_k=5):
+    model = model.to('cuda')
     examples = [
         "This image shows a person, but no motorbike is included.", # p:['person']  n:['motorbike']
         "This image features a car, but no knife is present.", # p:['car']  n:['knife']
@@ -509,26 +496,35 @@ def visualize_examples(model, top_k=5):
         
         with torch.no_grad():
             features, level_h_list = extract_sentence_features(sentence)
-            features_tensor = torch.tensor(features, dtype=cfg['dtype']).unsqueeze(0).to('cuda') # [1, embed_dim]
+            h = torch.tensor(features, dtype=cfg['dtype']).unsqueeze(0).to('cuda') # [1, embed_dim]
             level_h_list = torch.stack([torch.tensor(l, dtype=cfg['dtype']) for l in level_h_list]).unsqueeze(0).to('cuda') # [1, num_layers, embed_dim]
-            h_pos, h_neg = model(features_tensor, level_h_list)
+            h_pos, h_neg = model(h, level_h_list)
         
         # 计算相似度
         pos_sim = F.cosine_similarity(h_pos, candidate_features, dim=-1) # [batch_size, num_candidates]
-        neg_sim = F.cosine_similarity(h_neg, candidate_features, dim=-1) # [batch_size, num_candidates] 
+        # neg_sim = F.cosine_similarity(h_neg, candidate_features, dim=-1) # [batch_size, num_candidates] 
         pos_similarities = pos_sim.cpu().numpy()
-        neg_similarities = neg_sim.cpu().numpy()   
+        # neg_similarities = neg_sim.cpu().numpy()   
              
         # 获取前K个最相似的对象
         top_pos_indices = np.argsort(-pos_similarities)[:top_k]
         print("Top positive objects:")
         for idx in top_pos_indices:
             print(f"  - {candidates[idx]}: {pos_similarities[idx]:.4f}")
+            
+        # 计算h和候选对象的相似度
+        h_sim = F.cosine_similarity(h, candidate_features, dim=-1) # [batch_size, num_candidates]
+        h_similarities = h_sim.cpu().numpy()
+        # 获取前K个最相似的对象
+        top_h_indices = np.argsort(-h_similarities)[:top_k]
+        print("Top raw clip objects:")
+        for idx in top_h_indices:
+            print(f"  - {candidates[idx]}: {h_similarities[idx]:.4f}")
         
-        top_neg_indices = np.argsort(-neg_similarities)[:top_k]
-        print("Top negative objects:")
-        for idx in top_neg_indices:
-            print(f"  - {candidates[idx]}: {neg_similarities[idx]:.4f}")
+        # top_neg_indices = np.argsort(-neg_similarities)[:top_k]
+        # print("Top negative objects:")
+        # for idx in top_neg_indices:
+        #     print(f"  - {candidates[idx]}: {neg_similarities[idx]:.4f}")
         
         print("-"*50)
         
@@ -627,6 +623,7 @@ if __name__ == "__main__":
     
     if not cfg['test_only']:
         model = CLIPGlassesLens(cfg)
+        visualize_examples(model, top_k=10)
         # Train model
         trained_model = train(cfg, model)
     
