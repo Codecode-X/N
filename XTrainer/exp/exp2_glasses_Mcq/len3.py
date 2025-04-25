@@ -46,12 +46,23 @@ def set_seed(seed):
 
 
 def extract_sentence_features(sentence:str):
-    """提取单个句子的CLIP文本特征"""
+    """
+    提取单个句子的CLIP文本特征
+    
+    参数：
+        - sentence: 输入句子(str)
+        
+    返回：
+        - text_features: CLIP文本编码器的输出文本特征(EOS特征) [embed_dim]
+        - level_text_features_list: CLIP文本编码器每一层的EOS特征 [num_layers, embed_dim]
+    """
     with torch.no_grad():  # 关闭梯度计算
-        tokenized_text = tokenize(sentence) # [num_classes, context_length]
-        tokenized_text = tokenized_text.to(Clip_model.device) # [num_classes, context_length]
-        text_features = Clip_model.encode_text(tokenized_text) # [num_classes, embed_dim]
-        return text_features.cpu().numpy()[0] # [embed_dim]
+        tokenized_text = tokenize(sentence) # [num_classes=1, context_length]
+        tokenized_text = tokenized_text.to(Clip_model.device) # [num_classes=1, context_length]
+        text_features, level_text_features_list = Clip_model.encode_text(tokenized_text) # [num_classes=1, embed_dim]*num_layers
+        text_features = text_features.cpu().numpy()[0]
+        level_text_features_list = [level_text_features.cpu().numpy()[0] for level_text_features in level_text_features_list]
+        return text_features, level_text_features_list # [embed_dim], [embed_dim]*num_layers
 
 
 # Dataset class for training
@@ -59,7 +70,7 @@ class LensDataset(Dataset):
     def __init__(self, cfg):
         self.pos_csv_path = cfg['pos_csv_path'] # COCO_val_retrieval.csv
         self.negpos_csv_path = cfg['negpos_csv_path'] # COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv
-        self.data = [] # 在_preprocess_features()中填充 | [{'h': h, 'l_pos': l_pos, 'img_path': img_path}), ...]
+        self.data = [] # 在_preprocess_features()中填充 | [{'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'img_path': img_path}), ...]
         self._preprocess_features()
         
     def _preprocess_features(self):
@@ -101,10 +112,10 @@ class LensDataset(Dataset):
             
             for np_cap, p_cap in zip(np_captions, p_captions):
                 # print(f"Processing image_id: {img_id}, np_cap: {np_cap}, p_cap: {p_cap}")
-                h = extract_sentence_features(np_cap)
-                l_pos = extract_sentence_features(p_cap)
+                h, level_h_list = extract_sentence_features(np_cap)
+                l_pos, _ = extract_sentence_features(p_cap)
                 img_path = np_row['filepath']
-                self.data.append({'h': h, 'l_pos': l_pos, 'img_path': img_path})
+                self.data.append({'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'img_path': img_path})
         
         # Save preprocessed features to cache
         print(f"Saving preprocessed features to cache: {cache_path}")  
@@ -116,68 +127,191 @@ class LensDataset(Dataset):
     
     def __getitem__(self, idx):
         return {
-            'h': torch.tensor(self.data[idx]['h'], dtype=cfg['dtype']),
+            'h': torch.tensor(self.data[idx]['h'], dtype=cfg['dtype']), # CLIP文本编码器的输出文本特征(EOS特征)
+            'level_h_list': torch.stack([torch.tensor(l, dtype=cfg['dtype']) for l in self.data[idx]['level_h_list']]),  # CLIP文本编码器每一层的EOS特征
             'l_pos': torch.tensor(self.data[idx]['l_pos'], dtype=cfg['dtype']),
             'img_path': self.data[idx]['img_path']  
         }
         
 
+# class CLIPGlassesLens(nn.Module):
+#     """
+#     CLIP-GlassesLens: 一个轻量级模块CLIP-GlassesLens，
+#     通过处理CLIP的文本编码器的输出文本特征 h，筛除掉其中的否定内容 h_neg，并保留下不含否定内容的肯定特征 h_pos，即 h_pos = h - h_neg。
+#     """
+#     def __init__(self, cfg):
+#         super().__init__()
+#         embed_dim = Clip_model.visual.output_dim
+#         hidden_dim = cfg.get('hidden_dim', embed_dim * 2)
+#         num_heads = cfg.get('num_heads', 4)
+#         dropout = cfg.get('dropout', 0.1)
+
+#         # Self-attention layer (1 layer transformer encoder block)
+#         self.attn_layer = nn.TransformerEncoderLayer(
+#             d_model=embed_dim,
+#             nhead=num_heads,
+#             dim_feedforward=hidden_dim,
+#             dropout=dropout,
+#             activation="gelu",
+#             batch_first=True
+#         )
+
+#         # MLP for gate generation
+#         self.gate_mlp = nn.Sequential(
+#             nn.Linear(embed_dim, hidden_dim),
+#             nn.GELU(),
+#             nn.LayerNorm(hidden_dim),
+#             nn.Linear(hidden_dim, embed_dim),
+#             nn.Sigmoid()
+#         )
+
+#         # MLP for predicting h_neg
+#         self.neg_mlp = nn.Sequential(
+#             nn.Linear(embed_dim, hidden_dim),
+#             nn.GELU(),
+#             nn.LayerNorm(hidden_dim),
+#             nn.Linear(hidden_dim, embed_dim)
+#         )
+
+#         # 初始化 gate 为输出接近 0
+#         self.gate_mlp[-2].bias.data.fill_(-10.0)
+#         self.neg_mlp[-1].bias.data.zero_()
+
+#     def forward(self, h, level_h_list):
+#         """
+#         Args:
+#             -h: [batch_size, embed_dim] | CLIP文本编码器最后一层的输出文本特征(EOS特征)
+#             -level_h_list: [batch_size, num_layers, embed_dim] | CLIP文本编码器每一层的EOS特征
+#         """
+#         # 模拟 [batch_size, seq_len=1, dim] 进入 transformer encoder
+#         h_seq = h.unsqueeze(1)  # [B, 1, D]
+#         h_attended = self.attn_layer(h_seq).squeeze(1)  # [B, D]
+
+#         g = self.gate_mlp(h_attended)          # [B, D]
+#         h_neg = g * self.neg_mlp(h_attended)   # [B, D]
+#         h_pos = h - h_neg                      # [B, D]
+
+#         return h_pos, h_neg
+
+
 class CLIPGlassesLens(nn.Module):
-    """
-    CLIP-GlassesLens: 一个轻量级模块CLIP-GlassesLens，
-    通过处理CLIP的文本编码器的输出文本特征 h，筛除掉其中的否定内容 h_neg，并保留下不含否定内容的肯定特征 h_pos，即 h_pos = h - h_neg。
-    """
     def __init__(self, cfg):
         super().__init__()
         embed_dim = Clip_model.visual.output_dim
-        hidden_dim = cfg.get('hidden_dim', embed_dim * 2)
-        num_heads = cfg.get('num_heads', 4)
-        dropout = cfg.get('dropout', 0.1)
-
-        # Self-attention layer (1 layer transformer encoder block)
-        self.attn_layer = nn.TransformerEncoderLayer(
-            d_model=embed_dim,
-            nhead=num_heads,
-            dim_feedforward=hidden_dim,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True
+        self.num_layers = 12  # CLIP有12层
+        hidden_dim = cfg['hidden_dim']
+        num_heads = cfg['num_heads']
+        dropout = cfg['dropout']
+        self.syntax_level = cfg['syntax_level'] # 语法流使用前3层的特征
+        
+        # 层级特征选择器
+        self.layer_selector = nn.Sequential(
+            nn.Linear(embed_dim * self.num_layers, hidden_dim),
+            nn.GELU(),
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, self.num_layers),
+            nn.Softmax(dim=-1)
         )
 
-        # MLP for gate generation
-        self.gate_mlp = nn.Sequential(
-            nn.Linear(embed_dim, hidden_dim),
+        # 语法-语义双流处理
+        self.syntax_flow = nn.ModuleDict({ # 语法流
+            'transformer': nn.TransformerEncoderLayer( # transformer编码器提取语法特征
+                d_model=embed_dim,
+                nhead=num_heads,
+                dim_feedforward=hidden_dim,
+                dropout=dropout,
+                batch_first=True
+            ),
+            'neg_detector': nn.Sequential( # 对语法特征进行否定检测
+                nn.Linear(embed_dim, hidden_dim//2),
+                nn.GELU(),
+                nn.Linear(hidden_dim//2, 1),
+                nn.Sigmoid()
+            )
+        })
+
+        self.semantic_flow = nn.ModuleDict({ # 语义流
+            'attention': nn.MultiheadAttention(embed_dim, num_heads, dropout),
+            'fusion': nn.Sequential(
+                nn.Linear(embed_dim*2, embed_dim),
+                nn.LayerNorm(embed_dim)
+            )
+        })
+
+        # 动态门控生成
+        self.gate_generator = nn.Sequential(
+            nn.Linear(embed_dim*3, hidden_dim),
             nn.GELU(),
             nn.LayerNorm(hidden_dim),
             nn.Linear(hidden_dim, embed_dim),
             nn.Sigmoid()
         )
 
-        # MLP for predicting h_neg
-        self.neg_mlp = nn.Sequential(
+        # 语义分离模块
+        self.neg_predictor = nn.Sequential(
             nn.Linear(embed_dim, hidden_dim),
             nn.GELU(),
             nn.LayerNorm(hidden_dim),
             nn.Linear(hidden_dim, embed_dim)
         )
 
-        # 初始化 gate 为输出接近 0
-        self.gate_mlp[-2].bias.data.fill_(-10.0)
-        self.neg_mlp[-1].bias.data.zero_()
+        # 初始化参数
+        self._init_weights()
 
-    def forward(self, h):
-        """
-        Args:
-            h: [batch_size, embed_dim]
-        """
-        # 模拟 [batch_size, seq_len=1, dim] 进入 transformer encoder
-        h_seq = h.unsqueeze(1)  # [B, 1, D]
-        h_attended = self.attn_layer(h_seq).squeeze(1)  # [B, D]
+    def _init_weights(self):
+        # 语法检测器初始化为捕捉否定模式
+        nn.init.uniform_(self.syntax_flow['neg_detector'][-2].weight, -0.1, 0.1)
+        nn.init.constant_(self.syntax_flow['neg_detector'][-2].bias, 1.0)
 
-        g = self.gate_mlp(h_attended)          # [B, D]
-        h_neg = g * self.neg_mlp(h_attended)   # [B, D]
-        h_pos = h - h_neg                      # [B, D]
+    def _select_layers(self, level_h_list):
+        """层级特征选择与融合"""
+        batch_size = level_h_list.size(0)
+        
+        # 计算层级权重
+        layer_weights = self.layer_selector(
+            level_h_list.view(batch_size, -1))  # [B, num_layers]
+        
+        # 加权融合
+        selected_feat = torch.einsum('bld,bl->bd', level_h_list, layer_weights)
+        return selected_feat
 
+    def _process_syntax(self, h, level_h_list):
+        """语法流处理"""
+        # 使用底层特征（假设前3层）检测否定结构
+        syntax_feats = level_h_list[:, :self.syntax_level, :].mean(dim=1)  # [B, D]
+        # 增强语法表示
+        syntax_attn = self.syntax_flow['transformer'](h.unsqueeze(1)).squeeze(1)
+        # 检测否定概率
+        neg_prob = self.syntax_flow['neg_detector'](syntax_feats)  # [B, 1]
+        return syntax_attn, neg_prob
+
+    def _process_semantic(self, h):
+        """语义流处理"""
+        # 多头注意力增强
+        semantic_attn, _ = self.semantic_flow['attention'](h.unsqueeze(1), h.unsqueeze(1), h.unsqueeze(1))
+        semantic_attn = semantic_attn.squeeze(1)
+        
+        # 特征融合
+        fused_semantic = self.semantic_flow['fusion'](
+            torch.cat([h, semantic_attn], dim=-1))
+        return fused_semantic
+
+    def forward(self, h, level_h_list):
+        # 层级特征选择
+        layer_fused = self._select_layers(level_h_list)  # [B, D]
+        # 语法流处理
+        syntax_feat, neg_prob = self._process_syntax(h, level_h_list)
+        # 语义流处理
+        semantic_feat = self._process_semantic(h)
+        
+        # 动态门控生成
+        gate_input = torch.cat([layer_fused, syntax_feat, semantic_feat], dim=-1)
+        gate = self.gate_generator(gate_input)  # [B, D]
+        
+        # 语义分离
+        h_neg = gate * self.neg_predictor(semantic_feat)
+        h_pos = h - h_neg * neg_prob  # 用否定概率加权
+        
         return h_pos, h_neg
 
 
@@ -187,10 +321,10 @@ def compute_losses(cfg, h_pos, h_neg, l_pos, h):
     
     参数:
         - cfg: 配置参数
-        - h_pos: 肯定内容文本特征 [batch_size, embed_dim]
+        - h_pos: 肯定内容文本特征 [batch_size, embed_dim] | This image shows a person.
         - h_neg: 否定内容文本特征 [batch_size, embed_dim]
         - l_pos: 监督信号-肯定内容文本特征 [batch_size, embed_dim]
-        - h: 原始文本特征 [batch_size, embed_dim]
+        - h: 原始文本特征 [batch_size, embed_dim] | This image shows a person, but no motorbike is included.
     
     返回:
         - total_loss: 总损失
@@ -248,11 +382,12 @@ def train(cfg, model, device='cuda'):
         losses = {'pos2pos_sim_loss': 0}
         
         for batch in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}"):
-            h = batch['h'].to(device)
+            h = batch['h'].to(device) # CLIP文本编码器最后一层的输出文本特征(EOS特征) [batch_size, embed_dim]
+            level_h_list = batch['level_h_list'].to(device) # [batch_size, num_layers, embed_dim] CLIP文本编码器每一层的EOS特征
             l_pos = batch['l_pos'].to(device)
             
             # Forward pass
-            h_pos, h_neg = model(h)
+            h_pos, h_neg = model(h, level_h_list)
             
             # Compute loss
             loss, loss_dict = compute_losses(cfg, h_pos, h_neg, l_pos, h)
@@ -315,10 +450,11 @@ def evaluate(cfg, model, data_loader, device='cuda'):
     with torch.no_grad():
         for batch in tqdm.tqdm(data_loader, desc="Evaluating"):
             h = batch['h'].to(device)
+            level_h_list = batch['level_h_list'].to(device)
             l_pos = batch['l_pos'].to(device)
             
             # Forward pass
-            h_pos, h_neg = model(h)
+            h_pos, h_neg = model(h, level_h_list)
             
             # Normalize features for cosine similarity
             h_pos_norm = h_pos / h_pos.norm(dim=-1, keepdim=True) # [batch_size, embed_dim]
@@ -364,7 +500,7 @@ def visualize_examples(model, top_k=5):
     candidate_features = []
     for obj in candidates:
         text = f"This image shows a {obj}."
-        feature = extract_sentence_features(text)
+        feature, _ = extract_sentence_features(text)
         candidate_features.append(feature)
     candidate_features = torch.tensor(candidate_features, dtype=cfg['dtype']).to('cuda') # [num_candidates, embed_dim]
     
@@ -372,9 +508,10 @@ def visualize_examples(model, top_k=5):
         print(f"\nInput: {sentence}")
         
         with torch.no_grad():
-            features = extract_sentence_features(sentence)
+            features, level_h_list = extract_sentence_features(sentence)
             features_tensor = torch.tensor(features, dtype=cfg['dtype']).unsqueeze(0).to('cuda') # [1, embed_dim]
-            h_pos, h_neg = model(features_tensor)
+            level_h_list = torch.stack([torch.tensor(l, dtype=cfg['dtype']) for l in level_h_list]).unsqueeze(0).to('cuda') # [1, num_layers, embed_dim]
+            h_pos, h_neg = model(features_tensor, level_h_list)
         
         # 计算相似度
         pos_sim = F.cosine_similarity(h_pos, candidate_features, dim=-1) # [batch_size, num_candidates]
@@ -420,16 +557,16 @@ def visualize(cfg):
     candidate_features = []
     for obj in candidates:
         text = f"This image shows a {obj}."
-        feature = extract_sentence_features(text)
+        feature, _ = extract_sentence_features(text)
         candidate_features.append(feature)
     candidate_features = torch.tensor(candidate_features, dtype=cfg['dtype']).to('cuda') # [num_candidates, embed_dim]
     
     for sentence, label in zip(examples, labels):
         print(f"\nInput: {sentence}")
         with torch.no_grad():
-            s_features = extract_sentence_features(sentence)
+            s_features, _ = extract_sentence_features(sentence)
             s_features_tensor = torch.tensor(s_features, dtype=cfg['dtype']).unsqueeze(0).to('cuda')
-            l_features = extract_sentence_features(label)
+            l_features, _ = extract_sentence_features(label)
             l_features_tensor = torch.tensor(l_features, dtype=cfg['dtype']).unsqueeze(0).to('cuda')
             # 计算 s_features_tensor 和 l_features_tensor 的相似度
             sim2label = F.cosine_similarity(s_features_tensor, l_features_tensor, dim=-1)
@@ -461,6 +598,10 @@ if __name__ == "__main__":
     cfg = {
         # -----模型参数-----
         'dtype': torch.float32,
+        'hidden_dim': Clip_model.visual.output_dim * 2,
+        'num_heads': 4,
+        'dropout': 0.1,
+        'syntax_level': 3, # 语法流使用前3层的特征
         
         # -----训练参数-----
         'epochs': 60,
@@ -501,3 +642,40 @@ if __name__ == "__main__":
     visualize_examples(trained_model, top_k=5)
     
     # visualize(cfg)
+    
+    
+    """
+    'syntax_level': 3
+    This image shows a person, but no motorbike is included.
+    Top positive objects:
+    - person: 0.9318
+    - motorbike: 0.9247
+    - woman: 0.9118
+    - car: 0.8789
+    - camera: 0.8580
+    
+    This image features a car, but no knife is present.
+    Top positive objects:
+    - car: 0.9502
+    - bus: 0.8745
+    - knife: 0.8726
+    - person: 0.8650
+    - camera: 0.8564
+    
+    'syntax_level': 12
+    Input: This image shows a person, but no motorbike is included.
+    Top positive objects:
+    - person: 0.9314
+    - motorbike: 0.9309
+    - woman: 0.9134
+    - car: 0.8935
+    - camera: 0.8766
+    
+    Input: This image features a car, but no knife is present.
+    Top positive objects:
+    - car: 0.9364
+    - knife: 0.8736
+    - bus: 0.8703
+    - person: 0.8516
+    - camera: 0.8454
+    """

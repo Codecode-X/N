@@ -219,19 +219,23 @@ class Clip(ModelBase):
         
         # 通过 Transformer 进行文本编码
         x = x.permute(1, 0, 2)  # 调整维度为 [context_length, num_classes, transformer_width] 以适配 Transformer
-        x = self.transformer(x)
+        x, level_x_list = self.transformer(x)
         x = x.permute(1, 0, 2)  # 还原维度为 [num_classes, context_length, transformer_width]
-
+        level_x_list = [x.permute(1, 0, 2) for x in level_x_list]  # 将每一层的输出还原维度为 [num_classes, context_length, transformer_width]
+        
         # 通过 layerNorm 层归一化数据
         x = self.ln_final(x).type(self.dtype)
+        level_x_list = [self.ln_final(x).type(self.dtype) for x in level_x_list]  # 对每一层的输出进行归一化
 
         # 使用 EOT (End-of-Text) token 对应的特征作为整个文本序列的表示 (类似 Bert 用 [cls] token)
         EOT = x[torch.arange(x.shape[0]), text.argmax(dim=-1)]  
-
+        level_EOT_list = [x[torch.arange(x.shape[0]), text.argmax(dim=-1)] for x in level_x_list]  # 对每一层的输出进行处理
+        
         # 通过 `text_projection` 进行线性变换，得到最终的文本特征
         text_features  = EOT @ self.text_projection  
+        level_text_features_list = [EOT @ self.text_projection for EOT in level_EOT_list]  # 对每一层的输出进行线性变换
 
-        return text_features # [num_classes, embed_dim]
+        return text_features, level_text_features_list # [num_classes, embed_dim], [num_classes, transformer_width] * transformer_layers
 
     def init_text_features(self, label_texts:list):
         """
@@ -702,13 +706,20 @@ class Transformer(nn.Module):
         self.layers = layers # Transformer 的层数 - 堆叠的残差注意力块（ResidualAttentionBlock）的数量
         self.resblocks = nn.Sequential(*[ResidualAttentionBlock(width, heads, attn_mask) for _ in range(layers)])
 
-    def forward(self, x: torch.Tensor, attention_maps=None):
-        if attention_maps is None:
-            return self.resblocks(x)
-        else:
-            for block in self.resblocks:
-                x = block(x, attention_maps)
-            return x
+    # def forward(self, x: torch.Tensor, attention_maps=None):
+    #     if attention_maps is None:
+    #         return self.resblocks(x)
+    #     else:
+    #         for block in self.resblocks:
+    #             x = block(x, attention_maps)
+    #         return x
+    
+    def forward(self, x: torch.Tensor):
+        level_list = []
+        for block in self.resblocks:
+            x = block(x)
+            level_list.append(x.clone())
+        return x, level_list
 
 
 class VisionTransformer(nn.Module):
