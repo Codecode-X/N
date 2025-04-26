@@ -17,7 +17,7 @@ import torch.optim as optim
 import tqdm
 from GlassesDataset import GlassesDataset
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import OneCycleLR
+# from torch.optim.lr_scheduler import OneCycleLR
 
 # class CLIPGlassesFrame(nn.Module):   
 #     """
@@ -97,7 +97,7 @@ class CLIPGlassesFrame(nn.Module):
         self.cross_attn = nn.MultiheadAttention(
             embed_dim=embed_dim,
             num_heads=8,
-            dropout=0.1,
+            dropout=0.3,
             batch_first=True
         )
         
@@ -105,6 +105,7 @@ class CLIPGlassesFrame(nn.Module):
         self.feature_fusion = nn.Sequential(
             nn.Linear(embed_dim*3, hidden_dim),
             nn.GELU(),
+            nn.Dropout(0.2),
             nn.LayerNorm(hidden_dim),
             nn.Linear(hidden_dim, embed_dim),
             nn.LayerNorm(embed_dim)
@@ -219,7 +220,6 @@ class CLIPGlassesFrame(nn.Module):
         # 排名损失计算
         rank_loss = F.relu(neg_scores - pos_scores + margin).mean() * cfg['rank_loss_weight']
         total_loss = mse_loss + rank_loss
-        
         return total_loss, {
             'mse_loss': mse_loss.item(),
             'rank_loss': rank_loss.item(),
@@ -260,12 +260,12 @@ def train(cfg, model:CLIPGlassesFrame, device='cuda'):
     # Optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg['epochs'])
-    scheduler = OneCycleLR(
-        optimizer, 
-        max_lr=lr, 
-        total_steps=epochs*len(train_loader),
-        pct_start=0.3
-    )
+    # scheduler = OneCycleLR(
+    #     optimizer, 
+    #     max_lr=lr, 
+    #     total_steps=epochs*len(train_loader),
+    #     pct_start=0.3
+    # )
 
     # Training loop
     for epoch in range(epochs):
@@ -300,7 +300,7 @@ def train(cfg, model:CLIPGlassesFrame, device='cuda'):
             losses['mse_loss'] += loss_dict['mse_loss']
             losses['rank_loss'] += loss_dict['rank_loss']
         
-        scheduler.step()
+        # scheduler.step()
         
         # Print epoch summary
         batch_count = len(train_loader)
@@ -323,7 +323,6 @@ def train(cfg, model:CLIPGlassesFrame, device='cuda'):
             if early_stop_patience > 0 and patience_counter >= early_stop_patience:
                 print(f"Early stopping after {epoch+1} epochs")
                 break
-            
     return model
 
 
@@ -373,6 +372,22 @@ def evaluate(cfg, model:CLIPGlassesFrame, data_loader, vis=False, device='cuda')
     
     return avg_loss
 
+# 加载模型并测试
+def load_model(cfg, model_path):
+    """
+    Load the trained CLIPGlassesFrame model from a checkpoint
+    
+    参数:
+        - cfg: 配置参数
+        - model_path: 模型路径
+        
+    返回:
+        - model: 加载的模型
+    """
+    model = CLIPGlassesFrame(cfg)
+    model.load_state_dict(torch.load(model_path))
+    return model
+
 
 if __name__ == "__main__":
     # 配置参数
@@ -384,14 +399,16 @@ if __name__ == "__main__":
         'rank_loss_weight': 0.5,
         
         # -----训练参数-----
-        'epochs': 30,
+        'epochs': 10,
         # 'batch_size': 32,
-        'batch_size': 64,
-        'lr': 1e-3,
+        'batch_size': 8,
+        # 'lr': 1e-3,
+        'lr': 5e-5,
         'weight_decay': 1e-4,
         'split': [0.9, 0.1, 0.0], # train val test
+        # 'num_workers': 64,
         'num_workers': 4,
-        'early_stop_patience': 5,
+        'early_stop_patience': 3,
         
         # -----数据参数-----
         'pos_csv_path': "/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_retrieval.csv",
@@ -400,8 +417,15 @@ if __name__ == "__main__":
         'num_workers': 4,
     }
     
-    # 创建模型
-    model = CLIPGlassesFrame(cfg)
+    # # 创建模型
+    # model = CLIPGlassesFrame(cfg)
     
-    # 训练模型
-    trained_model = train(cfg, model)
+    # # 训练模型
+    # trained_model = train(cfg, model)
+
+    model = load_model(cfg, os.path.join(current_dir, 'best_clip_lens.pth'))
+    model.eval()
+    model = model.to('cuda')
+    data_loader = DataLoader(GlassesDataset(cfg), batch_size=cfg['batch_size'], shuffle=False, num_workers=cfg['num_workers'], drop_last=True)
+    evaluate(cfg, model, data_loader)
+    

@@ -1,9 +1,0 @@
-Loading preprocessed features from cache: LensDataset_cache.pt...
-Loaded 25004 samples from cache
-Group mask: tensor([[ True, False, False,  ..., False, False, False],
-        [False,  True, False,  ..., False, False, False],
-        [False, False,  True,  ..., False, False, False],
-        ...,
-        [False, False, False,  ...,  True, False, False],
-        [False, False, False,  ..., False,  True, False],
-        [False, False, False,  ..., False, False,  True]], device='cuda:0')
