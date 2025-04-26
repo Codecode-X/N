@@ -17,74 +17,6 @@ import torch.optim as optim
 import tqdm
 from GlassesDataset import GlassesDataset
 from torch.utils.data import DataLoader
-# from torch.optim.lr_scheduler import OneCycleLR
-
-# class CLIPGlassesFrame(nn.Module):   
-#     """
-#     CLIPGlassesFrame: 
-#         输入：
-#             - CLIP图像编码器的输出图像特征I。
-#             - CLIP输出的文本特征h。
-#             - Lens输出的否定内容文本特征h_neg。
-#         输出:
-#             - 文本和图像的匹配度
-#         场景：
-#             - Retrieval任务
-#     """
-#     def __init__(self, cfg, embed_dim=512, hidden_dim=128):
-#         """
-#         初始化CLIPGlassesFrame模块
-        
-#         Args:
-#             - embed_dim: 嵌入维度(CLIP特征维度)
-#             - hidden_dim: MLP隐藏层维度
-#             - lambda_0: 基础惩罚强度
-#         """
-#         super().__init__()
-#         self.cfg = cfg
-#         self.lambda_0 = cfg['lambda_0']  # 基础惩罚强度
-#         self.register_buffer('logit_scale', Clip_model.logit_scale.detach())
-#         Clip_model.requires_grad_(False) # 冻结CLIP模型的参数
-                
-#         self.confidence_mlp = nn.Sequential(
-#             nn.LayerNorm(512*2),  # 添加输入归一化
-#             nn.Linear(512*2, 1024),
-#             nn.GELU(),
-#             nn.LayerNorm(1024),
-#             nn.Linear(1024, 1),
-#             nn.Sigmoid()  # 替代Sigmoid保证输出在[0,1]
-#         )
-        
-#         # 初始化最后一层权重
-#         nn.init.xavier_uniform_(self.confidence_mlp[-2].weight, gain=0.1)
-#         nn.init.constant_(self.confidence_mlp[-2].bias, 0.0)
-
-#     def forward(self, I, h, h_neg):
-#         """
-#         计算图像和文本特征的匹配得分
-        
-#         Args:
-#             I: 图像特征 [N_imgs, embed_dim]
-#             h: 原内容文本特征 [N_caps, embed_dim]
-#             h_neg: 否定内容文本特征 [N_caps, embed_dim]
-            
-#         Returns:
-#             scores: 匹配得分 [N_caps, N_imgs]
-#         """
-#         # 标准化
-#         I = I / I.norm(dim=-1, keepdim=True) # [N_imgs, embed_dim]
-#         h = h / h.norm(dim=-1, keepdim=True) # [N_caps, embed_dim]
-#         h_neg = h_neg / h_neg.norm(dim=-1, keepdim=True) # [N_caps, embed_dim]
-        
-#          # 计算动态惩罚权重
-#         lambda_dynamic = self.lambda_0 * torch.sigmoid(self.confidence_mlp(torch.cat([h, h_neg], dim=-1))) # [N_caps, 1]
-        
-#         # 计算标准化差分匹配得分
-#         logit_scale = self.logit_scale.exp()
-#         scores_H2I = logit_scale * h @ I.t() # [B, B]
-#         scores_N2I = logit_scale * h_neg @ I.t() # [B, B]
-#         scores = scores_H2I - lambda_dynamic * scores_N2I # [B, B]
-#         return scores
 
 class CLIPGlassesFrame(nn.Module):
     def __init__(self, cfg, embed_dim=512, hidden_dim=1024):
@@ -97,7 +29,10 @@ class CLIPGlassesFrame(nn.Module):
         self.cross_attn = nn.MultiheadAttention(
             embed_dim=embed_dim,
             num_heads=8,
-            dropout=0.3,
+            # dropout=0.5, # 1.8826
+            dropout=0.7, # 1.8698
+            # dropout=0.8, # 1.8905
+            # dropout=0.9, # 1.9377
             batch_first=True
         )
         
@@ -105,7 +40,10 @@ class CLIPGlassesFrame(nn.Module):
         self.feature_fusion = nn.Sequential(
             nn.Linear(embed_dim*3, hidden_dim),
             nn.GELU(),
-            nn.Dropout(0.2),
+            # nn.Dropout(0.5), # 1.8826
+            nn.Dropout(0.7), # 1.8698
+            # nn.Dropout(0.8), # 1.8905
+            # nn.Dropout(0.9), # 1.9377
             nn.LayerNorm(hidden_dim),
             nn.Linear(hidden_dim, embed_dim),
             nn.LayerNorm(embed_dim)
@@ -157,7 +95,7 @@ class CLIPGlassesFrame(nn.Module):
         
         # 多层次特征融合
         fused_feature = self.feature_fusion(
-            torch.cat([h_attn, h_neg_norm, h_attn - h_neg_norm], dim=-1)
+            torch.cat([h_attn, h_neg_norm, h_attn-h_neg_norm], dim=-1)
         )
         
         # 双通道lambda生成
@@ -167,7 +105,7 @@ class CLIPGlassesFrame(nn.Module):
         lambda_dynamic = self.lambda_0 * lambda_base
         
         # 稳定化得分计算
-        with torch.cuda.amp.autocast(enabled=True):
+        with torch.amp.autocast('cuda', enabled=True):
             scores_H2I = self.logit_scale.exp() * (h_attn @ I_norm.t())
             scores_N2I = self.logit_scale.exp() * (h_neg_norm @ I_norm.t())
             scores = scores_H2I - lambda_dynamic * scores_N2I
@@ -228,11 +166,11 @@ class CLIPGlassesFrame(nn.Module):
  
 def train(cfg, model:CLIPGlassesFrame, device='cuda'):
     """
-    Train the CLIPGlassesLens model
+    Train the CLIPGlassesFrame model
     
     参数:
         - cfg: 配置参数
-        - model: CLIPGlassesLens模型
+        - model: CLIPGlassesFrame模型
         - device: 设备类型（'cuda'或'cpu'）
         
     返回:
@@ -248,7 +186,7 @@ def train(cfg, model:CLIPGlassesFrame, device='cuda'):
         num_workers = cfg['num_workers']
         early_stop_patience = cfg['early_stop_patience'] # Early stopping patience
        
-    dataset = GlassesDataset(cfg) # Clip_model, lens_model 用于预加载数据过程中的特征提取
+    dataset = GlassesDataset(cfg) # Clip_model, Frame_model 用于预加载数据过程中的特征提取
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
     
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
@@ -316,7 +254,7 @@ def train(cfg, model:CLIPGlassesFrame, device='cuda'):
         if batch_loss < best_loss:
             best_loss = batch_loss
             patience_counter = 0
-            torch.save(model.state_dict(), os.path.join(current_dir, 'best_clip_lens.pth'))
+            torch.save(model.state_dict(), os.path.join(current_dir, 'best_clip_Frame.pth'))
         else:
             patience_counter += 1 # 增加耐心计数器
             print(f"💔loss improve from {best_loss:.4f} to {batch_loss:.4f}, cur patience_counter add to {patience_counter}")
@@ -399,11 +337,13 @@ if __name__ == "__main__":
         'rank_loss_weight': 0.5,
         
         # -----训练参数-----
-        'epochs': 10,
+        # 'epochs': 10, # 1.8698
+        'epochs': 20,
         # 'batch_size': 32,
         'batch_size': 8,
         # 'lr': 1e-3,
-        'lr': 5e-5,
+        'lr': 5e-5, # 1.8698
+        # 'lr': 1e-5, # 1.8931
         'weight_decay': 1e-4,
         'split': [0.9, 0.1, 0.0], # train val test
         # 'num_workers': 64,
@@ -417,15 +357,15 @@ if __name__ == "__main__":
         'num_workers': 4,
     }
     
-    # # 创建模型
-    # model = CLIPGlassesFrame(cfg)
+    # 创建模型
+    model = CLIPGlassesFrame(cfg)
     
-    # # 训练模型
-    # trained_model = train(cfg, model)
+    # 训练模型
+    trained_model = train(cfg, model)
 
-    model = load_model(cfg, os.path.join(current_dir, 'best_clip_lens.pth'))
-    model.eval()
-    model = model.to('cuda')
-    data_loader = DataLoader(GlassesDataset(cfg), batch_size=cfg['batch_size'], shuffle=False, num_workers=cfg['num_workers'], drop_last=True)
-    evaluate(cfg, model, data_loader)
+    # model = load_model(cfg, os.path.join(current_dir, 'best_clip_Frame.pth'))
+    # model.eval()
+    # model = model.to('cuda')
+    # data_loader = DataLoader(GlassesDataset(cfg), batch_size=cfg['batch_size'], shuffle=False, num_workers=cfg['num_workers'], drop_last=True)
+    # evaluate(cfg, model, data_loader)
     
