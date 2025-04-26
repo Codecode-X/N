@@ -1,0 +1,102 @@
+Saving preprocessed features to cache: LensDataset_cache.pt
+Preprocessed features saved to LensDataset_cache.pt
+Ep1/50  Loss: 4.4275 distill_loss: 4.4275
+Validation - Loss: 4.5226, distill_loss: 4.5226
+Ep2/50  Loss: 4.4029 distill_loss: 4.4029
+Validation - Loss: 4.5181, distill_loss: 4.5181
+Ep3/50  Loss: 4.3863 distill_loss: 4.3863
+Validation - Loss: 4.5090, distill_loss: 4.5090
+Ep4/50  Loss: 4.3912 distill_loss: 4.3912
+Validation - Loss: 4.5189, distill_loss: 4.5189
+Ep5/50  Loss: 4.3796 distill_loss: 4.3796
+Validation - Loss: 4.5110, distill_loss: 4.5110
+Ep6/50  Loss: 4.3744 distill_loss: 4.3744
+Validation - Loss: 4.5021, distill_loss: 4.5021
+Ep7/50  Loss: 4.3717 distill_loss: 4.3717
+Validation - Loss: 4.4921, distill_loss: 4.4921
+Ep8/50  Loss: 4.3661 distill_loss: 4.3661
+Validation - Loss: 4.4941, distill_loss: 4.4941
+Ep9/50  Loss: 4.3545 distill_loss: 4.3545
+Validation - Loss: 4.4941, distill_loss: 4.4941
+Ep10/50  Loss: 4.3592 distill_loss: 4.3592
+Validation - Loss: 4.4885, distill_loss: 4.4885
+Ep11/50  Loss: 4.3534 distill_loss: 4.3534
+Validation - Loss: 4.4926, distill_loss: 4.4926
+Ep12/50  Loss: 4.3395 distill_loss: 4.3395
+Validation - Loss: 4.4927, distill_loss: 4.4927
+Ep13/50  Loss: 4.3447 distill_loss: 4.3447
+Validation - Loss: 4.4899, distill_loss: 4.4899
+Ep14/50  Loss: 4.3534 distill_loss: 4.3534
+Validation - Loss: 4.4943, distill_loss: 4.4943
+Ep15/50  Loss: 4.3269 distill_loss: 4.3269
+Validation - Loss: 4.4890, distill_loss: 4.4890
+Ep16/50  Loss: 4.3194 distill_loss: 4.3194
+Validation - Loss: 4.4930, distill_loss: 4.4930
+Ep17/50  Loss: 4.3285 distill_loss: 4.3285
+Validation - Loss: 4.4907, distill_loss: 4.4907
+Ep18/50  Loss: 4.3233 distill_loss: 4.3233
+Validation - Loss: 4.4920, distill_loss: 4.4920
+Ep19/50  Loss: 4.3174 distill_loss: 4.3174
+Validation - Loss: 4.4916, distill_loss: 4.4916
+Ep20/50  Loss: 4.3226 distill_loss: 4.3226
+Validation - Loss: 4.4842, distill_loss: 4.4842
+Ep21/50  Loss: 4.3113 distill_loss: 4.3113
+Validation - Loss: 4.4826, distill_loss: 4.4826
+Ep22/50  Loss: 4.3019 distill_loss: 4.3019
+Validation - Loss: 4.4859, distill_loss: 4.4859
+Ep23/50  Loss: 4.2980 distill_loss: 4.2980
+Validation - Loss: 4.4843, distill_loss: 4.4843
+Ep24/50  Loss: 4.2955 distill_loss: 4.2955
+Validation - Loss: 4.4812, distill_loss: 4.4812
+Ep25/50  Loss: 4.2930 distill_loss: 4.2930
+Validation - Loss: 4.4840, distill_loss: 4.4840
+Ep26/50  Loss: 4.3016 distill_loss: 4.3016
+Validation - Loss: 4.4855, distill_loss: 4.4855
+Ep27/50  Loss: 4.2969 distill_loss: 4.2969
+Validation - Loss: 4.4828, distill_loss: 4.4828
+Ep28/50  Loss: 4.2908 distill_loss: 4.2908
+Validation - Loss: 4.4874, distill_loss: 4.4874
+Ep29/50  Loss: 4.2976 distill_loss: 4.2976
+Validation - Loss: 4.4860, distill_loss: 4.4860
+Ep30/50  Loss: 4.2826 distill_loss: 4.2826
+Validation - Loss: 4.4875, distill_loss: 4.4875
+Ep31/50  Loss: 4.2889 distill_loss: 4.2889
+Validation - Loss: 4.4846, distill_loss: 4.4846
+Ep32/50  Loss: 4.2841 distill_loss: 4.2841
+Validation - Loss: 4.4829, distill_loss: 4.4829
+Ep33/50  Loss: 4.2801 distill_loss: 4.2801
+Validation - Loss: 4.4860, distill_loss: 4.4860
+Ep34/50  Loss: 4.2754 distill_loss: 4.2754
+Validation - Loss: 4.4849, distill_loss: 4.4849
+Ep35/50  Loss: 4.2814 distill_loss: 4.2814
+Validation - Loss: 4.4848, distill_loss: 4.4848
+Ep36/50  Loss: 4.2805 distill_loss: 4.2805
+Validation - Loss: 4.4873, distill_loss: 4.4873
+Ep37/50  Loss: 4.2933 distill_loss: 4.2933
+Validation - Loss: 4.4886, distill_loss: 4.4886
+Ep38/50  Loss: 4.2738 distill_loss: 4.2738
+Validation - Loss: 4.4862, distill_loss: 4.4862
+Ep39/50  Loss: 4.2762 distill_loss: 4.2762
+Validation - Loss: 4.4875, distill_loss: 4.4875
+Ep40/50  Loss: 4.2812 distill_loss: 4.2812
+Validation - Loss: 4.4858, distill_loss: 4.4858
+Ep41/50  Loss: 4.2745 distill_loss: 4.2745
+Validation - Loss: 4.4866, distill_loss: 4.4866
+Ep42/50  Loss: 4.2630 distill_loss: 4.2630
+Validation - Loss: 4.4870, distill_loss: 4.4870
+Ep43/50  Loss: 4.2733 distill_loss: 4.2733
+Validation - Loss: 4.4860, distill_loss: 4.4860
+Ep44/50  Loss: 4.2781 distill_loss: 4.2781
+Validation - Loss: 4.4865, distill_loss: 4.4865
+Ep45/50  Loss: 4.2647 distill_loss: 4.2647
+Validation - Loss: 4.4873, distill_loss: 4.4873
+Ep46/50  Loss: 4.2738 distill_loss: 4.2738
+Validation - Loss: 4.4879, distill_loss: 4.4879
+Ep47/50  Loss: 4.2602 distill_loss: 4.2602
+Validation - Loss: 4.4881, distill_loss: 4.4881
+Ep48/50  Loss: 4.2752 distill_loss: 4.2752
+Validation - Loss: 4.4882, distill_loss: 4.4882
+Ep49/50  Loss: 4.2704 distill_loss: 4.2704
+Validation - Loss: 4.4883, distill_loss: 4.4883
+Ep50/50  Loss: 4.2664 distill_loss: 4.2664
+Validation - Loss: 4.4883, distill_loss: 4.4883

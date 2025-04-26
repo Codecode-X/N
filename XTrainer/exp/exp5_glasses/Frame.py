@@ -17,75 +17,173 @@ import torch.optim as optim
 import tqdm
 from GlassesDataset import GlassesDataset
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import OneCycleLR
 
-
-class CLIPGlassesFrame(nn.Module):   
-    """
-    CLIPGlassesFrame: 
-        输入：
-            - CLIP图像编码器的输出图像特征I。
-            - CLIP输出的文本特征h。
-            - Lens输出的否定内容文本特征h_neg。
-        输出:
-            - 文本和图像的匹配度
-        场景：
-            - Retrieval任务
-    """
-    def __init__(self, cfg, embed_dim=512, hidden_dim=128):
-        """
-        初始化CLIPGlassesFrame模块
+# class CLIPGlassesFrame(nn.Module):   
+#     """
+#     CLIPGlassesFrame: 
+#         输入：
+#             - CLIP图像编码器的输出图像特征I。
+#             - CLIP输出的文本特征h。
+#             - Lens输出的否定内容文本特征h_neg。
+#         输出:
+#             - 文本和图像的匹配度
+#         场景：
+#             - Retrieval任务
+#     """
+#     def __init__(self, cfg, embed_dim=512, hidden_dim=128):
+#         """
+#         初始化CLIPGlassesFrame模块
         
-        Args:
-            - embed_dim: 嵌入维度(CLIP特征维度)
-            - hidden_dim: MLP隐藏层维度
-            - lambda_0: 基础惩罚强度
-        """
+#         Args:
+#             - embed_dim: 嵌入维度(CLIP特征维度)
+#             - hidden_dim: MLP隐藏层维度
+#             - lambda_0: 基础惩罚强度
+#         """
+#         super().__init__()
+#         self.cfg = cfg
+#         self.lambda_0 = cfg['lambda_0']  # 基础惩罚强度
+#         self.register_buffer('logit_scale', Clip_model.logit_scale.detach())
+#         Clip_model.requires_grad_(False) # 冻结CLIP模型的参数
+                
+#         self.confidence_mlp = nn.Sequential(
+#             nn.LayerNorm(512*2),  # 添加输入归一化
+#             nn.Linear(512*2, 1024),
+#             nn.GELU(),
+#             nn.LayerNorm(1024),
+#             nn.Linear(1024, 1),
+#             nn.Sigmoid()  # 替代Sigmoid保证输出在[0,1]
+#         )
+        
+#         # 初始化最后一层权重
+#         nn.init.xavier_uniform_(self.confidence_mlp[-2].weight, gain=0.1)
+#         nn.init.constant_(self.confidence_mlp[-2].bias, 0.0)
+
+#     def forward(self, I, h, h_neg):
+#         """
+#         计算图像和文本特征的匹配得分
+        
+#         Args:
+#             I: 图像特征 [N_imgs, embed_dim]
+#             h: 原内容文本特征 [N_caps, embed_dim]
+#             h_neg: 否定内容文本特征 [N_caps, embed_dim]
+            
+#         Returns:
+#             scores: 匹配得分 [N_caps, N_imgs]
+#         """
+#         # 标准化
+#         I = I / I.norm(dim=-1, keepdim=True) # [N_imgs, embed_dim]
+#         h = h / h.norm(dim=-1, keepdim=True) # [N_caps, embed_dim]
+#         h_neg = h_neg / h_neg.norm(dim=-1, keepdim=True) # [N_caps, embed_dim]
+        
+#          # 计算动态惩罚权重
+#         lambda_dynamic = self.lambda_0 * torch.sigmoid(self.confidence_mlp(torch.cat([h, h_neg], dim=-1))) # [N_caps, 1]
+        
+#         # 计算标准化差分匹配得分
+#         logit_scale = self.logit_scale.exp()
+#         scores_H2I = logit_scale * h @ I.t() # [B, B]
+#         scores_N2I = logit_scale * h_neg @ I.t() # [B, B]
+#         scores = scores_H2I - lambda_dynamic * scores_N2I # [B, B]
+#         return scores
+
+class CLIPGlassesFrame(nn.Module):
+    def __init__(self, cfg, embed_dim=512, hidden_dim=1024):
         super().__init__()
         self.cfg = cfg
-        self.lambda_0 = cfg['lambda_0']  # 基础惩罚强度
-        self.logit_scale = Clip_model.logit_scale.detach() # 直接使用CLIP模型的训练好的logit_scale
-        self.confidence_mlp = nn.Sequential( # 用于动态惩罚权重的MLP
-            nn.Linear(embed_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, 1)
+        self.lambda_0 = cfg['lambda_0']
+        self.register_buffer('logit_scale', Clip_model.logit_scale.detach())
+        
+        # 跨模态交互模块
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=8,
+            dropout=0.1,
+            batch_first=True
         )
+        
+        # 增强的特征融合网络
+        self.feature_fusion = nn.Sequential(
+            nn.Linear(embed_dim*3, hidden_dim),
+            nn.GELU(),
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, embed_dim),
+            nn.LayerNorm(embed_dim)
+        )
+        
+        # 动态lambda生成器（双通道结构）
+        self.lambda_generator = nn.ModuleDict({
+            'semantic_branch': nn.Sequential(
+                nn.Linear(embed_dim*2, hidden_dim),
+                nn.GELU(),
+                nn.LayerNorm(hidden_dim)),
+            'syntactic_branch': nn.Sequential(
+                nn.Linear(embed_dim*2, hidden_dim//2),
+                nn.GELU(),
+                nn.LayerNorm(hidden_dim//2)),
+            'fusion': nn.Sequential(
+                nn.Linear(hidden_dim + hidden_dim//2, 1),
+                nn.Sigmoid())
+        })
+        
+        # 残差连接参数
+        self.alpha = nn.Parameter(torch.tensor(0.1))
+        
+        # 初始化
+        self._init_weights()
+        
+    def _init_weights(self):
+        # 跨模态注意力初始化
+        nn.init.xavier_uniform_(self.cross_attn.in_proj_weight)
+        nn.init.constant_(self.cross_attn.out_proj.bias, 0.0)
+        
+        # 特征融合网络初始化
+        nn.init.kaiming_normal_(self.feature_fusion[0].weight, mode='fan_in')
+        nn.init.zeros_(self.feature_fusion[-2].weight)
 
     def forward(self, I, h, h_neg):
-        """
-        计算图像和文本特征的匹配得分
+        # 特征归一化
+        I_norm = F.normalize(I, p=2, dim=-1)
+        h_norm = F.normalize(h, p=2, dim=-1)
+        h_neg_norm = F.normalize(h_neg, p=2, dim=-1)
         
-        Args:
-            I: 图像特征 [N_imgs, embed_dim]
-            h: 原内容文本特征 [N_caps, embed_dim]
-            h_neg: 否定内容文本特征 [N_caps, embed_dim]
+        # 跨模态注意力交互
+        attn_output, _ = self.cross_attn(
+            query=h_norm.unsqueeze(1),
+            key=I_norm.unsqueeze(1),
+            value=I_norm.unsqueeze(1)
+        )
+        h_attn = h_norm + self.alpha * attn_output.squeeze(1)
+        
+        # 多层次特征融合
+        fused_feature = self.feature_fusion(
+            torch.cat([h_attn, h_neg_norm, h_attn - h_neg_norm], dim=-1)
+        )
+        
+        # 双通道lambda生成
+        semantic_feat = self.lambda_generator['semantic_branch'](torch.cat([fused_feature, h_neg_norm], dim=-1))
+        syntactic_feat = self.lambda_generator['syntactic_branch'](torch.cat([h_norm, h_neg_norm], dim=-1))
+        lambda_base = self.lambda_generator['fusion'](torch.cat([semantic_feat, syntactic_feat], dim=-1))
+        lambda_dynamic = self.lambda_0 * lambda_base
+        
+        # 稳定化得分计算
+        with torch.cuda.amp.autocast(enabled=True):
+            scores_H2I = self.logit_scale.exp() * (h_attn @ I_norm.t())
+            scores_N2I = self.logit_scale.exp() * (h_neg_norm @ I_norm.t())
+            scores = scores_H2I - lambda_dynamic * scores_N2I
             
-        Returns:
-            scores: 匹配得分 [N_caps, N_imgs]
-        """
-        # 计算动态惩罚权重
-        lambda_dynamic = self.lambda_0 * torch.sigmoid(self.confidence_mlp(h_neg)) # [N_caps, 1]
-        
-        # 标准化
-        I = I / I.norm(dim=-1, keepdim=True) # [N_imgs, embed_dim]
-        h = h / h.norm(dim=-1, keepdim=True) # [N_caps, embed_dim]
-        h_neg = h_neg / h_neg.norm(dim=-1, keepdim=True) # [N_caps, embed_dim]
-        
-        # 计算标准化差分匹配得分
-        logit_scale = self.logit_scale.exp()
-        scores_H2I = logit_scale * h @ I.t() # [N_caps, N_imgs]
-        scores_N2I = logit_scale * h_neg @ I.t() # [N_caps, N_imgs]
-        scores = scores_H2I - lambda_dynamic * scores_N2I
-        return scores
+        return scores.float()  # 确保输出精度
     
-    def calc_losses(self, scores, I, l_pos):
+    def calc_losses(self, scores, I, l_pos, img_ids, h=None):
         """
-        蒸馏训练 用于计算动态惩罚权重 的 MLP:
+        蒸馏训练 动态惩罚权重MLP:
 
         参数:
             - cfg: 配置参数
             - scores: CLIPGlassesFrame 计算得到的 h2I 匹配得分 [N_caps, N_imgs]
             - I: 图像特征 [N_imgs, embed_dim]
             - l_pos: 肯定内容文本特征 [N_caps, embed_dim]
+            - img_ids: 图像ID [N_imgs]
+            - h: CLIP文本编码器最后一层的输出文本特征(EOS特征) [N_caps, embed_dim]
             
         返回:
             - total_loss: 总损失
@@ -96,16 +194,38 @@ class CLIPGlassesFrame(nn.Module):
         I = I / I.norm(dim=-1, keepdim=True) # [batch_size, embed_dim]
         l_pos = l_pos / l_pos.norm(dim=-1, keepdim=True) # [batch_size, embed_dim]
         logit_scale = self.logit_scale.exp()
-        scores_gt = logit_scale * l_pos @ I.t()
+        scores_gt = logit_scale * l_pos @ I.t() # [batch_size, batch_size]
         
-        # mse
-        loss_mse = F.mse_loss(scores, scores_gt, reduction='none')
+        if h is not None:
+            h = h / h.norm(dim=-1, keepdim=True) # [batch_size, embed_dim]
+            raw_scores = logit_scale * h @ I.t()
+            # mse
+            print("="*50)
+            print(f"G scores: {scores_gt.diag()}")
+            print(f"P scores: {scores.diag()}")
+            print(f"R scores: {raw_scores.diag()}")
         
-        return loss_mse.mean(), {
-            'mse_loss': loss_mse.mean().item(),
+        mse_loss = F.mse_loss(scores.diag(), scores_gt.diag(), reduction='none').mean()
+        
+        # 多caption感知排名损失
+        margin = cfg['margin']  # 可配置参数
+        # 构建图像分组掩码
+        _, inverse_indices = torch.unique(img_ids, return_inverse=True)
+        group_mask = inverse_indices.unsqueeze(1) == inverse_indices.unsqueeze(0)  # [B,B]
+        # 计算正样本得分（同图像所有caption的最大得分）
+        pos_scores = torch.where(group_mask, scores, -torch.inf).max(dim=1)[0]  # [B]
+        # 计算负样本得分（不同图像所有caption的最小得分）
+        neg_scores = torch.where(~group_mask, scores, torch.inf).min(dim=1)[0]  # [B]
+        # 排名损失计算
+        rank_loss = F.relu(neg_scores - pos_scores + margin).mean() * cfg['rank_loss_weight']
+        total_loss = mse_loss + rank_loss
+        
+        return total_loss, {
+            'mse_loss': mse_loss.item(),
+            'rank_loss': rank_loss.item(),
         }
- 
     
+ 
 def train(cfg, model:CLIPGlassesFrame, device='cuda'):
     """
     Train the CLIPGlassesLens model
@@ -127,9 +247,10 @@ def train(cfg, model:CLIPGlassesFrame, device='cuda'):
         train_size, val_size, test_size = cfg['split']
         num_workers = cfg['num_workers']
         early_stop_patience = cfg['early_stop_patience'] # Early stopping patience
-        
+       
     dataset = GlassesDataset(cfg) # Clip_model, lens_model 用于预加载数据过程中的特征提取
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+    
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     
@@ -138,7 +259,13 @@ def train(cfg, model:CLIPGlassesFrame, device='cuda'):
     
     # Optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg['epochs'])
+    # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg['epochs'])
+    scheduler = OneCycleLR(
+        optimizer, 
+        max_lr=lr, 
+        total_steps=epochs*len(train_loader),
+        pct_start=0.3
+    )
 
     # Training loop
     for epoch in range(epochs):
@@ -146,7 +273,8 @@ def train(cfg, model:CLIPGlassesFrame, device='cuda'):
         best_loss = float('inf')
         patience_counter = 0 # Early stopping counter
         total_loss = 0
-        losses = {'mse_loss': 0}
+        # losses = {'mse_loss': 0}
+        losses = {'mse_loss': 0, 'rank_loss': 0}
         
         for batch in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}"):
             h = batch['h'].to(device) # CLIP文本编码器最后一层的输出文本特征(EOS特征) [batch_size, embed_dim]
@@ -154,12 +282,13 @@ def train(cfg, model:CLIPGlassesFrame, device='cuda'):
             l_pos = batch['l_pos'].to(device) # 肯定文本特征 [batch_size, embed_dim]
             l_neg = batch['neg_obj'].to(device) # 被否定对象的文本特征 [batch_size, embed_dim]
             I = batch['I'].to(device) # 图像特征 [batch_size, embed_dim]
+            img_ids = batch['img_id'].to(device) # 图像ID [batch_size]
             
             # Forward pass
             scores = model(I, h, h_neg=l_neg) # 使用GT l_neg 训练 MLP
             
             # Compute loss
-            loss, loss_dict = model.calc_losses(scores, I, l_pos)
+            loss, loss_dict = model.calc_losses(scores, I, l_pos, img_ids)
             
             # Backward pass and optimization
             optimizer.zero_grad()
@@ -169,33 +298,36 @@ def train(cfg, model:CLIPGlassesFrame, device='cuda'):
             # Track metrics
             total_loss += loss.item()
             losses['mse_loss'] += loss_dict['mse_loss']
-            # losses['pos2negobj_sim_loss'] += loss_dict['pos2negobj_sim_loss']
+            losses['rank_loss'] += loss_dict['rank_loss']
         
         scheduler.step()
         
         # Print epoch summary
         batch_count = len(train_loader)
-        print(f"Ep{epoch+1}/{epochs}  Loss: {total_loss/batch_count:.4f} mse_loss: {losses['mse_loss']/batch_count:.4f}")
+        # print(f"Ep{epoch+1}/{epochs}  Loss: {total_loss/batch_count:.4f} mse_loss: {losses['mse_loss']/batch_count:.4f}")
+        print(f"Ep{epoch+1}/{epochs}  Loss: {total_loss/batch_count:.4f} mse_loss: {losses['mse_loss']/batch_count:.4f} rank_loss: {losses['rank_loss']/batch_count:.4f}")
         
         # Validation
-        batch_loss = evaluate(cfg, model, val_loader)
-        
+        if epoch % 10 == 0: # 每隔1个epoch进行一次验证
+            batch_loss = evaluate(cfg, model, val_loader, vis=True)
+        else:
+            batch_loss = evaluate(cfg, model, val_loader)
         # 早停
         if batch_loss < best_loss:
             best_loss = batch_loss
             patience_counter = 0
             torch.save(model.state_dict(), os.path.join(current_dir, 'best_clip_lens.pth'))
         else:
-            print(f"💔loss improve from {best_loss:.4f} to {batch_loss:.4f}, cur patience_counter add to {patience_counter}")
             patience_counter += 1 # 增加耐心计数器
+            print(f"💔loss improve from {best_loss:.4f} to {batch_loss:.4f}, cur patience_counter add to {patience_counter}")
             if early_stop_patience > 0 and patience_counter >= early_stop_patience:
                 print(f"Early stopping after {epoch+1} epochs")
                 break
-        
+            
     return model
 
 
-def evaluate(cfg, model, data_loader):
+def evaluate(cfg, model:CLIPGlassesFrame, data_loader, vis=False, device='cuda'):
     """
     Evaluate the CLIPGlassesFrame model on the validation set
     
@@ -208,9 +340,8 @@ def evaluate(cfg, model, data_loader):
         - avg_loss: 平均损失
     """
     model.eval()
-    device = next(model.parameters()).device
     total_loss = 0
-    losses = {'mse_loss': 0}
+    losses = {'mse_loss': 0, 'rank_loss': 0}
     
     with torch.no_grad():  # No need to track gradients during evaluation
         for batch in tqdm.tqdm(data_loader, desc="Evaluating"):
@@ -219,20 +350,26 @@ def evaluate(cfg, model, data_loader):
             l_pos = batch['l_pos'].to(device)
             l_neg = batch['neg_obj'].to(device)  # Negative object features
             I = batch['I'].to(device)
+            img_ids = batch['img_id'].to(device) # 图像ID [batch_size]
             
             # Forward pass
             scores = model(I, h, h_neg=l_neg)
             
             # Compute loss
-            loss, loss_dict = model.calc_losses(scores, I, l_pos)
+            if vis:
+                loss, loss_dict = model.calc_losses(scores, I, l_pos, img_ids, h)
+            else:
+                loss, loss_dict = model.calc_losses(scores, I, l_pos, img_ids)
             
             # Track metrics
             total_loss += loss.item()
             losses['mse_loss'] += loss_dict['mse_loss']
+            losses['rank_loss'] += loss_dict['rank_loss']
     
     batch_count = len(data_loader)
     avg_loss = total_loss / batch_count
-    print(f"Validation - Loss: {avg_loss:.4f}, MSE Loss: {losses['mse_loss']/batch_count:.4f}")
+    # print(f"Validation - Loss: {avg_loss:.4f}, MSE Loss: {losses['mse_loss']/batch_count:.4f}")
+    print(f"Validation - Loss: {avg_loss:.4f}, mse_loss: {losses['mse_loss']/batch_count:.4f} rank_loss: {losses['rank_loss']/batch_count:.4f}")
     
     return avg_loss
 
@@ -243,11 +380,14 @@ if __name__ == "__main__":
         # -----模型参数-----
         'dtype': torch.float32,
         'lambda_0': 0.1, # 基础惩罚强度
+        'margin': 0.5,
+        'rank_loss_weight': 0.5,
         
         # -----训练参数-----
-        'epochs': 10,
-        'batch_size': 32,
-        'lr': 1e-4,
+        'epochs': 30,
+        # 'batch_size': 32,
+        'batch_size': 64,
+        'lr': 1e-3,
         'weight_decay': 1e-4,
         'split': [0.9, 0.1, 0.0], # train val test
         'num_workers': 4,

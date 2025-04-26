@@ -66,16 +66,18 @@ class GlassesDataset(Dataset):
                 
                 # 求候选列表neg_objs_list中每个neg_obj与h的余弦相似度, 相似度最大的neg_obj为相应的被否定对象
                 biggest_sim = -float('inf')
-                correct_neg_obj = None
-                for neg_obj in neg_objs_list:
+                correct_neg_obj, correct_neg_obj_str = None, None
+                for i, neg_obj in enumerate(neg_objs_list):
                     neg_obj = torch.tensor(neg_obj, dtype=self.cfg['dtype']) # [embed_dim]
                     sim = F.cosine_similarity(h, neg_obj, dim=-1)
                     if sim > biggest_sim:
                         biggest_sim = sim
                         correct_neg_obj = neg_obj
+                        correct_neg_obj_str = neg_object_list[i] # 对应的 neg_object
                 
+                # print(f"img_id: {img_id}, np_cap: {np_cap}, p_cap: {p_cap}, correct_neg_obj_str: {correct_neg_obj_str}, biggest_sim: {biggest_sim}")
                 # self.data.append({'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'img_path': img_path})
-                self.data.append({'I': I, 'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'neg_obj': correct_neg_obj, 'img_path': img_path})
+                self.data.append({'I': I, 'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'neg_obj': correct_neg_obj, 'img_path': img_path, 'img_id': img_id})
         
         # Save preprocessed features to cache
         print(f"Saving preprocessed features to cache: {cache_path}")  
@@ -92,6 +94,7 @@ class GlassesDataset(Dataset):
             'level_h_list': torch.stack([torch.tensor(l, dtype=self.cfg['dtype']) for l in self.data[idx]['level_h_list']]),  # CLIP文本编码器每一层的EOS特征
             'l_pos': torch.tensor(self.data[idx]['l_pos'], dtype=self.cfg['dtype']),
             'neg_obj': self.data[idx]['neg_obj'].to(dtype=self.cfg['dtype']), # [num_objs, embed_dim]
-            'img_path': self.data[idx]['img_path']  
+            'img_path': self.data[idx]['img_path'],
+            'img_id': self.data[idx]['img_id'] # 提取图像ID  
         }
         
