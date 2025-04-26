@@ -303,9 +303,6 @@ if __name__ == "__main__":
         'test_csv_path': "/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv",
     }
     
-    sys.stdout = Logger(os.path.join(current_dir, "log.txt"))  # 将输出重定向到log.txt文件
-    set_random_seed(3407)  # 设置随机种子为42
-    
     test_dataset = GlassesDataset(cfg) # Clip_model, lens_model 用于预加载数据过程中的特征提取
     test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, num_workers=cfg['num_workers'])
     
