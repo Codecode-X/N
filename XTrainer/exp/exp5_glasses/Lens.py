@@ -2,11 +2,9 @@ import sys
 import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
-grandparent_dir = os.path.dirname(parent_dir)
-sys.path.insert(0, grandparent_dir)
 sys.path.insert(0, parent_dir)
-from get_model import build_clip_model
-from model.Clip import tokenize  # 分词器
+from get_model import Clip_model, extract_sentence_features
+from utils import Logger, set_random_seed
 import torch
 import tqdm
 import numpy as np
@@ -14,164 +12,9 @@ import pandas as pd
 import random
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset
+from GlassesDataset import GlassesDataset
 from torch.utils.data import DataLoader
 import torch.optim as optim
-
-config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB32-ep10-Caltech101-AdamW.yaml"
-
-Clip_model = build_clip_model(config_path=config_path) # 加载CLIP模型
-
-# 重定向输出到文件
-class Logger:
-    def __init__(self, filename="log.txt"):
-        self.terminal = sys.stdout
-        self.log = open(filename, "a")
-    
-    def write(self, message):
-        self.terminal.write(message)
-        self.log.write(message)
-    
-    def flush(self):
-        pass
-    
-# 设置随机种子
-def set_seed(seed):
-    """设置随机种子"""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
-
-def extract_sentence_features(sentence:str):
-    """
-    提取单个句子的CLIP文本特征
-    
-    参数：
-        - sentence: 输入句子(str)
-        
-    返回：
-        - text_features: CLIP文本编码器的输出文本特征(EOS特征) [embed_dim]
-        - level_text_features_list: CLIP文本编码器每一层的EOS特征 [num_layers, embed_dim]
-    """
-    with torch.no_grad():  # 关闭梯度计算
-        tokenized_text = tokenize(sentence) # [num_classes=1, context_length]
-        tokenized_text = tokenized_text.to(Clip_model.device) # [num_classes=1, context_length]
-        text_features, level_text_features_list = Clip_model.encode_text(tokenized_text) # [num_classes=1, embed_dim]*num_layers
-        text_features = text_features.cpu().numpy()[0]
-        level_text_features_list = [level_text_features.cpu().numpy()[0] for level_text_features in level_text_features_list]
-        return text_features, level_text_features_list # [embed_dim], [embed_dim]*num_layers
-
-
-def extract_objs_features(objs:list):
-    """
-    提取单个句子的CLIP文本特征
-    
-    参数：
-        - objs: 对象列表(list)
-        
-    返回：
-        # - objs_features: CLIP文本编码器的输出文本特征(EOS特征) [num_objs, embed_dim]
-        - objs_features(list: CLIP文本编码器的输出文本特征(EOS特征) [embed_dim]*num_objs
-    """
-    objs_features = []
-    for obj in objs:
-        # text = f"This image shows a {obj}."
-        text = f"{obj}"
-        feature, _ = extract_sentence_features(text)
-        feature = torch.tensor(feature, dtype=cfg['dtype']) # [embed_dim]
-        objs_features.append(feature)
-    # objs_features = torch.stack(objs_features) # [num_objs, embed_dim]
-    return objs_features
-
-
-# Dataset class for training
-class LensDataset(Dataset):
-    def __init__(self, cfg):
-        self.pos_csv_path = cfg['pos_csv_path'] # COCO_val_retrieval.csv
-        self.negpos_csv_path = cfg['negpos_csv_path'] # COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv
-        self.data = [] # 在_preprocess_features()中填充 | [{'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'img_path': img_path}), ...]
-        self._preprocess_features()
-        
-    def _preprocess_features(self):
-        """
-        Preprocess and cache all image and text features
-            - 如果有预处理数据文件，则直接加载
-            - 如果没有则提取，并保存预处理数据文件，下次直接加载
-        """
-        # Create cache file path based on CSV path
-        cache_path = f"LensDataset_cache.pt"
-        # Check if cache file exists
-        if os.path.exists(cache_path):
-            print(f"Loading preprocessed features from cache: {cache_path}...")
-            self.data = torch.load(cache_path)
-            print(f"Loaded {len(self.data)} samples from cache")
-            return
-        
-        # Read CSV files
-        df_np = pd.read_csv(self.negpos_csv_path)
-        df_p = pd.read_csv(self.pos_csv_path)
-        
-        # Create image_id lookup dictionaries
-        np_by_id = {}
-        p_by_id = {}
-        for _, row in df_np.iterrows():
-            np_by_id[row['image_id']] = row
-        for _, row in df_p.iterrows():
-            p_by_id[row['image_id']] = row
-        
-        # Match samples and extract features
-        common_ids = set(np_by_id.keys()) & set(p_by_id.keys())
-        
-        for img_id in tqdm.tqdm(common_ids, desc="Processing data"):
-            np_row = np_by_id[img_id]
-            p_row = p_by_id[img_id]
-            
-            np_captions = eval(np_row['captions'])
-            p_captions = eval(p_row['captions'])
-            
-            neg_object_list = eval(np_row['negative_objects'])
-            neg_objs_list = extract_objs_features(neg_object_list) # 提取 neg_object_list 中的每个对象的文本特征 | [num_objs, embed_dim]
-            
-            for np_cap, p_cap in zip(np_captions, p_captions):
-                # print(f"Processing image_id: {img_id}, np_cap: {np_cap}, p_cap: {p_cap}")
-                h, level_h_list = extract_sentence_features(np_cap)
-                l_pos, _ = extract_sentence_features(p_cap) # [embed_dim]
-                img_path = np_row['filepath']
-                
-                # 求neg_objs_list中每个neg_obj与h的余弦相似度, 相似度最大的neg_obj为相应的被否定对象
-                biggest_sim = -float('inf')
-                correct_neg_obj = None
-                for neg_obj in neg_objs_list:
-                    neg_obj = torch.tensor(neg_obj, dtype=cfg['dtype']) # [embed_dim]
-                    h = torch.tensor(h, dtype=cfg['dtype']) # [embed_dim]
-                    sim = F.cosine_similarity(h, neg_obj, dim=-1)
-                    if sim > biggest_sim:
-                        biggest_sim = sim
-                        correct_neg_obj = neg_obj
-                
-                # self.data.append({'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'img_path': img_path})
-                self.data.append({'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'neg_obj': correct_neg_obj, 'img_path': img_path})
-        
-        # Save preprocessed features to cache
-        print(f"Saving preprocessed features to cache: {cache_path}")  
-        torch.save(self.data, cache_path)
-        print(f"Preprocessed features saved to {cache_path}")
-    
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, idx):
-        return {
-            'h': self.data[idx]['h'], # CLIP文本编码器的输出文本特征(EOS特征)
-            'level_h_list': torch.stack([torch.tensor(l, dtype=cfg['dtype']) for l in self.data[idx]['level_h_list']]),  # CLIP文本编码器每一层的EOS特征
-            'l_pos': torch.tensor(self.data[idx]['l_pos'], dtype=cfg['dtype']),
-            'neg_obj': self.data[idx]['neg_obj'].to(dtype=cfg['dtype']), # [num_objs, embed_dim]
-            'img_path': self.data[idx]['img_path']  
-        }
-        
 
 class CLIPGlassesLens(nn.Module):
     def __init__(self, cfg):
@@ -342,7 +185,7 @@ def train(cfg, model, device='cuda'):
         num_workers = cfg['num_workers']
         early_stop_patience = cfg['early_stop_patience'] # Early stopping patience
         
-    dataset = LensDataset(cfg) # Clip_model, lens_model 用于预加载数据过程中的特征提取
+    dataset = GlassesDataset(cfg) # Clip_model, lens_model 用于预加载数据过程中的特征提取
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
@@ -616,9 +459,9 @@ if __name__ == "__main__":
     }
     
     sys.stdout = Logger(os.path.join(current_dir, "log.txt"))  # 将输出重定向到log.txt文件
-    set_seed(3407)  # 设置随机种子为42
+    set_random_seed(3407)  # 设置随机种子为42
     
-    test_dataset = LensDataset(cfg) # Clip_model, lens_model 用于预加载数据过程中的特征提取
+    test_dataset = GlassesDataset(cfg) # Clip_model, lens_model 用于预加载数据过程中的特征提取
     test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, num_workers=cfg['num_workers'])
     
     if not cfg['test_only']:

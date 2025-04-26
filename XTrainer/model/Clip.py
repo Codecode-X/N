@@ -714,13 +714,19 @@ class Transformer(nn.Module):
     #             x = block(x, attention_maps)
     #         return x
     
-    def forward(self, x: torch.Tensor):
-        level_list = []
-        for block in self.resblocks:
-            x = block(x)
-            level_list.append(x.clone())
-        return x, level_list
-
+    def forward(self, x: torch.Tensor, attention_maps=None):
+        if attention_maps is None:
+            level_list = []
+            for block in self.resblocks:
+                x = block(x)
+                level_list.append(x.clone())
+            return x, level_list
+        else:
+            level_list = []
+            for block in self.resblocks:
+                x = block(x, attention_maps)
+                level_list.append(x.clone())
+            return x, level_list
 
 class VisionTransformer(nn.Module):
     def __init__(self, input_resolution: int, patch_size: int, width: int, layers: int, heads: int, output_dim: int):
@@ -790,7 +796,7 @@ class VisionTransformer(nn.Module):
 
         # **5. 进入 Transformer 编码器**
         x = x.permute(1, 0, 2)  # (batch_size, seq_len, width) -> (seq_len, batch_size, width)
-        x = self.transformer(x, attention_maps)
+        x, _ = self.transformer(x, attention_maps)
         x = x.permute(1, 0, 2)  # (seq_len, batch_size, width) -> (batch_size, seq_len, width)
 
         # **6. 取出 CLS token 表示整个视频序列的特征**
