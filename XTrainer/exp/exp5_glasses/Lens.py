@@ -83,9 +83,12 @@ class CLIPGlassesLens(nn.Module):
             nn.init.xavier_uniform_(proj[0].weight)
     
     @staticmethod        
-    def load_model(cfg, model_path):
+    def load_model(cfg):
         model = CLIPGlassesLens(cfg)
-        model.load_state_dict(torch.load(model_path))
+        if cfg['model_path'] is not None:
+            print(f"正在加载 CLIPGlassesLens 模型权重: {cfg['model_path']}")
+            model.load_state_dict(torch.load(cfg['model_path'], weights_only=False))
+        model = model.to(cfg['device'])
         model.eval()
         return model
         
@@ -289,10 +292,11 @@ if __name__ == "__main__":
     cfg = {
         # -----模型参数-----
         'dtype': torch.float32,
+        'device': 'cuda',
         'num_heads': 4,
         'dropout': 0.1,
         'margin': 0.5,
-        
+        'model_path': os.path.join(current_dir, 'best_clip_lens.pth'),
         
         # -----训练参数-----
         'epochs': 30,
@@ -321,7 +325,7 @@ if __name__ == "__main__":
         trained_model = train(cfg, model)
     
     # Final evaluation
-    trained_model = CLIPGlassesLens.load_model(cfg, os.path.join(current_dir, 'best_clip_lens.pth'))
+    trained_model = CLIPGlassesLens.load_model(cfg)
     trained_model = trained_model.to('cuda')
     print("\nFinal evaluation on test set:")
     evaluate(cfg, trained_model, test_loader)

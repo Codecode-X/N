@@ -19,9 +19,18 @@ def build_clip_model(config_path):
     model = build_model(cfg)
     return model
 
+def freeze_clip_model(model):
+    """
+    冻结CLIP模型的参数
+    """
+    for param in model.parameters():
+        param.requires_grad = False
+    return model
+
+
 config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB32-ep10-Caltech101-AdamW.yaml"
 
-Clip_model = build_clip_model(config_path=config_path) # 加载CLIP模型
+Clip_model = freeze_clip_model(build_clip_model(config_path=config_path)) # 加载CLIP模型
 
 def extract_sentence_features(sentence:str):
     """

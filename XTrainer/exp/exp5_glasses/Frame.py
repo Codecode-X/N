@@ -82,15 +82,15 @@ class CLIPGlassesFrame(nn.Module):
         """
         参数:
             - I: 图像特征 [N_imgs, embed_dim]
-            - h: CLIP文本编码器最后一层的输出文本特征(EOS特征) [N_caps, embed_dim]
-            - h_neg: 被否定对象的文本特征 [N_caps, embed_dim]
+            - h: CLIP文本编码器最后一层的输出文本特征(EOS特征) [N_caps=N_imgs, embed_dim]
+            - h_neg: 被否定对象的文本特征 [N_caps=N_imgs, embed_dim]
         返回:
-            - scores: CLIPGlassesFrame 计算得到的 文本->图像 匹配得分 [N_caps, N_imgs]
+            - scores: CLIPGlassesFrame 计算得到的 文本->图像 匹配得分 [N_imgs, N_caps=N_imgs]
         """
         # 特征归一化
-        I_norm = F.normalize(I, p=2, dim=-1)
-        h_norm = F.normalize(h, p=2, dim=-1)
-        h_neg_norm = F.normalize(h_neg, p=2, dim=-1)
+        I_norm = F.normalize(I, p=2, dim=-1) # [N_imgs, embed_dim]
+        h_norm = F.normalize(h, p=2, dim=-1) # [N_imgs, embed_dim]
+        h_neg_norm = F.normalize(h_neg, p=2, dim=-1) # [N_imgs, embed_dim]
         
         # 跨模态注意力交互
         attn_output, _ = self.cross_attn(
@@ -113,11 +113,12 @@ class CLIPGlassesFrame(nn.Module):
         
         # 文本->图像匹配得分
         with torch.amp.autocast('cuda', enabled=True):
-            scores_H2I = self.logit_scale.exp() * (h_attn @ I_norm.t())
-            scores_N2I = self.logit_scale.exp() * (h_neg_norm @ I_norm.t())
-            scores = scores_H2I - lambda_dynamic * scores_N2I
+            logit_scale = self.logit_scale.exp()
+            scores_H2I = logit_scale.exp() * (h_attn @ I_norm.t())
+            scores_N2I = logit_scale.exp() * (h_neg_norm @ I_norm.t())
+            scores = scores_H2I - lambda_dynamic * scores_N2I # [N_imgs, N_caps]
             
-        return scores.float()  # 确保输出精度
+        return scores.float()
     
     def calc_losses(self, scores, I, l_pos, img_ids, h=None):
         """
@@ -171,7 +172,7 @@ class CLIPGlassesFrame(nn.Module):
         }
         
     @staticmethod
-    def load_model(cfg, model_path):
+    def load_model(cfg):
         """
         Load the trained CLIPGlassesFrame model from a checkpoint
         
@@ -183,7 +184,11 @@ class CLIPGlassesFrame(nn.Module):
             - model: 加载的模型
         """
         model = CLIPGlassesFrame(cfg)
-        model.load_state_dict(torch.load(model_path))
+        if cfg['model_path'] is not None:
+            print(f"正在加载 CLIPGlassesFrame 模型权重: {cfg['model_path']}")
+            model.load_state_dict(torch.load(cfg['model_path'], weights_only=False))
+        model = model.to(cfg['device'])
+        model.eval()
         return model
     
  
@@ -339,9 +344,12 @@ if __name__ == "__main__":
     cfg = {
         # -----模型参数-----
         'dtype': torch.float32,
+        'device': 'cuda',
         'lambda_0': 0.1, # 基础惩罚强度
-        'margin': 0.5,
-        'rank_loss_weight': 0.5,
+        'model_path': os.path.join(current_dir, 'best_clip_Frame.pth'), # 待加载模型权重
+        
+        'rank_loss_weight': 0.5, # 排名损失权重
+        'margin': 0.5, # 排名损失的margin
         
         # -----训练参数-----
         # 'epochs': 10, # 1.8698
@@ -370,7 +378,7 @@ if __name__ == "__main__":
     # # 训练模型
     # trained_model = train(cfg, model)
 
-    model = CLIPGlassesFrame.load_model(cfg, os.path.join(current_dir, 'best_clip_Frame.pth'))
+    model = CLIPGlassesFrame.load_model(cfg)
     model.eval()
     model = model.to('cuda')
     data_loader = DataLoader(GlassesDataset(cfg), batch_size=cfg['batch_size'], shuffle=False, num_workers=cfg['num_workers'], drop_last=True)
