@@ -10,7 +10,6 @@ from utils import setup_logger, set_random_seed
 setup_logger(os.path.join(current_dir, "log.txt")) # 将输出重定向到log.txt文件
 set_random_seed(3407)  # 设置随机种子
 import torch
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -80,6 +79,14 @@ class CLIPGlassesFrame(nn.Module):
         nn.init.zeros_(self.feature_fusion[-2].weight)
 
     def forward(self, I, h, h_neg):
+        """
+        参数:
+            - I: 图像特征 [N_imgs, embed_dim]
+            - h: CLIP文本编码器最后一层的输出文本特征(EOS特征) [N_caps, embed_dim]
+            - h_neg: 被否定对象的文本特征 [N_caps, embed_dim]
+        返回:
+            - scores: CLIPGlassesFrame 计算得到的 文本->图像 匹配得分 [N_caps, N_imgs]
+        """
         # 特征归一化
         I_norm = F.normalize(I, p=2, dim=-1)
         h_norm = F.normalize(h, p=2, dim=-1)
@@ -104,7 +111,7 @@ class CLIPGlassesFrame(nn.Module):
         lambda_base = self.lambda_generator['fusion'](torch.cat([semantic_feat, syntactic_feat], dim=-1))
         lambda_dynamic = self.lambda_0 * lambda_base
         
-        # 稳定化得分计算
+        # 文本->图像匹配得分
         with torch.amp.autocast('cuda', enabled=True):
             scores_H2I = self.logit_scale.exp() * (h_attn @ I_norm.t())
             scores_N2I = self.logit_scale.exp() * (h_neg_norm @ I_norm.t())
@@ -162,6 +169,22 @@ class CLIPGlassesFrame(nn.Module):
             'mse_loss': mse_loss.item(),
             'rank_loss': rank_loss.item(),
         }
+        
+    @staticmethod
+    def load_model(cfg, model_path):
+        """
+        Load the trained CLIPGlassesFrame model from a checkpoint
+        
+        参数:
+            - cfg: 配置参数
+            - model_path: 模型路径
+            
+        返回:
+            - model: 加载的模型
+        """
+        model = CLIPGlassesFrame(cfg)
+        model.load_state_dict(torch.load(model_path))
+        return model
     
  
 def train(cfg, model:CLIPGlassesFrame, device='cuda'):
@@ -310,22 +333,6 @@ def evaluate(cfg, model:CLIPGlassesFrame, data_loader, vis=False, device='cuda')
     
     return avg_loss
 
-# 加载模型并测试
-def load_model(cfg, model_path):
-    """
-    Load the trained CLIPGlassesFrame model from a checkpoint
-    
-    参数:
-        - cfg: 配置参数
-        - model_path: 模型路径
-        
-    返回:
-        - model: 加载的模型
-    """
-    model = CLIPGlassesFrame(cfg)
-    model.load_state_dict(torch.load(model_path))
-    return model
-
 
 if __name__ == "__main__":
     # 配置参数
@@ -357,15 +364,15 @@ if __name__ == "__main__":
         'num_workers': 4,
     }
     
-    # 创建模型
-    model = CLIPGlassesFrame(cfg)
+    # # 创建模型
+    # model = CLIPGlassesFrame(cfg)
     
-    # 训练模型
-    trained_model = train(cfg, model)
+    # # 训练模型
+    # trained_model = train(cfg, model)
 
-    # model = load_model(cfg, os.path.join(current_dir, 'best_clip_Frame.pth'))
-    # model.eval()
-    # model = model.to('cuda')
-    # data_loader = DataLoader(GlassesDataset(cfg), batch_size=cfg['batch_size'], shuffle=False, num_workers=cfg['num_workers'], drop_last=True)
-    # evaluate(cfg, model, data_loader)
+    model = CLIPGlassesFrame.load_model(cfg, os.path.join(current_dir, 'best_clip_Frame.pth'))
+    model.eval()
+    model = model.to('cuda')
+    data_loader = DataLoader(GlassesDataset(cfg), batch_size=cfg['batch_size'], shuffle=False, num_workers=cfg['num_workers'], drop_last=True)
+    evaluate(cfg, model, data_loader)
     

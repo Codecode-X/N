@@ -34,7 +34,7 @@ class CLIPGlassesLens(nn.Module):
         - neg_obj： 否定对象文本特征 [batch_size, embed_dim]
         - neg_obj： 肯定对象文本特征 [batch_size, embed_dim]
     - 损失函数:
-        
+        - 1-neg_sim.mean() 目标是最大化预测的h_neg和真实的neg_obj之间的余弦相似度
     """
     def __init__(self, cfg):
         super().__init__()
@@ -81,6 +81,13 @@ class CLIPGlassesLens(nn.Module):
         nn.init.xavier_uniform_(self.semantic_k_proj[0].weight)
         for proj in self.semantic_v_proj:
             nn.init.xavier_uniform_(proj[0].weight)
+    
+    @staticmethod        
+    def load_model(cfg, model_path):
+        model = CLIPGlassesLens(cfg)
+        model.load_state_dict(torch.load(model_path))
+        model.eval()
+        return model
         
     def forward(self, h, level_h_list):
         """
@@ -290,7 +297,9 @@ if __name__ == "__main__":
         # -----训练参数-----
         'epochs': 30,
         'batch_size': 32,
-        'lr': 1e-3,
+        'lr': 1e-3, # full:0.9831 val:0.9765
+        # 'lr': 1e-2, # full:0.9857 val:0.9770
+        # 'lr': 5e-2, # full:0.9750 val:0.9786
         'weight_decay': 0.05,
         'early_stop_patience': 5, # Early stopping patience
         'test_only': False, # 是否只测试
@@ -312,9 +321,7 @@ if __name__ == "__main__":
         trained_model = train(cfg, model)
     
     # Final evaluation
-    trained_model = CLIPGlassesLens(cfg)
-    trained_model.load_state_dict(torch.load(os.path.join(current_dir, 'best_clip_lens.pth')))
-    trained_model.eval()
+    trained_model = CLIPGlassesLens.load_model(cfg, os.path.join(current_dir, 'best_clip_lens.pth'))
     trained_model = trained_model.to('cuda')
     print("\nFinal evaluation on test set:")
     evaluate(cfg, trained_model, test_loader)

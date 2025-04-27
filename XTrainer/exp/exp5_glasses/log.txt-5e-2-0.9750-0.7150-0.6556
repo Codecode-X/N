@@ -1,0 +1,160 @@
+Loading preprocessed features from cache: LensDataset_cache.pt...
+Loaded 25004 samples from cache
+Loading preprocessed features from cache: LensDataset_cache.pt...
+Loaded 25004 samples from cache
+Ep1/30  Loss: 0.0712                  sim_loss: 0.0712
+Evaluation results:
+  p_sim: 0.6601
+  h_sim: 0.7174
+  neg_sim: 0.9592
+Ep2/30  Loss: 0.0385                  sim_loss: 0.0385
+Evaluation results:
+  p_sim: 0.6612
+  h_sim: 0.7192
+  neg_sim: 0.9636
+Ep3/30  Loss: 0.0374                  sim_loss: 0.0374
+Evaluation results:
+  p_sim: 0.6581
+  h_sim: 0.7152
+  neg_sim: 0.9560
+Ep4/30  Loss: 0.0366                  sim_loss: 0.0366
+Evaluation results:
+  p_sim: 0.6573
+  h_sim: 0.7181
+  neg_sim: 0.9649
+Ep5/30  Loss: 0.0351                  sim_loss: 0.0351
+Evaluation results:
+  p_sim: 0.6569
+  h_sim: 0.7125
+  neg_sim: 0.9607
+Ep6/30  Loss: 0.0358                  sim_loss: 0.0358
+Evaluation results:
+  p_sim: 0.6579
+  h_sim: 0.7189
+  neg_sim: 0.9652
+Ep7/30  Loss: 0.0348                  sim_loss: 0.0348
+Evaluation results:
+  p_sim: 0.6602
+  h_sim: 0.7184
+  neg_sim: 0.9633
+Ep8/30  Loss: 0.0345                  sim_loss: 0.0345
+Evaluation results:
+  p_sim: 0.6613
+  h_sim: 0.7200
+  neg_sim: 0.9662
+Ep9/30  Loss: 0.0344                  sim_loss: 0.0344
+Evaluation results:
+  p_sim: 0.6617
+  h_sim: 0.7192
+  neg_sim: 0.9651
+Ep10/30  Loss: 0.0341                  sim_loss: 0.0341
+Evaluation results:
+  p_sim: 0.6607
+  h_sim: 0.7205
+  neg_sim: 0.9666
+Ep11/30  Loss: 0.0335                  sim_loss: 0.0335
+Evaluation results:
+  p_sim: 0.6535
+  h_sim: 0.7160
+  neg_sim: 0.9678
+Ep12/30  Loss: 0.0331                  sim_loss: 0.0331
+Evaluation results:
+  p_sim: 0.6571
+  h_sim: 0.7167
+  neg_sim: 0.9681
+Ep13/30  Loss: 0.0325                  sim_loss: 0.0325
+Evaluation results:
+  p_sim: 0.6616
+  h_sim: 0.7216
+  neg_sim: 0.9677
+Ep14/30  Loss: 0.0321                  sim_loss: 0.0321
+Evaluation results:
+  p_sim: 0.6618
+  h_sim: 0.7201
+  neg_sim: 0.9660
+Ep15/30  Loss: 0.0312                  sim_loss: 0.0312
+Evaluation results:
+  p_sim: 0.6531
+  h_sim: 0.7148
+  neg_sim: 0.9696
+Ep16/30  Loss: 0.0307                  sim_loss: 0.0307
+Evaluation results:
+  p_sim: 0.6609
+  h_sim: 0.7207
+  neg_sim: 0.9652
+Ep17/30  Loss: 0.0299                  sim_loss: 0.0299
+Evaluation results:
+  p_sim: 0.6583
+  h_sim: 0.7187
+  neg_sim: 0.9702
+Ep18/30  Loss: 0.0285                  sim_loss: 0.0285
+Evaluation results:
+  p_sim: 0.6562
+  h_sim: 0.7178
+  neg_sim: 0.9709
+Ep19/30  Loss: 0.0279                  sim_loss: 0.0279
+Evaluation results:
+  p_sim: 0.6528
+  h_sim: 0.7148
+  neg_sim: 0.9704
+Ep20/30  Loss: 0.0272                  sim_loss: 0.0272
+Evaluation results:
+  p_sim: 0.6577
+  h_sim: 0.7179
+  neg_sim: 0.9709
+Ep21/30  Loss: 0.0258                  sim_loss: 0.0258
+Evaluation results:
+  p_sim: 0.6513
+  h_sim: 0.7159
+  neg_sim: 0.9712
+Ep22/30  Loss: 0.0250                  sim_loss: 0.0250
+Evaluation results:
+  p_sim: 0.6502
+  h_sim: 0.7133
+  neg_sim: 0.9731
+Ep23/30  Loss: 0.0232                  sim_loss: 0.0232
+Evaluation results:
+  p_sim: 0.6509
+  h_sim: 0.7152
+  neg_sim: 0.9736
+Ep24/30  Loss: 0.0215                  sim_loss: 0.0215
+Evaluation results:
+  p_sim: 0.6506
+  h_sim: 0.7146
+  neg_sim: 0.9755
+Ep25/30  Loss: 0.0197                  sim_loss: 0.0197
+Evaluation results:
+  p_sim: 0.6480
+  h_sim: 0.7134
+  neg_sim: 0.9768
+Ep26/30  Loss: 0.0176                  sim_loss: 0.0176
+Evaluation results:
+  p_sim: 0.6455
+  h_sim: 0.7109
+  neg_sim: 0.9771
+Ep27/30  Loss: 0.0155                  sim_loss: 0.0155
+Evaluation results:
+  p_sim: 0.6473
+  h_sim: 0.7118
+  neg_sim: 0.9781
+Ep28/30  Loss: 0.0135                  sim_loss: 0.0135
+Evaluation results:
+  p_sim: 0.6452
+  h_sim: 0.7108
+  neg_sim: 0.9788
+Ep29/30  Loss: 0.0119                  sim_loss: 0.0119
+Evaluation results:
+  p_sim: 0.6441
+  h_sim: 0.7100
+  neg_sim: 0.9786
+Ep30/30  Loss: 0.0109                  sim_loss: 0.0109
+Evaluation results:
+  p_sim: 0.6434
+  h_sim: 0.7092
+  neg_sim: 0.9786
+
+Final evaluation on test set:
+Evaluation results:
+  p_sim: 0.6556
+  h_sim: 0.7150
+  neg_sim: 0.9750
