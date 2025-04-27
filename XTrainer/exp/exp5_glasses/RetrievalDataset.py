@@ -151,7 +151,6 @@ def evaluate_model_retrieval(model, data_loader, device='cuda'):
                 # 把这张图 append 到 all_image_feats
                 all_image_feats.append(image_feats[batch_idx].cpu())
                 img_idx = len(all_image_feats)-1 # 这张图在 list 中的新索引
-
                 # 把这张图的每条 caption 都收集起来，并记录它们对应 img_idx
                 caps_b = caption_feats[batch_idx] # [num_caps_i, D]
                 levels_b = level_H_list[batch_idx] # [num_caps_i, L, D]
