@@ -26,7 +26,7 @@ class GlassesDataset(Dataset):
         # Check if cache file exists
         if os.path.exists(cache_path):
             print(f"Loading preprocessed features from cache: {cache_path}...")
-            self.data = torch.load(cache_path)
+            self.data = torch.load(cache_path, weights_only=False)
             print(f"Loaded {len(self.data)} samples from cache")
             return
         

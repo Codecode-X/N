@@ -24,7 +24,7 @@ class RetrievalDataset(Dataset):
         """
         self.device = device
         self.csv_path = csv_path
-        self.data = pd.read_csv(csv_path, encoding='gbk')[:1000]
+        self.data = pd.read_csv(csv_path, encoding='gbk')
         self.transform = transform
         
         # Preprocess all data
@@ -114,9 +114,8 @@ def retrieval_collate_fn(batch):
         list(neg_features),         # list of [num_captions_i, embed_dim]
         torch.stack(image_ids)      # [B]
     )  
-    
-    
-def evaluate_model_retrieval(model, data_loader, device='cuda'):
+        
+def evaluate_model_retrieval(model, data_loader, test_raw_clip=False, device='cuda'):
     """
     Evaluate the model on the retrieval task.
     
@@ -169,17 +168,18 @@ def evaluate_model_retrieval(model, data_loader, device='cuda'):
         idx = torch.tensor(caption_to_img, dtype=torch.long, device=device) # [N_caps]
         I_rep = I[idx]  # [N_caps, D]
         
-        # # 计算全量相似度
-        model.eval()
-        scores_T2I, scores_I2T = model(I_rep, h, level_h)
-     
-        # # #----TEST: 直接使用原始的clip输出计算-----
-        # I_norm = F.normalize(I_rep, p=2, dim=-1)
-        # h_norm = F.normalize(h, p=2, dim=-1)
-        # logit_scale = Clip_model.logit_scale.exp()
-        # scores_T2I = logit_scale * (h_norm @ I_norm.t())
-        # scores_I2T = scores_T2I.t()
-        # # #---------------------------------------
+        # ----TEST: 直接使用原始的clip输出计算-----
+        if test_raw_clip:
+            print("直接使用原始的clip输出计算:")
+            I_norm = F.normalize(I_rep, p=2, dim=-1)
+            h_norm = F.normalize(h, p=2, dim=-1)
+            logit_scale = Clip_model.logit_scale.exp()
+            scores_T2I = logit_scale * (h_norm @ I_norm.t())
+            scores_I2T = scores_T2I.t()
+        # ---------------------------------------
+        else: # 使用当前模型
+            model.eval()
+            scores_T2I, scores_I2T = model(I_rep, h, level_h)
         
         # 将 scores_T2I 根据 caption_to_img 从 [N_caps, N_imgs] 还原为 [N_caps, N_imgs]
         cti = torch.tensor(caption_to_img, dtype=torch.long, device=device)  # [N_caps]

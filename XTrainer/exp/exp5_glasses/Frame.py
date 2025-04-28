@@ -114,8 +114,9 @@ class CLIPGlassesFrame(nn.Module):
         # 文本->图像匹配得分
         with torch.amp.autocast('cuda', enabled=True):
             logit_scale = self.logit_scale.exp()
-            scores_H2I = logit_scale.exp() * (h_attn @ I_norm.t())
-            scores_N2I = logit_scale.exp() * (h_neg_norm @ I_norm.t())
+            scores_N2I = logit_scale * (h_neg_norm @ I_norm.t())
+            # scores_H2I = logit_scale.exp() * (h_attn @ I_norm.t())
+            scores_H2I = logit_scale * (h_norm @ I_norm.t())
             scores = scores_H2I - lambda_dynamic * scores_N2I # [N_imgs, N_caps]
             
         return scores.float()
@@ -192,13 +193,14 @@ class CLIPGlassesFrame(nn.Module):
         return model
     
  
-def train(cfg, model:CLIPGlassesFrame, device='cuda'):
+def train(cfg, model:CLIPGlassesFrame, Lens_model=None, device='cuda'):
     """
     Train the CLIPGlassesFrame model
     
     参数:
         - cfg: 配置参数
         - model: CLIPGlassesFrame模型
+        - Lens_model: Lens_model=None 表示使用GT neg_obj进行训练，否则使用冻结的Lens模型预测的neg_obj进行训练
         - device: 设备类型（'cuda'或'cpu'）
         
     返回:
@@ -234,10 +236,10 @@ def train(cfg, model:CLIPGlassesFrame, device='cuda'):
     # )
 
     # Training loop
+    patience_counter = 0 # Early stopping counter
     for epoch in range(epochs):
         model.train()
         best_loss = float('inf')
-        patience_counter = 0 # Early stopping counter
         total_loss = 0
         # losses = {'mse_loss': 0}
         losses = {'mse_loss': 0, 'rank_loss': 0}
@@ -251,8 +253,13 @@ def train(cfg, model:CLIPGlassesFrame, device='cuda'):
             img_ids = batch['img_id'].to(device) # 图像ID [batch_size]
             
             # Forward pass
-            scores = model(I, h, h_neg=l_neg) # 使用GT l_neg 训练 MLP
-            
+            if Lens_model is None: # 使用GT neg_obj 训练 MLP
+                scores = model(I, h, h_neg=l_neg) # 使用GT l_neg 训练 MLP
+            else: # 使用冻结的Lens模型预测的neg_obj进行训练
+                with torch.no_grad():
+                    h_neg = Lens_model(h, level_h_list)
+                scores = model(I, h, h_neg=h_neg) # 使用Lens模型预测的neg_obj进行训练
+
             # Compute loss
             loss, loss_dict = model.calc_losses(scores, I, l_pos, img_ids)
             
@@ -282,7 +289,7 @@ def train(cfg, model:CLIPGlassesFrame, device='cuda'):
         if batch_loss < best_loss:
             best_loss = batch_loss
             patience_counter = 0
-            torch.save(model.state_dict(), os.path.join(current_dir, 'best_clip_Frame.pth'))
+            torch.save(model.state_dict(), os.path.join(current_dir, cfg['save_path']))
         else:
             patience_counter += 1 # 增加耐心计数器
             print(f"💔loss improve from {best_loss:.4f} to {batch_loss:.4f}, cur patience_counter add to {patience_counter}")
@@ -346,10 +353,20 @@ if __name__ == "__main__":
         'dtype': torch.float32,
         'device': 'cuda',
         'lambda_0': 0.1, # 基础惩罚强度
-        'model_path': os.path.join(current_dir, 'best_clip_Frame.pth'), # 待加载模型权重
+        
+        'model_path': os.path.join(current_dir, 'weights/best_clip_Frame_mse_v1869.pth'), # 预训练模型权重的路径
+        'save_path': os.path.join(current_dir, 'best_clip_Frame.pth'), # 训练得到的模型权重保存路径
         
         'rank_loss_weight': 0.5, # 排名损失权重
         'margin': 0.5, # 排名损失的margin
+        
+        'Lens': {
+            'device': 'cuda',
+            'dtype': torch.float32,
+            'num_heads': 4,
+            'dropout': 0.1,
+            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9832_0027.pth' # Lens的预训练权重
+        },
         
         # -----训练参数-----
         # 'epochs': 10, # 1.8698
@@ -372,15 +389,28 @@ if __name__ == "__main__":
         'num_workers': 4,
     }
     
-    # # 创建模型
-    # model = CLIPGlassesFrame(cfg)
+    # 创建模型
+    model = CLIPGlassesFrame(cfg)
     
-    # # 训练模型
-    # trained_model = train(cfg, model)
+    # 加载当前Frame模型预训练权重
+    if cfg['model_path'] is not None:
+        print(f"正在加载 CLIPGlassesFrame 模型权重: {cfg['model_path']}")
+        model.load_state_dict(torch.load(cfg['model_path'], weights_only=False))
+    
+    # 加载冻结的预训练的Lens模型
+    from Lens import CLIPGlassesLens
+    lens_model = CLIPGlassesLens.load_model(cfg['Lens'])
+    for param in lens_model.parameters():
+        param.requires_grad = False
+    lens_model.eval()
+    
+    # 训练模型
+    # trained_model = train(cfg, model) # 直接使用 GT neg_obj 进行训练
+    trained_model = train(cfg, model, lens_model) # 使用冻结的Lens模型预测的 neg_obj 进行训练
 
-    model = CLIPGlassesFrame.load_model(cfg)
-    model.eval()
-    model = model.to('cuda')
-    data_loader = DataLoader(GlassesDataset(cfg), batch_size=cfg['batch_size'], shuffle=False, num_workers=cfg['num_workers'], drop_last=True)
-    evaluate(cfg, model, data_loader)
+    # model = CLIPGlassesFrame.load_model(cfg)
+    # model.eval()
+    # model = model.to('cuda')
+    # data_loader = DataLoader(GlassesDataset(cfg), batch_size=cfg['batch_size'], shuffle=False, num_workers=cfg['num_workers'], drop_last=True)
+    # evaluate(cfg, model, data_loader)
     

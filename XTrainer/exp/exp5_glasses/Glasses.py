@@ -54,24 +54,27 @@ class Glasses(nn.Module):
             print(f"正在加载 Glasses 模型权重: {cfg['model_path']}, 将覆盖 Lens 和 Frame 的权重")
             model.load_state_dict(torch.load(cfg['model_path']))
         return model
+   
     
     
 if __name__ == "__main__":
-    # Example usage
+    # Example usagerue
     cfg = {
         # -----模型参数-----
+        'test_raw_clip': False, # 是否使用原始的CLIP模型进行测试
         'Lens': {
             'device': 'cuda',
             'dtype': torch.float32,
             'num_heads': 4,
             'dropout': 0.1,
-            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_98_31.pth' # Lens的预训练权重
+            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9832_0027.pth' # Lens的预训练权重
         },
         'Frame': {
             'device': 'cuda',
             'dtype': torch.float32,
             'lambda_0': 0.1, # 基础惩罚强度
             'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_Frame_mse_v1869.pth' # Frame的预训练权重
+            # 'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/best_clip_Frame.pth' # Frame的预训练权重
         },
         
         'device': 'cuda',
@@ -91,8 +94,21 @@ if __name__ == "__main__":
             'dataset_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv'
         },
     }
+    print("==============配置项===============")
+    for k, v in cfg.items():
+        if isinstance(v, dict):
+            print(f"{k}:")
+            for k1, v1 in v.items():
+                print(f"  {k1}: {v1}")
+        else:
+            print(f"{k}: {v}")
+    print("===================================")
     
-    model = Glasses.load_model(cfg)
     test_retrieval_dataset = RetrievalDataset(cfg['Retrieval']['dataset_path'])
     test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'], collate_fn=retrieval_collate_fn)
-    evaluate_model_retrieval(model, test_retrieval_dataloader, Clip_model.device)
+
+    if cfg['test_raw_clip'] is True:
+        evaluate_model_retrieval(None, test_retrieval_dataloader, test_raw_clip=True)
+    else:
+        model = Glasses.load_model(cfg)
+        evaluate_model_retrieval(model, test_retrieval_dataloader, test_raw_clip=False)

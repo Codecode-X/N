@@ -1,0 +1,45 @@
+==============配置项===============
+test_raw_clip: False
+Lens:
+  device: cuda
+  dtype: torch.float32
+  num_heads: 4
+  dropout: 0.1
+  model_path: /root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9832_0027.pth
+Frame:
+  device: cuda
+  dtype: torch.float32
+  lambda_0: 0.1
+  model_path: /root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_Frame_mse_v1869.pth
+device: cuda
+dtype: torch.float32
+model_path: None
+Mcq:
+  batch_size: 64
+  num_workers: 4
+  num_options: 4
+  dataset_path: /root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv
+Retrieval:
+  batch_size: 64
+  num_workers: 4
+  dataset_path: /root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv
+===================================
+Loading preprocessed features from cache: retrieve_features_cache_abb15625da.pt of /root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv ...
+Loaded 4998 samples from cache
+正在加载 CLIPGlassesLens 模型权重: /root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9832_0027.pth
+正在加载 CLIPGlassesFrame 模型权重: /root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_Frame_mse_v1869.pth
+
+Text→Image Retrieval:
+  Recall@1: 24.02%
+  Recall@5: 46.80%
+  Recall@10: 58.09%
+
+Image→Text Retrieval:
+  Recall@1: 42.36%
+  Recall@5: 67.15%
+  Recall@10: 76.93%
+
+Mean Retrieval:
+  Recall@1: 33.19%
+  Recall@5: 56.97%
+  Recall@10: 67.51%

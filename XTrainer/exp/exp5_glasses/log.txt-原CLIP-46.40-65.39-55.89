@@ -1,0 +1,22 @@
+===============配置项===============
+ {'test_raw_clip': True, 'Lens': {'device': 'cuda', 'dtype': torch.float32, 'num_heads': 4, 'dropout': 0.1, 'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9832_0027.pth'}, 'Frame': {'device': 'cuda', 'dtype': torch.float32, 'lambda_0': 0.1, 'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_Frame_mse_v1869.pth'}, 'device': 'cuda', 'dtype': torch.float32, 'model_path': None, 'Mcq': {'batch_size': 64, 'num_workers': 4, 'num_options': 4, 'dataset_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv'}, 'Retrieval': {'batch_size': 64, 'num_workers': 4, 'dataset_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv'}}
+Preprocessing dataset features of /root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv ...
+Saving features to cache: retrieve_features_cache_abb15625da.pt
+Cached 4998 samples.
+直接使用原始的clip输出计算:
+直接使用原始的clip输出计算:
+
+Text→Image Retrieval:
+  Recall@1: 23.77%
+  Recall@5: 46.40%
+  Recall@10: 57.73%
+
+Image→Text Retrieval:
+  Recall@1: 40.46%
+  Recall@5: 65.39%
+  Recall@10: 75.13%
+
+Mean Retrieval:
+  Recall@1: 32.11%
+  Recall@5: 55.89%
+  Recall@10: 66.43%

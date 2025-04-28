@@ -127,23 +127,36 @@ class CLIPGlassesLens(nn.Module):
         
         return h_neg
 
-    def calc_losses(self, h_neg, neg_obj, pos_obj=None, h=None):
+    def calc_losses(self, h_neg, neg_obj, I, h=None):
         """
         Args:
             h_neg: 预测的否定特征 [B,D]
             neg_obj: 真实否定对象特征 [B,D]
-            h_pos: 预测的肯定特征 [B,D]
+            I: 图像特征 [B,D]
             pos_obj: 真实肯定对象特征 [B,D]
             h_original: 原始特征 [B,D]
         """
         h_neg_n = F.normalize(h_neg, p=2, dim=-1)
         neg_obj_n = F.normalize(neg_obj, p=2, dim=-1)
+        I_n = F.normalize(I, p=2, dim=-1)
+        h_n = F.normalize(h, p=2, dim=-1)
+        
         neg_sim = (h_neg_n * neg_obj_n).sum(dim=-1)  # [B] 越高越好
+        neg_sim_loss = 1 - neg_sim.mean()  # 越低越好
         
-        sim_loss = 1-neg_sim.mean()  # 越低越好
+        obj2i_sim = (neg_obj_n * I_n).sum(dim=-1)  # [B] 越高越好
+        # print(f"》》》 sim_obj2i: {obj2i_sim}")
+        # h2i_sim = (h_n * I_n).sum(dim=-1)  # [B] 越高越好
+        # print(f"》》》 sim_h2i: {h2i_sim}")
         
-        return sim_loss, {
-            'sim_loss': sim_loss.item(),
+        n2i_sim = (h_neg_n * I_n).sum(dim=-1)  # [B] 应该和obj2i_sim越接近越好 | 保证与图像特征的对齐
+        n2i_sim_loss =  abs(obj2i_sim - n2i_sim).mean()  # 越低越好
+        
+        total_loss = neg_sim_loss + n2i_sim_loss  # 越低越好
+        
+        return total_loss, {
+            'neg_sim_loss': neg_sim_loss.item(),
+            'n2i_sim_loss': n2i_sim_loss.item(),
         }
 
 def train(cfg, model:CLIPGlassesLens, device='cuda'):
@@ -176,9 +189,10 @@ def train(cfg, model:CLIPGlassesLens, device='cuda'):
         best_sim_loss = float('inf')
         patience_counter = 0 # Early stopping counter
         total_loss = 0
-        losses = {'sim_loss': 0}
+        losses = {'neg_sim_loss': 0, 'n2i_sim_loss': 0}
         
         for batch in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}"):
+            I = batch['I'].to(device) # 图像特征 [batch_size, embed_dim]
             h = batch['h'].to(device) # CLIP文本编码器最后一层的输出文本特征(EOS特征) [batch_size, embed_dim]
             level_h_list = batch['level_h_list'].to(device) # [batch_size, num_layers, embed_dim] CLIP文本编码器每一层的EOS特征
             neg_obj = batch['neg_obj'].to(device) # [batch_size, num_objs, embed_dim]
@@ -187,7 +201,7 @@ def train(cfg, model:CLIPGlassesLens, device='cuda'):
             h_neg = model(h, level_h_list)
             
             # Compute loss
-            loss, loss_dict = model.calc_losses(h_neg, neg_obj)
+            loss, loss_dict = model.calc_losses(h_neg, neg_obj, I, h)
             
             # Backward pass and optimization
             optimizer.zero_grad()
@@ -196,14 +210,16 @@ def train(cfg, model:CLIPGlassesLens, device='cuda'):
             
             # Track metrics
             total_loss += loss.item()
-            losses['sim_loss'] += loss_dict['sim_loss']
+            losses['neg_sim_loss'] += loss_dict['neg_sim_loss']
+            losses['n2i_sim_loss'] += loss_dict['n2i_sim_loss']
         
         scheduler.step()
         
         # Print epoch summary
         batch_count = len(train_loader)
         print(f"Ep{epoch+1}/{epochs}  Loss: {total_loss/batch_count:.4f}  \
-                sim_loss: {losses['sim_loss']/batch_count:.4f}")
+                neg_sim_loss: {losses['neg_sim_loss']/batch_count:.4f} \
+                n2i_sim_loss: {losses['n2i_sim_loss']/batch_count:.4f}")
         
         # Validation
         batch_sim_loss = evaluate(cfg, model, val_loader)
@@ -212,7 +228,7 @@ def train(cfg, model:CLIPGlassesLens, device='cuda'):
         if batch_sim_loss < best_sim_loss:
             best_sim_loss = batch_sim_loss
             patience_counter = 0
-            torch.save(model.state_dict(), os.path.join(current_dir, 'best_clip_lens.pth'))
+            torch.save(model.state_dict(), os.path.join(current_dir, cfg['save_path']))
         else:
             print(f"💔loss improve from {best_sim_loss:.4f} to {batch_sim_loss:.4f}, cur patience_counter add to {patience_counter}")
             patience_counter += 1 # 增加耐心计数器
@@ -294,9 +310,12 @@ if __name__ == "__main__":
         'dtype': torch.float32,
         'device': 'cuda',
         'num_heads': 4,
+        
         'dropout': 0.1,
         'margin': 0.5,
-        'model_path': os.path.join(current_dir, 'best_clip_lens.pth'),
+        
+        'model_path': os.path.join(current_dir, 'weights/best_clip_lens_9832_0027.pth'), # Lens的预训练权重
+        'save_path': os.path.join(current_dir, 'best_clip_lens.pth'), # Lens的训练权重保存路径
         
         # -----训练参数-----
         'epochs': 30,
@@ -324,7 +343,6 @@ if __name__ == "__main__":
         # Train model
         trained_model = train(cfg, model)
     
-    # Final evaluation
     trained_model = CLIPGlassesLens.load_model(cfg)
     trained_model = trained_model.to('cuda')
     print("\nFinal evaluation on test set:")
