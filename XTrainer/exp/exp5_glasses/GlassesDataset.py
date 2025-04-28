@@ -31,8 +31,8 @@ class GlassesDataset(Dataset):
             return
         
         # Read CSV files
-        df_np = pd.read_csv(self.negpos_csv_path)
-        df_p = pd.read_csv(self.pos_csv_path)
+        df_np = pd.read_csv(self.negpos_csv_path)[:10]
+        df_p = pd.read_csv(self.pos_csv_path)[:10]
         
         # Create image_id lookup dictionaries
         np_by_id = {}
@@ -54,7 +54,7 @@ class GlassesDataset(Dataset):
             
             neg_object_list = eval(np_row['negative_objects'])
             neg_objs_list = extract_objs_features(neg_object_list) # 提取 neg_object_list 中的每个对象的文本特征 | [num_objs, embed_dim]
-            
+
             for np_cap, p_cap in zip(np_captions, p_captions):
                 # print(f"Processing image_id: {img_id}, np_cap: {np_cap}, p_cap: {p_cap}")
                 h, level_h_list = extract_sentence_features(np_cap)
@@ -75,8 +75,10 @@ class GlassesDataset(Dataset):
                         correct_neg_obj = neg_obj
                         correct_neg_obj_str = neg_object_list[i] # 对应的 neg_object
                 
+                if correct_neg_obj is None: # 无否定对象
+                    correct_neg_obj = torch.zeros_like(h) # 全0向量-torch.all(correct_neg_obj == 0)
+                
                 # print(f"img_id: {img_id}, np_cap: {np_cap}, p_cap: {p_cap}, correct_neg_obj_str: {correct_neg_obj_str}, biggest_sim: {biggest_sim}")
-                # self.data.append({'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'img_path': img_path})
                 self.data.append({'I': I, 'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'neg_obj': correct_neg_obj, 'img_path': img_path, 'img_id': img_id})
         
         # Save preprocessed features to cache

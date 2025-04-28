@@ -115,7 +115,6 @@ class CLIPGlassesFrame(nn.Module):
         with torch.amp.autocast('cuda', enabled=True):
             logit_scale = self.logit_scale.exp()
             scores_N2I = logit_scale * (h_neg_norm @ I_norm.t())
-            # scores_H2I = logit_scale.exp() * (h_attn @ I_norm.t())
             scores_H2I = logit_scale * (h_norm @ I_norm.t())
             scores = scores_H2I - lambda_dynamic * scores_N2I # [N_imgs, N_caps]
             
@@ -405,8 +404,8 @@ if __name__ == "__main__":
     lens_model.eval()
     
     # 训练模型
-    # trained_model = train(cfg, model) # 直接使用 GT neg_obj 进行训练
-    trained_model = train(cfg, model, lens_model) # 使用冻结的Lens模型预测的 neg_obj 进行训练
+    trained_model = train(cfg, model) # 直接使用 GT neg_obj 进行训练
+    # trained_model = train(cfg, model, lens_model) # 使用冻结的Lens模型预测的 neg_obj 进行训练
 
     # model = CLIPGlassesFrame.load_model(cfg)
     # model.eval()

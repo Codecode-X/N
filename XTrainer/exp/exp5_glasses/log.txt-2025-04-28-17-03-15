@@ -1,0 +1,6 @@
+正在加载 CLIPGlassesLens 模型权重: /root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9832_0027.pth
+Loading preprocessed features from cache: LensDataset_cache.pt...
+Loaded 50 samples from cache
+st_clip_lens_9832_0027.pth
+Loading preprocessed features from cache: LensDataset_cache.pt...
+Loaded 50 samples from cache
