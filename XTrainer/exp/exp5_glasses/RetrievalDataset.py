@@ -160,7 +160,7 @@ def evaluate_model_retrieval(model, data_loader, test_raw_clip=False, device='cu
 
         # Stack 成大 tensor
         I = torch.stack(all_image_feats, dim=0).to(device)  # [N_imgs, D]
-        h  = torch.stack(all_text_feats, dim=0).to(device)  # [N_caps, D]
+        h = torch.stack(all_text_feats, dim=0).to(device)  # [N_caps, D]
         level_h = torch.stack(all_level_text_feats, dim=0).to(device) # [N_caps, L, D]
         N_imgs, N_caps = I.size(0), h.size(0)
         
