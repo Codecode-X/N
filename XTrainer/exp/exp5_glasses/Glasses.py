@@ -72,10 +72,10 @@ class Glasses(nn.Module):
         model = Glasses(cfg)
         if 'pretrain' in cfg.keys() and cfg['pretrain'] and cfg['model_path'] is not None:
             print(f"训练：正在加载预训练 Glasses 模型权重: {cfg['model_path']}, 将覆盖 Lens 和 Frame 的权重")
-            model.load_state_dict(torch.load(os.path.join(current_dir, cfg['model_path'])))
+            model.load_state_dict(torch.load(os.path.join(current_dir, cfg['model_path']), weights_only=False))
         if 'test' in cfg.keys() and cfg['test'] is True and cfg['model_path'] is not None:
             print(f"测试：正在加载被测试 Glasses 模型权重: {cfg['model_path']}, 将覆盖 Lens 和 Frame 的权重")
-            model.load_state_dict(torch.load(os.path.join(current_dir, cfg['model_path'])))
+            model.load_state_dict(torch.load(os.path.join(current_dir, cfg['model_path']), weights_only=False))
         return model
    
 def train_Retrieval(cfg, model):   
@@ -250,8 +250,8 @@ if __name__ == "__main__":
             'num_workers': 4,
             'num_options': 4,
             'split': [0.9, 0.1, 0.0],
-            'train_dataset_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv',
-            'test_dataset_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv',
+            'train_dataset_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv',
+            'test_dataset_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv',
         },
         'Retrieval': {
             'batch_size': 64,
@@ -272,18 +272,28 @@ if __name__ == "__main__":
     print("===================================")
     
 
-    # 训练模型
-    model = Glasses.load_model(cfg)
-    model = train_Retrieval(cfg, model)
+    # # 训练模型
+    # model = Glasses.load_model(cfg)
+    # model = train_Retrieval(cfg, model)
     
-    # # 测试模型
-    # cfg['test'] = True
-    # cfg['model_path'] = 'weights/best_clip_Glasses.pth' # 测试模型权重路径
+    # 测试模型
+    cfg['test'] = True
+    cfg['model_path'] = 'weights/best_clip_Glasses_5882.pth' # 测试模型权重路径
+    
+    # # Retrieval
     # test_retrieval_dataset = RetrievalDataset(cfg['Retrieval']['test_dataset_path'])
     # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'], collate_fn=retrieval_collate_fn)
-
     # if cfg['test_raw_clip'] is True:
     #     evaluate_model_retrieval(None, test_retrieval_dataloader, test_raw_clip=True)
     # else:
     #     model = Glasses.load_model(cfg)
     #     evaluate_model_retrieval(model, test_retrieval_dataloader, test_raw_clip=False)
+        
+    # MCQ    
+    test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
+    test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
+    if cfg['test_raw_clip'] is True:
+        evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
+    else:
+        model = Glasses.load_model(cfg)
+        evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)

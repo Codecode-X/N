@@ -24,7 +24,10 @@ class RetrievalDataset(Dataset):
         """
         self.device = device
         self.csv_path = csv_path
-        self.data = pd.read_csv(csv_path, encoding='gbk')
+        try:
+            self.data = pd.read_csv(csv_path, encoding='gbk')
+        except UnicodeDecodeError:
+            self.data = pd.read_csv(csv_path, encoding='utf-8')
         self.transform = transform
         
         # Preprocess all data

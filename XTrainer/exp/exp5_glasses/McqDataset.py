@@ -10,9 +10,17 @@ from tqdm import tqdm
 from get_model import extract_img_features, extract_sentence_features
 
 
+ANSWERTYPE_ID_MAP = {
+    'hybrid': 0,
+    'negative': 1,
+    'positive': 2
+}
+
 class McqDataset(Dataset):
-    """Multiple Choice Question dataset"""
-    def __init__(self, csv_path, clip_model, lens_model, transform=None):
+    """
+    Multiple Choice Question dataset
+    """
+    def __init__(self, csv_path, transform=None, device='cuda'):
         """
         Args:
             csv_path: Path to the CSV file with MCQ data
@@ -20,82 +28,77 @@ class McqDataset(Dataset):
             lens_model: CLIPGlassesLens model for feature extraction
             transform: Optional transform to be applied on images
         """
+        self.device = device
         self.csv_path = csv_path
-        self.data = pd.read_csv(csv_path)
-        self.clip_model = clip_model
-        self.lens_model = lens_model
+        try:
+            self.data = pd.read_csv(csv_path, encoding='gbk')
+        except UnicodeDecodeError:
+            self.data = pd.read_csv(csv_path, encoding='utf-8')
         self.transform = transform
-        self.device = next(lens_model.parameters()).device
         
         # Preprocess all data
         self._preprocess_features()
         
-        
     def _preprocess_features(self):
         """
         Preprocess and cache all image and text features
-            - 如果有预处理数据文件，则直接加载
-            - 如果没有则提取，并保存预处理数据文件，下次直接加载
+            - Load from cache if available
+            - Otherwise extract features and save to cache
         """
         # Create cache file path based on CSV path
         csv_hash = hashlib.md5(self.data.to_json().encode()).hexdigest()[:10]
-        
-        dataset_name = "COCO" if "COCO" in self.csv_path else "VOC2007"
-        cache_path = f"{dataset_name}_mcq_features_cache_{csv_hash}.pt"
+        cache_path = f"MCQ_features_cache_{csv_hash}.pt"
         
         # Check if cache file exists
         if os.path.exists(cache_path):
             print(f"Loading preprocessed features from cache: {cache_path} of {self.csv_path} ...")
-            cached_data = torch.load(cache_path)
-            with torch.no_grad():
-                self.image_features = cached_data['image_features']
-                self.pos_features = cached_data['pos_features']
-                self.neg_features = cached_data['neg_features']
-                self.labels = cached_data['labels']
-            print(f"Loaded {len(self.labels)} samples from cache")
+            cached_data = torch.load(cache_path, weights_only=False)
+            self.image_features = cached_data['image_features']
+            self.captions_feats = cached_data['captions_feats']
+            self.level_H = cached_data['level_H_list']
+            self.labels = cached_data['labels']
+            self.types = [ANSWERTYPE_ID_MAP.get(d, -1) for d in cached_data['types']]
+            print(f"Loaded {len(self.image_features)} samples from cache")
             return
         
         print(f"Preprocessing dataset features of {self.csv_path} ...")
-        self.image_features = []
-        self.pos_features = []  # List of lists (4 options per sample)
-        self.neg_features = []  # List of lists (4 options per sample)
-        self.labels = []
         
-        for idx, row in tqdm.tqdm(self.data.iterrows(), total=len(self.data)):
-            # Extract image features
+        self.image_features = []
+        self.captions_feats = [] 
+        self.level_H = []
+        self.labels = [] # Correct answer index (0-3)
+        self.types = [] # 正确答案的类型 (0-2)
+        
+        for idx, row in tqdm(self.data.iterrows(), total=len(self.data)):
             img_path = row['image_path']
-            img_features = extract_img_features(img_path)
+
+            # 提取图像特征
+            img_feature = extract_img_features(img_path) # 原始CLIP提取的图像特征
+            self.image_features.append(img_feature)
             
             # Extract text features for all options
-            option_pos_features = []
-            option_neg_features = []
-            
+            row_h = []
+            row_level_h = []
+
             for i in range(4):
                 caption = row[f'caption_{i}']
-                text_features = extract_sentence_features(caption)
-                text_features_tensor = torch.tensor(text_features, dtype=torch.float32).unsqueeze(0).to(self.device)
-                
-                # Get positive and negative features using lens model
-                with torch.no_grad():
-                    h_pos, h_neg = self.lens_model(text_features_tensor)
-                
-                option_pos_features.append(h_pos.cpu().numpy()[0])
-                option_neg_features.append(h_neg.cpu().numpy()[0])
-            
-            self.image_features.append(img_features)
-            self.pos_features.append(option_pos_features)
-            self.neg_features.append(option_neg_features)
+                h, level_h_list = extract_sentence_features(caption) # 原始CLIP提取的文本特征 | h:[embed_dim], level_h_list:[embed_dim]*num_layers
+                row_h.append(h) 
+                row_level_h.append(level_h_list)
+            self.captions_feats.append(row_h)
+            self.level_H.append(row_level_h)
             self.labels.append(row['correct_answer'])
+            self.types.append(row['correct_answer_template'])
         
-        # Save preprocessed features to cache
-        print(f"Saving preprocessed features to cache: {cache_path}")
+        print(f"Saving features to cache: {cache_path}")
         torch.save({
             'image_features': self.image_features,
-            'pos_features': self.pos_features,
-            'neg_features': self.neg_features,
-            'labels': self.labels
+            'captions_feats': self.captions_feats,
+            'level_H_list': self.level_H,
+            'labels': self.labels,
+            'types': self.types
         }, cache_path)
-        print(f"Cached {len(self.labels)} samples")
+        print(f"Cached {len(self.image_features)} samples.")
             
     def __len__(self):
         return len(self.data)
@@ -103,30 +106,29 @@ class McqDataset(Dataset):
     def __getitem__(self, idx):
         """
         Returns:
-            image_features: Image features [embed_dim]
-            pos_features: List of positive features for each option [4, embed_dim]
-            neg_features: List of negative features for each option [4, embed_dim]
+            img_feature: Image features [embed_dim]
+            caption_feat: List of positive features for each option [4, embed_dim]
+            level_h_list: List of negative features for each option [4, embed_dim]
             label: Correct answer index (0-3)
+            answer_type: Correct answer type (0-2) | hybrid:0, negative:1, positive:2
         """
-        img_features = torch.tensor(self.image_features[idx], dtype=torch.float32)
+        img_feature = torch.tensor(self.image_features[idx], dtype=torch.float32)
+        caption_feat = torch.from_numpy(np.array(self.captions_feats[idx])).float() # [num_captions=4, embed_dim]
+        level_h_list = torch.from_numpy(np.array(self.level_H[idx])).float() # [num_captions=4, num_layers, embed_dim]
+        label = torch.tensor(self.labels[idx], dtype=torch.long) # [1]
+        answer_type = torch.tensor(self.types[idx], dtype=torch.long) # [1]
         
-        # Stack all option features
-        pos_features = torch.tensor(np.stack(self.pos_features[idx]), dtype=torch.float32)
-        neg_features = torch.tensor(np.stack(self.neg_features[idx]), dtype=torch.float32)
-        
-        label = torch.tensor(self.labels[idx], dtype=torch.long)
-        
-        return img_features, pos_features, neg_features, label
+        return img_feature, caption_feat, level_h_list, label, answer_type
     
     
-
-def evaluate_model_mcq(model, data_loader, device):
+def evaluate_model_mcq(model, data_loader, test_raw_clip=False, device='cuda'):
     """
     Evaluate the CLIPGlassesFrame model on the validation set.
     
     参数:
         - model: The CLIPGlassesFrame model
         - data_loader: DataLoader for the validation set
+        - test_raw_clip: Whether to test the raw CLIP model
         - device: Device to run the model on (CPU or GPU)
         
     返回:
@@ -143,19 +145,29 @@ def evaluate_model_mcq(model, data_loader, device):
     all_labels = []
     
     with torch.no_grad():
-        for img_features, text_features, _,  labels in tqdm.tqdm(data_loader, desc="Validation"):
+        for img_features, caption_feats, level_H_list, labels, answer_types in tqdm(data_loader, desc="Extract feats"):
+            """
+                img_feature: Image features [embed_dim]
+                caption_feat: List of positive features for each option [4, embed_dim]
+                level_h_list: List of negative features for each option [4, embed_dim]
+                label: Correct answer index (0-3)
+                answer_type: Correct answer type | hybrid,negative,positive
+            """            
             img_features = img_features.to(device) # [batch_size, embed_dim]
-            text_features = text_features.to(device) # [batch_size, num_options, embed_dim]
-            labels = labels.to(device)
+            caption_feats = caption_feats.to(device) # [batch_size, num_options, embed_dim]
+            level_H_list = level_H_list.to(device) # [batch_size, num_options, num_layers, embed_dim]
+            labels = labels.to(device) # [batch_size]
+            answer_types = answer_types.to(device) # [batch_size]
             
             # Get scores for all options
-            num_options = text_features.shape[1]
+            num_options = caption_feats.shape[1]
             # Process each option
             all_scores = [None] * num_options  # [batch_size, batch_size] * num_options
             for i in range(num_options):
                 # mini-batch中每个图像和第i个选项文本特征的匹配得分
-                choice_features = text_features[:, i] # [batch_size, embed_dim]
-                scores, _ = model(img_features, choice_features) # [batch_size, batch_size]
+                choice_h = caption_feats[:, i] # [batch_size, embed_dim]
+                level_h_list = level_H_list[:, i] # [batch_size, num_layers, embed_dim]
+                scores, _ = model(img_features, choice_h, level_h_list) # [batch_size, batch_size]
                 all_scores[i] = scores # [batch_size, batch_size]
             
             # # 错误方式（直接使用全矩阵）
@@ -179,4 +191,8 @@ def evaluate_model_mcq(model, data_loader, device):
     
     # Print metrics
     val_acc = 100. * val_correct / val_total
+    print(f"predicted: {all_predictions}")
+    print(f"labels: {all_labels}")
+    print("="*50)
+    print(f"Validation Accuracy: {val_acc:.2f}%")
     return val_acc, val_loss, all_predictions, all_labels
