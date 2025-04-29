@@ -225,6 +225,7 @@ def train_Retrieval_with_gtneg(cfg, model:Glasses, with_gt_neg=True):
     # 读取配置
     device = cfg['device']
     epochs = cfg['epochs']
+    clip_grad = True if cfg.get('clip_grad', False) else False # 如果cfg中没有clip_grad，则默认不裁剪
     batch_size = cfg['batch_size']
     early_stop_patience = cfg['early_stop_patience'] # Early stopping patience
     lr = cfg['lr']
@@ -241,8 +242,29 @@ def train_Retrieval_with_gtneg(cfg, model:Glasses, with_gt_neg=True):
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     # 优化器
-    optimizer = optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.98))
+    if cfg.get('only_train_moudle', None) == 'lens':
+        print("只训练lens模型")
+        for param in model.frame.parameters():
+            param.requires_grad = False
+        optimizer = optim.AdamW(model.lens.parameters(), lr=lr, betas=(0.9, 0.98))
+    elif cfg.get('only_train_moudle', None) == 'frame':
+        print("只训练frame模型")
+        for param in model.lens.parameters():
+            param.requires_grad = False
+        optimizer = optim.AdamW(model.frame.parameters(), lr=lr, betas=(0.9, 0.98))
+    else: # 训练所有模块
+        print("训练Glasses所有模块")
+        optimizer = optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.98))
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    
+    # 梯度监控钩子
+    print("注册梯度监控钩子")
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            param.register_hook(
+                lambda grad, name=name: print(f"梯度 {name} 范数: {grad.norm().item():.4f}")
+                if grad.norm() > 5e2 else None
+            )
     
     # 训练前测试
     evaluate_model_retrieval_withGTNeg(model, val_loader, test_raw_clip=False, with_gt_neg=with_gt_neg)
@@ -290,10 +312,36 @@ def train_Retrieval_with_gtneg(cfg, model:Glasses, with_gt_neg=True):
             epoch_loss += loss.item()
             losses['contrastive_loss'] += loss_dict['contrastive_loss']
             
+            # # -------😝调试代码：比较参数是否更新-------
+            # # 训练前保存一份副本
+            # frame_weights_before = {name: param.clone() for name, param in model.frame.named_parameters()}
+            # lens_weights_before = {name: param.clone() for name, param in model.lens.named_parameters()}
+            
             # Backward pass and optimization
             optimizer.zero_grad()
             loss.backward()
+            
+            # 梯度裁剪
+            if clip_grad:
+                print("进行梯度裁剪")
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
             optimizer.step()
+            
+            # # -------😝调试代码：比较参数是否更新-------
+            # # 比较 Frame 是否没变
+            # for name, param in model.frame.named_parameters():
+            #     if not torch.allclose(param, frame_weights_before[name]):
+            #         print(f"❌ Frame 参数 {name} 被更新了！")
+            #     else:
+            #         print(f"✅ Frame 参数 {name} 没有被更新")
+
+            # # 比较 Lens 是否变了
+            # for name, param in model.lens.named_parameters():
+            #     if not torch.allclose(param, lens_weights_before[name]):
+            #         print(f"✅ Lens 参数 {name} 被成功更新")
+            #     else:
+            #         print(f"❌ Lens 参数 {name} 没有被更新")
         
         batch_count = len(train_loader)
         print(f"Ep{epoch+1}/{epochs}  Loss: {epoch_loss/batch_count:.4f} contrastive_loss: {losses['contrastive_loss']/batch_count:.4f}")
@@ -342,7 +390,7 @@ if __name__ == "__main__":
         # 'lr': 10, # r@5: 57.91% - 36.37%
         # 'lr': 1e-5, # r@5: 57.33
         'num_workers': 4,
-        'early_stop_patience': 10, # Early stopping patience
+        'early_stop_patience': 5, # Early stopping patience
         'device': 'cuda',
         'dtype': torch.float32,
         'save_path': 'best_clip_Glasses.pth', # 训练得到的模型权重保存路径
@@ -354,7 +402,7 @@ if __name__ == "__main__":
             'dtype': torch.float32,
             'num_heads': 4,
             'dropout': 0.1,
-            # 'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9832_0027.pth' # Lens的预训练权重
+            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9922.pth' # Lens的预训练权重
         },
         'Frame': {
             'device': 'cuda',
@@ -390,16 +438,27 @@ if __name__ == "__main__":
         }
     }
 
-    # # 训练模型
+    # # 一阶段训练：使用gtneg代替lens输出，单独训练Frame模型，不训练Lens模型 -- Recall@5: 99.71%
+    # cfg['lr'] = 1e-5
+    # cfg['epochs'] = 10
     # model = Glasses.load_model(cfg)
-    # # model = train_Retrieval(cfg, model) # 训练Glasses模型 | 代理任务: Retrieval with Lens pred
-    # model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=True) # 训练Glasses模型 | 代理任务: Retrieval with gtneg
+    # model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=True) # 一阶段: 训练Glasses模型 | 代理任务: Retrieval with gtneg
+    
+    # # 二阶段训练：使用GT_neg作为监督单独训练lens, 在lens.py中完成
+    
+    # # 三阶段训练：联合训练lens和Frame模型，进行适配 -- Recall@5: val: 75.97% full: 82.24%  -- MCQ: 35.90%
+    # cfg['pretrain'] = True
+    # cfg['lr'] = 1e-3
+    # cfg['model_path'] = 'weights/best_clip_Glasses_9971.pth' # 一阶段预模型权重路径
+    # cfg['clip_grad'] = True # 梯度裁剪
+    # model = Glasses.load_model(cfg)
+    # model.lens = CLIPGlassesLens.load_model(cfg['Lens']) # 加载lens模型的预训练权重
+    # model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=False) # 二阶段: 联合lens训练Glasses模型 | 代理任务: Retrieval
     
     # 测试模型
     cfg['test_raw_clip'] = False, # 是否使用原始的CLIP模型进行测试
     cfg['test'] = True
-    # cfg['model_path'] = 'weights/best_clip_Glasses_5882.pth' # 测试模型权重路径
-    cfg['model_path'] = 'weights/best_clip_Glasses.pth' # 测试模型权重路径
+    cfg['model_path'] = 'weights/best_clip_Glasses_7597_8224_3590(after_joint).pth' # 测试模型权重路径
     
     # Retrieval
     test_retrieval_dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
@@ -408,8 +467,8 @@ if __name__ == "__main__":
         evaluate_model_retrieval_withGTNeg(None, test_retrieval_dataloader, test_raw_clip=True, with_gt_neg=False)
     else:
         model = Glasses.load_model(cfg)
-        evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=True) # 使用GT的h_neg
-        # evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=False)
+        # evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=True) # 使用GT的h_neg
+        evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
         
     # test_retrieval_dataset = RetrievalDataset(cfg['Retrieval']['test_dataset_path'])
     # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'], collate_fn=retrieval_collate_fn)

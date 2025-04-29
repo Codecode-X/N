@@ -32,7 +32,8 @@ class CLIPGlassesFrame(nn.Module):
                 dim_feedforward=hidden_dim,
                 dropout=0.3,
                 activation='gelu',
-                batch_first=True
+                batch_first=True,
+                layer_norm_eps=1e-6 # 增加数值稳定性
             ),
             num_layers=3
         )
@@ -85,7 +86,7 @@ class CLIPGlassesFrame(nn.Module):
         # 特征归一化
         I_norm = F.normalize(I, p=2, dim=-1)
         h_norm = F.normalize(h, p=2, dim=-1)
-        h_neg_norm = F.normalize(h_neg, p=2, dim=-1)
+        h_neg_norm = F.normalize(h_neg, p=2, dim=-1) + 1e-8
         
         # 深度跨模态交互
         cross_features = self.cross_transformer(
@@ -110,7 +111,7 @@ class CLIPGlassesFrame(nn.Module):
         )
         gate_input = torch.cat([h_attn, attn_output.squeeze(1)], dim=-1)
         lambda_base = self.lambda_generator['gate_controller'](gate_input)
-        lambda_dynamic = self.lambda_0 * lambda_base
+        lambda_dynamic = torch.sigmoid(self.lambda_0 * lambda_base) # 动态lambda生成器，限制在[0,1]之间
         
         # 保持CLIP基础能力的自适应匹配
         with torch.amp.autocast('cuda', enabled=True):
@@ -162,6 +163,7 @@ class ResidualBlock(nn.Module):
         residual = x
         x = F.gelu(self.fc1(x))
         x = F.dropout(x, p=0.3, training=self.training)
+        x = torch.clamp(x, min=-5.0, max=5.0)  # 梯度截断
         x = self.fc2(x)
         
         # 门控残差连接

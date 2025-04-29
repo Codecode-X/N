@@ -1,0 +1,528 @@
+Loading model: Clip
+正在调用模型构造方法构造模型....
+直接调用模型构造方法失败，尝试使用模型的 build_model 方法....
+正在加载 CLIPGlassesLens 模型权重: /root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9922.pth
+训练：正在加载预训练 Glasses 模型权重: weights/best_clip_Glasses_9971.pth, 将覆盖 Lens 和 Frame 的权重
+正在加载 CLIPGlassesLens 模型权重: /root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9922.pth
+Loading preprocessed features from cache: LensDataset_cache.pt...
+Loaded 25004 samples from cache
+>>> train_rate, val_rate, test_rate: 0.9, 0.1, 0.0
+训练Glasses所有模块
+注册梯度监控钩子
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 94.44%
+  Recall@5: 99.96%
+  Recall@10: 100.00%
+
+Image→Text Retrieval:
+  Recall@1: 95.83%
+  Recall@5: 99.80%
+  Recall@10: 99.90%
+
+Mean Retrieval:
+  Recall@1: 95.13%
+  Recall@5: 99.88%
+  Recall@10: 99.95%
+梯度 frame.feature_fusion.1.gate.weight 范数: 844.9617
+梯度 frame.feature_fusion.0.fc2.weight 范数: 5520.9785
+梯度 frame.feature_fusion.0.fc1.weight 范数: 1135.9906
+梯度 frame.cross_transformer.layers.2.linear2.weight 范数: 984.0833
+梯度 frame.cross_transformer.layers.2.linear1.weight 范数: 1024.6025
+梯度 frame.cross_transformer.layers.2.self_attn.out_proj.weight 范数: 748.8159
+梯度 frame.cross_transformer.layers.2.self_attn.in_proj_weight 范数: 1075.0872
+梯度 frame.cross_transformer.layers.1.linear2.weight 范数: 917.1331
+梯度 frame.cross_transformer.layers.1.linear1.weight 范数: 1021.6735
+梯度 frame.cross_transformer.layers.1.self_attn.out_proj.weight 范数: 700.4716
+梯度 frame.cross_transformer.layers.1.self_attn.in_proj_weight 范数: 961.3036
+梯度 frame.cross_transformer.layers.0.linear2.weight 范数: 928.9406
+梯度 frame.cross_transformer.layers.0.linear1.weight 范数: 1000.2730
+梯度 frame.cross_transformer.layers.0.self_attn.out_proj.bias 范数: 1218.0660
+梯度 frame.cross_transformer.layers.0.self_attn.out_proj.weight 范数: 730.8417
+梯度 frame.cross_transformer.layers.0.self_attn.in_proj_bias 范数: 1370.5712
+梯度 frame.cross_transformer.layers.0.self_attn.in_proj_weight 范数: 1130.5620
+Ep1/30  Loss: 0.6447 contrastive_loss: 0.6447
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 41.30%
+  Recall@5: 69.73%
+  Recall@10: 80.73%
+
+Image→Text Retrieval:
+  Recall@1: 44.06%
+  Recall@5: 72.05%
+  Recall@10: 81.68%
+
+Mean Retrieval:
+  Recall@1: 42.68%
+  Recall@5: 70.89%
+  Recall@10: 81.20%
+Best model saved at epoch 0 with recall@5: 70.8925761718888
+Training completed. Best validation recall5: 70.8926
+Ep2/30  Loss: 0.3502 contrastive_loss: 0.3502
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 41.58%
+  Recall@5: 71.09%
+  Recall@10: 81.81%
+
+Image→Text Retrieval:
+  Recall@1: 44.50%
+  Recall@5: 71.51%
+  Recall@10: 82.81%
+
+Mean Retrieval:
+  Recall@1: 43.04%
+  Recall@5: 71.30%
+  Recall@10: 82.31%
+Best model saved at epoch 1 with recall@5: 71.30216675608735
+Training completed. Best validation recall5: 71.3022
+Ep3/30  Loss: 0.2998 contrastive_loss: 0.2998
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 43.14%
+  Recall@5: 72.17%
+  Recall@10: 82.61%
+
+Image→Text Retrieval:
+  Recall@1: 44.70%
+  Recall@5: 73.92%
+  Recall@10: 83.01%
+
+Mean Retrieval:
+  Recall@1: 43.92%
+  Recall@5: 73.05%
+  Recall@10: 82.81%
+Best model saved at epoch 2 with recall@5: 73.04529072457461
+Training completed. Best validation recall5: 73.0453
+Ep4/30  Loss: 0.2526 contrastive_loss: 0.2526
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 42.78%
+  Recall@5: 72.09%
+  Recall@10: 83.53%
+
+Image→Text Retrieval:
+  Recall@1: 45.33%
+  Recall@5: 73.33%
+  Recall@10: 83.55%
+
+Mean Retrieval:
+  Recall@1: 44.06%
+  Recall@5: 72.71%
+  Recall@10: 83.54%
+💔recall5 drop from 73.0453 to 72.7106, cur patience_counter add to 1
+Training completed. Best validation recall5: 73.0453
+Ep5/30  Loss: 0.2137 contrastive_loss: 0.2137
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 43.10%
+  Recall@5: 73.13%
+  Recall@10: 84.05%
+
+Image→Text Retrieval:
+  Recall@1: 45.48%
+  Recall@5: 73.97%
+  Recall@10: 84.18%
+
+Mean Retrieval:
+  Recall@1: 44.29%
+  Recall@5: 73.55%
+  Recall@10: 84.12%
+Best model saved at epoch 4 with recall@5: 73.5496567581219
+Training completed. Best validation recall5: 73.5497
+Ep6/30  Loss: 0.1920 contrastive_loss: 0.1920
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 43.14%
+  Recall@5: 73.09%
+  Recall@10: 84.57%
+
+Image→Text Retrieval:
+  Recall@1: 46.22%
+  Recall@5: 74.31%
+  Recall@10: 84.58%
+
+Mean Retrieval:
+  Recall@1: 44.68%
+  Recall@5: 73.70%
+  Recall@10: 84.57%
+Best model saved at epoch 5 with recall@5: 73.70157045236914
+Training completed. Best validation recall5: 73.7016
+Ep7/30  Loss: 0.1655 contrastive_loss: 0.1655
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 42.50%
+  Recall@5: 74.25%
+  Recall@10: 84.21%
+
+Image→Text Retrieval:
+  Recall@1: 45.87%
+  Recall@5: 75.15%
+  Recall@10: 84.18%
+
+Mean Retrieval:
+  Recall@1: 44.19%
+  Recall@5: 74.70%
+  Recall@10: 84.20%
+Best model saved at epoch 6 with recall@5: 74.69882381035798
+Training completed. Best validation recall5: 74.6988
+Ep8/30  Loss: 0.1489 contrastive_loss: 0.1489
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 43.98%
+  Recall@5: 74.77%
+  Recall@10: 84.97%
+
+Image→Text Retrieval:
+  Recall@1: 46.56%
+  Recall@5: 74.51%
+  Recall@10: 84.77%
+
+Mean Retrieval:
+  Recall@1: 45.27%
+  Recall@5: 74.64%
+  Recall@10: 84.87%
+💔recall5 drop from 74.6988 to 74.6395, cur patience_counter add to 1
+Training completed. Best validation recall5: 74.6988
+Ep9/30  Loss: 0.1338 contrastive_loss: 0.1338
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 44.02%
+  Recall@5: 73.89%
+  Recall@10: 84.13%
+
+Image→Text Retrieval:
+  Recall@1: 47.30%
+  Recall@5: 73.92%
+  Recall@10: 83.89%
+
+Mean Retrieval:
+  Recall@1: 45.66%
+  Recall@5: 73.90%
+  Recall@10: 84.01%
+💔recall5 drop from 74.6988 to 73.9049, cur patience_counter add to 2
+Training completed. Best validation recall5: 74.6988
+Ep10/30  Loss: 0.1168 contrastive_loss: 0.1168
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 44.54%
+  Recall@5: 74.53%
+  Recall@10: 85.05%
+
+Image→Text Retrieval:
+  Recall@1: 46.81%
+  Recall@5: 75.29%
+  Recall@10: 84.04%
+
+Mean Retrieval:
+  Recall@1: 45.67%
+  Recall@5: 74.91%
+  Recall@10: 84.54%
+Best model saved at epoch 9 with recall@5: 74.912441703083
+Training completed. Best validation recall5: 74.9124
+Ep11/30  Loss: 0.1086 contrastive_loss: 0.1086
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 44.70%
+  Recall@5: 74.33%
+  Recall@10: 85.09%
+
+Image→Text Retrieval:
+  Recall@1: 46.56%
+  Recall@5: 74.71%
+  Recall@10: 84.38%
+
+Mean Retrieval:
+  Recall@1: 45.63%
+  Recall@5: 74.52%
+  Recall@10: 84.73%
+💔recall5 drop from 74.9124 to 74.5178, cur patience_counter add to 1
+Training completed. Best validation recall5: 74.9124
+Ep12/30  Loss: 0.0988 contrastive_loss: 0.0988
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 44.62%
+  Recall@5: 75.29%
+  Recall@10: 85.97%
+
+Image→Text Retrieval:
+  Recall@1: 47.30%
+  Recall@5: 75.44%
+  Recall@10: 84.77%
+
+Mean Retrieval:
+  Recall@1: 45.96%
+  Recall@5: 75.37%
+  Recall@10: 85.37%
+Best model saved at epoch 11 with recall@5: 75.3659636341927
+Training completed. Best validation recall5: 75.3660
+Ep13/30  Loss: 0.0898 contrastive_loss: 0.0898
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 44.58%
+  Recall@5: 74.81%
+  Recall@10: 85.81%
+
+Image→Text Retrieval:
+  Recall@1: 47.69%
+  Recall@5: 75.93%
+  Recall@10: 85.02%
+
+Mean Retrieval:
+  Recall@1: 46.14%
+  Recall@5: 75.37%
+  Recall@10: 85.41%
+Best model saved at epoch 12 with recall@5: 75.37163916358801
+Training completed. Best validation recall5: 75.3716
+Ep14/30  Loss: 0.0822 contrastive_loss: 0.0822
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 43.82%
+  Recall@5: 74.77%
+  Recall@10: 84.61%
+
+Image→Text Retrieval:
+  Recall@1: 47.94%
+  Recall@5: 75.49%
+  Recall@10: 84.82%
+
+Mean Retrieval:
+  Recall@1: 45.88%
+  Recall@5: 75.13%
+  Recall@10: 84.71%
+💔recall5 drop from 75.3716 to 75.1306, cur patience_counter add to 1
+Training completed. Best validation recall5: 75.3716
+Ep15/30  Loss: 0.0775 contrastive_loss: 0.0775
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 45.50%
+  Recall@5: 75.29%
+  Recall@10: 85.65%
+
+Image→Text Retrieval:
+  Recall@1: 46.81%
+  Recall@5: 75.64%
+  Recall@10: 84.58%
+
+Mean Retrieval:
+  Recall@1: 46.15%
+  Recall@5: 75.46%
+  Recall@10: 85.11%
+Best model saved at epoch 14 with recall@5: 75.46419546130467
+Training completed. Best validation recall5: 75.4642
+Ep16/30  Loss: 0.0712 contrastive_loss: 0.0712
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 45.18%
+  Recall@5: 75.81%
+  Recall@10: 85.25%
+
+Image→Text Retrieval:
+  Recall@1: 47.10%
+  Recall@5: 75.93%
+  Recall@10: 85.41%
+
+Mean Retrieval:
+  Recall@1: 46.14%
+  Recall@5: 75.87%
+  Recall@10: 85.33%
+Best model saved at epoch 15 with recall@5: 75.87143924355601
+Training completed. Best validation recall5: 75.8714
+Ep17/30  Loss: 0.0624 contrastive_loss: 0.0624
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 45.82%
+  Recall@5: 76.33%
+  Recall@10: 85.57%
+
+Image→Text Retrieval:
+  Recall@1: 47.05%
+  Recall@5: 76.28%
+  Recall@10: 84.82%
+
+Mean Retrieval:
+  Recall@1: 46.44%
+  Recall@5: 76.30%
+  Recall@10: 85.19%
+Best model saved at epoch 16 with recall@5: 76.30324098258535
+Training completed. Best validation recall5: 76.3032
+Ep18/30  Loss: 0.0607 contrastive_loss: 0.0607
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 46.58%
+  Recall@5: 75.81%
+  Recall@10: 85.81%
+
+Image→Text Retrieval:
+  Recall@1: 46.61%
+  Recall@5: 75.64%
+  Recall@10: 85.51%
+
+Mean Retrieval:
+  Recall@1: 46.60%
+  Recall@5: 75.72%
+  Recall@10: 85.66%
+💔recall5 drop from 76.3032 to 75.7241, cur patience_counter add to 1
+Training completed. Best validation recall5: 76.3032
+Ep19/30  Loss: 0.0502 contrastive_loss: 0.0502
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 46.58%
+  Recall@5: 75.69%
+  Recall@10: 85.41%
+
+Image→Text Retrieval:
+  Recall@1: 47.30%
+  Recall@5: 75.83%
+  Recall@10: 85.61%
+
+Mean Retrieval:
+  Recall@1: 46.94%
+  Recall@5: 75.76%
+  Recall@10: 85.51%
+💔recall5 drop from 76.3032 to 75.7623, cur patience_counter add to 2
+Training completed. Best validation recall5: 76.3032
+Ep20/30  Loss: 0.0499 contrastive_loss: 0.0499
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 45.74%
+  Recall@5: 75.73%
+  Recall@10: 85.85%
+
+Image→Text Retrieval:
+  Recall@1: 47.79%
+  Recall@5: 75.54%
+  Recall@10: 85.76%
+
+Mean Retrieval:
+  Recall@1: 46.77%
+  Recall@5: 75.63%
+  Recall@10: 85.80%
+💔recall5 drop from 76.3032 to 75.6350, cur patience_counter add to 3
+Training completed. Best validation recall5: 76.3032
+Ep21/30  Loss: 0.0434 contrastive_loss: 0.0434
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 46.02%
+  Recall@5: 76.17%
+  Recall@10: 86.05%
+
+Image→Text Retrieval:
+  Recall@1: 47.15%
+  Recall@5: 75.98%
+  Recall@10: 85.27%
+
+Mean Retrieval:
+  Recall@1: 46.59%
+  Recall@5: 76.08%
+  Recall@10: 85.66%
+💔recall5 drop from 76.3032 to 76.0759, cur patience_counter add to 4
+Training completed. Best validation recall5: 76.3032
+Ep22/30  Loss: 0.0424 contrastive_loss: 0.0424
+N_imgs: 2036, N_caps: 2501
+使用Lens预测的neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 46.42%
+  Recall@5: 76.05%
+  Recall@10: 85.61%
+
+Image→Text Retrieval:
+  Recall@1: 47.45%
+  Recall@5: 75.88%
+  Recall@10: 85.56%
+
+Mean Retrieval:
+  Recall@1: 46.93%
+  Recall@5: 75.97%
+  Recall@10: 85.58%
+💔recall5 drop from 76.3032 to 75.9668, cur patience_counter add to 5
+Early stopping after 22 epochs
+==============配置项===============
+epochs: 30
+batch_size: 64
+lr: 0.001
+num_workers: 4
+early_stop_patience: 5
+device: cuda
+dtype: torch.float32
+save_path: best_clip_Glasses.pth
+pretrain: True
+Lens:
+  device: cuda
+  dtype: torch.float32
+  num_heads: 4
+  dropout: 0.1
+  model_path: /root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9922.pth
+Frame:
+  device: cuda
+  dtype: torch.float32
+  lambda_0: 0.1
+Mcq:
+  batch_size: 64
+  num_workers: 4
+  num_options: 4
+  split: [0.9, 0.1, 0.0]
+  train_dataset_path: /root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv
+  test_dataset_path: /root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv
+Retrieval:
+  batch_size: 64
+  num_workers: 4
+  split: [0.9, 0.1, 0.0]
+  train_dataset_path: /root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv
+  test_dataset_path: /root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv
+RetrievalWithGtNeg:
+  batch_size: 64
+  num_workers: 4
+  split: [0.9, 0.1, 0.0]
+  pos_csv_path: /root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_retrieval.csv
+  negpos_csv_path: /root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv
+  dtype: torch.float32
+model_path: weights/best_clip_Glasses_9971.pth
+clip_grad: True
+===================================

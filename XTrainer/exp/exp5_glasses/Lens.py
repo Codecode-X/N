@@ -40,10 +40,17 @@ class CLIPGlassesLens(nn.Module):
         super().__init__()
         self.embed_dim = 512
         
+        # 残差连接门控机制
+        self.res_gate = nn.Sequential(
+            nn.Linear(self.embed_dim, 1),
+            nn.Sigmoid()  # 直接内置Sigmoid
+        )
+        
         # 语法流参数 (前三层)
         self.syntax_proj = nn.ModuleList([
             nn.Sequential(
                 nn.Linear(self.embed_dim, self.embed_dim, bias=False),
+                nn.GELU(),
                 nn.LayerNorm(self.embed_dim)
             ) for _ in range(3)
         ])
@@ -51,24 +58,28 @@ class CLIPGlassesLens(nn.Module):
         # 语义流参数 (最后一层)
         self.semantic_k_proj = nn.Sequential(
             nn.Linear(self.embed_dim, self.embed_dim, bias=False),
+            nn.GELU(),
             nn.LayerNorm(self.embed_dim)
         )
         self.semantic_v_proj = nn.ModuleList([
             nn.Sequential(
                 nn.Linear(self.embed_dim, self.embed_dim, bias=False),
+                nn.GELU(),
                 nn.LayerNorm(self.embed_dim)
             ) for _ in range(3)
         ])
         
         # 注意力融合模块
-        self.attention_scale = nn.Parameter(torch.tensor([1.0, 0.8, 0.6]))
+        attention_scale = torch.tensor([1.0, 0.8, 0.6])
+        self.attention_log_scale = nn.Parameter(torch.log(attention_scale))
         
         # FFN网络
         self.ffn = nn.Sequential(
-            nn.Linear(self.embed_dim, 4*self.embed_dim),
+            nn.Linear(self.embed_dim, 2*self.embed_dim),
+            nn.LayerNorm(2*self.embed_dim),  # 新增层归一化
             nn.GELU(),
             nn.Dropout(0.1),
-            nn.Linear(4*self.embed_dim, self.embed_dim),
+            nn.Linear(2*self.embed_dim, self.embed_dim),
             nn.LayerNorm(self.embed_dim)
         )
         
@@ -76,12 +87,27 @@ class CLIPGlassesLens(nn.Module):
         self._init_weights()
         
     def _init_weights(self):
+        # 残差门控层初始化
+        nn.init.constant_(self.res_gate[0].bias, -2.0)  # 初始偏向原始特征
+        nn.init.normal_(self.res_gate[0].weight, mean=0.0, std=0.02)
+        
+        # 语法流投影层初始化（GELU）
         for proj in self.syntax_proj:
-            nn.init.xavier_uniform_(proj[0].weight)
-        nn.init.xavier_uniform_(self.semantic_k_proj[0].weight)
+            nn.init.kaiming_normal_(
+                proj[0].weight, 
+                mode='fan_in',
+                nonlinearity='relu'
+            )
+        
+        # 语义流投影层初始化（GELU）
         for proj in self.semantic_v_proj:
-            nn.init.xavier_uniform_(proj[0].weight)
-    
+            nn.init.kaiming_normal_(
+                proj[0].weight, 
+                mode='fan_in',
+                nonlinearity='relu'
+            )
+         
+            
     @staticmethod        
     def load_model(cfg):
         model = CLIPGlassesLens(cfg)
@@ -113,14 +139,17 @@ class CLIPGlassesLens(nn.Module):
         
         # 分层注意力计算
         c_neg = 0
+        scale_factor = torch.sqrt(torch.tensor(self.embed_dim, dtype=torch.float32)) # 注意力缩放因子
         for i in range(3):
             Q = syntax_feats[i]
-            A = torch.bmm(Q.unsqueeze(1), K.unsqueeze(-1)).squeeze(-1)  # [B, 1]
-            A = F.softmax(A * self.attention_scale[i], dim=0)  # 归一化注意力权重
+            A = torch.bmm(Q.unsqueeze(1), K.unsqueeze(-1)).squeeze(-1) / scale_factor  # [B, 1]
+            # A = F.softmax(A * self.attention_scale[i], dim=0)  # 归一化注意力权重
+            A = F.softmax(A * self.attention_log_scale[i], dim=0)  # 归一化注意力权重
             c_neg += A * Vs[i]
         
-        # 残差连接
-        # c_neg = c_neg + h  # [B, D]
+        # 残差连接并添加门控机制
+        gate = torch.sigmoid(self.res_gate(c_neg)) 
+        c_neg = gate * c_neg + (1 - gate) * h  # 添加可学习的残差门控
         
         # FFN处理
         h_neg = self.ffn(c_neg)
@@ -145,9 +174,6 @@ class CLIPGlassesLens(nn.Module):
         neg_sim_loss = 1 - neg_sim.mean()  # 越低越好
         
         obj2i_sim = (neg_obj_n * I_n).sum(dim=-1)  # [B] 越高越好
-        # print(f"》》》 sim_obj2i: {obj2i_sim}")
-        # h2i_sim = (h_n * I_n).sum(dim=-1)  # [B] 越高越好
-        # print(f"》》》 sim_h2i: {h2i_sim}")
         
         n2i_sim = (h_neg_n * I_n).sum(dim=-1)  # [B] 应该和obj2i_sim越接近越好 | 保证与图像特征的对齐
         n2i_sim_loss =  abs(obj2i_sim - n2i_sim).mean()  # 越低越好
@@ -224,7 +250,7 @@ def train(cfg, model:CLIPGlassesLens, device='cuda'):
         # Validation
         batch_sim_loss = evaluate(cfg, model, val_loader)
         
-        # 早停
+        # 早停 
         if batch_sim_loss < best_sim_loss:
             best_sim_loss = batch_sim_loss
             patience_counter = 0
@@ -314,7 +340,7 @@ if __name__ == "__main__":
         'dropout': 0.1,
         'margin': 0.5,
         
-        'model_path': os.path.join(current_dir, 'weights/best_clip_lens_9832_0027.pth'), # Lens的预训练权重
+        'model_path': os.path.join(current_dir, 'best_clip_lens.pth'), # Lens的预训练权重
         'save_path': os.path.join(current_dir, 'best_clip_lens.pth'), # Lens的训练权重保存路径
         
         # -----训练参数-----
@@ -338,13 +364,16 @@ if __name__ == "__main__":
     test_dataset = GlassesDataset(cfg) # Clip_model, lens_model 用于预加载数据过程中的特征提取
     test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, num_workers=cfg['num_workers'])
     
-    if not cfg['test_only']:
-        model = CLIPGlassesLens(cfg)
-        # Train model
-        trained_model = train(cfg, model)
+    # if not cfg['test_only']:
+    #     model = CLIPGlassesLens(cfg)
+    #     # Train model
+    #     trained_model = train(cfg, model)
+    #     # 测试模型为训练的模型
+    #     cfg['model_path'] = cfg['save_path']
     
     trained_model = CLIPGlassesLens.load_model(cfg)
     trained_model = trained_model.to('cuda')
+    
     print("\nFinal evaluation on test set:")
     evaluate(cfg, trained_model, test_loader)
     

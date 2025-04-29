@@ -1,0 +1,155 @@
+Loading preprocessed features from cache: LensDataset_cache.pt...
+Loaded 25004 samples from cache
+Loading preprocessed features from cache: LensDataset_cache.pt...
+Loaded 25004 samples from cache
+Ep1/30  Loss: 0.0625                  neg_sim_loss: 0.0514                 n2i_sim_loss: 0.0111
+Evaluation results:
+  p_sim: 0.6595
+  h_sim: 0.7197
+  neg_sim: 0.9647
+Ep2/30  Loss: 0.0386                  neg_sim_loss: 0.0303                 n2i_sim_loss: 0.0083
+Evaluation results:
+  p_sim: 0.6558
+  h_sim: 0.7172
+  neg_sim: 0.9696
+Ep3/30  Loss: 0.0320                  neg_sim_loss: 0.0248                 n2i_sim_loss: 0.0072
+Evaluation results:
+  p_sim: 0.6529
+  h_sim: 0.7160
+  neg_sim: 0.9729
+Ep4/30  Loss: 0.0275                  neg_sim_loss: 0.0209                 n2i_sim_loss: 0.0066
+Evaluation results:
+  p_sim: 0.6503
+  h_sim: 0.7145
+  neg_sim: 0.9742
+Ep5/30  Loss: 0.0235                  neg_sim_loss: 0.0177                 n2i_sim_loss: 0.0058
+Evaluation results:
+  p_sim: 0.6495
+  h_sim: 0.7139
+  neg_sim: 0.9757
+Ep6/30  Loss: 0.0198                  neg_sim_loss: 0.0146                 n2i_sim_loss: 0.0052
+Evaluation results:
+  p_sim: 0.6479
+  h_sim: 0.7124
+  neg_sim: 0.9763
+Ep7/30  Loss: 0.0170                  neg_sim_loss: 0.0123                 n2i_sim_loss: 0.0047
+Evaluation results:
+  p_sim: 0.6482
+  h_sim: 0.7122
+  neg_sim: 0.9757
+Ep8/30  Loss: 0.0143                  neg_sim_loss: 0.0101                 n2i_sim_loss: 0.0043
+Evaluation results:
+  p_sim: 0.6439
+  h_sim: 0.7100
+  neg_sim: 0.9763
+Ep9/30  Loss: 0.0121                  neg_sim_loss: 0.0083                 n2i_sim_loss: 0.0038
+Evaluation results:
+  p_sim: 0.6436
+  h_sim: 0.7095
+  neg_sim: 0.9768
+Ep10/30  Loss: 0.0106                  neg_sim_loss: 0.0072                 n2i_sim_loss: 0.0035
+Evaluation results:
+  p_sim: 0.6446
+  h_sim: 0.7103
+  neg_sim: 0.9762
+Ep11/30  Loss: 0.0094                  neg_sim_loss: 0.0062                 n2i_sim_loss: 0.0032
+Evaluation results:
+  p_sim: 0.6426
+  h_sim: 0.7077
+  neg_sim: 0.9759
+Ep12/30  Loss: 0.0078                  neg_sim_loss: 0.0050                 n2i_sim_loss: 0.0028
+Evaluation results:
+  p_sim: 0.6425
+  h_sim: 0.7086
+  neg_sim: 0.9768
+Ep13/30  Loss: 0.0068                  neg_sim_loss: 0.0042                 n2i_sim_loss: 0.0026
+Evaluation results:
+  p_sim: 0.6433
+  h_sim: 0.7091
+  neg_sim: 0.9764
+Ep14/30  Loss: 0.0063                  neg_sim_loss: 0.0038                 n2i_sim_loss: 0.0024
+Evaluation results:
+  p_sim: 0.6403
+  h_sim: 0.7067
+  neg_sim: 0.9762
+Ep15/30  Loss: 0.0054                  neg_sim_loss: 0.0032                 n2i_sim_loss: 0.0022
+Evaluation results:
+  p_sim: 0.6412
+  h_sim: 0.7073
+  neg_sim: 0.9766
+Ep16/30  Loss: 0.0047                  neg_sim_loss: 0.0028                 n2i_sim_loss: 0.0020
+Evaluation results:
+  p_sim: 0.6416
+  h_sim: 0.7071
+  neg_sim: 0.9762
+Ep17/30  Loss: 0.0042                  neg_sim_loss: 0.0024                 n2i_sim_loss: 0.0018
+Evaluation results:
+  p_sim: 0.6408
+  h_sim: 0.7068
+  neg_sim: 0.9770
+Ep18/30  Loss: 0.0038                  neg_sim_loss: 0.0021                 n2i_sim_loss: 0.0017
+Evaluation results:
+  p_sim: 0.6401
+  h_sim: 0.7067
+  neg_sim: 0.9761
+Ep19/30  Loss: 0.0032                  neg_sim_loss: 0.0017                 n2i_sim_loss: 0.0015
+Evaluation results:
+  p_sim: 0.6406
+  h_sim: 0.7068
+  neg_sim: 0.9762
+Ep20/30  Loss: 0.0028                  neg_sim_loss: 0.0015                 n2i_sim_loss: 0.0013
+Evaluation results:
+  p_sim: 0.6408
+  h_sim: 0.7071
+  neg_sim: 0.9772
+Ep21/30  Loss: 0.0025                  neg_sim_loss: 0.0013                 n2i_sim_loss: 0.0012
+Evaluation results:
+  p_sim: 0.6414
+  h_sim: 0.7074
+  neg_sim: 0.9771
+Ep22/30  Loss: 0.0023                  neg_sim_loss: 0.0012                 n2i_sim_loss: 0.0011
+Evaluation results:
+  p_sim: 0.6403
+  h_sim: 0.7067
+  neg_sim: 0.9767
+Ep23/30  Loss: 0.0019                  neg_sim_loss: 0.0010                 n2i_sim_loss: 0.0010
+Evaluation results:
+  p_sim: 0.6406
+  h_sim: 0.7067
+  neg_sim: 0.9763
+Ep24/30  Loss: 0.0018                  neg_sim_loss: 0.0010                 n2i_sim_loss: 0.0009
+Evaluation results:
+  p_sim: 0.6406
+  h_sim: 0.7070
+  neg_sim: 0.9771
+Ep25/30  Loss: 0.0016                  neg_sim_loss: 0.0009                 n2i_sim_loss: 0.0008
+Evaluation results:
+  p_sim: 0.6403
+  h_sim: 0.7067
+  neg_sim: 0.9771
+Ep26/30  Loss: 0.0015                  neg_sim_loss: 0.0008                 n2i_sim_loss: 0.0007
+Evaluation results:
+  p_sim: 0.6406
+  h_sim: 0.7070
+  neg_sim: 0.9770
+Ep27/30  Loss: 0.0013                  neg_sim_loss: 0.0007                 n2i_sim_loss: 0.0006
+Evaluation results:
+  p_sim: 0.6405
+  h_sim: 0.7069
+  neg_sim: 0.9769
+Ep28/30  Loss: 0.0013                  neg_sim_loss: 0.0007                 n2i_sim_loss: 0.0006
+Evaluation results:
+  p_sim: 0.6404
+  h_sim: 0.7068
+  neg_sim: 0.9769
+Ep29/30  Loss: 0.0012                  neg_sim_loss: 0.0007                 n2i_sim_loss: 0.0005
+Evaluation results:
+  p_sim: 0.6404
+  h_sim: 0.7068
+  neg_sim: 0.9770
+Ep30/30  Loss: 0.0012                  neg_sim_loss: 0.0007                 n2i_sim_loss: 0.0005
+Evaluation results:
+  p_sim: 0.6404
+  h_sim: 0.7068
+  neg_sim: 0.9770
+正在加载 CLIPGlassesLens 模型权重: /root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9832_0027.pth
