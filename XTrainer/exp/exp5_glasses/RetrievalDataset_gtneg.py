@@ -106,7 +106,7 @@ class RetrievalNegGtDataset(Dataset):
         }
 
 
-def evaluate_model_retrieval_withGTNeg(model, data_loader, test_raw_clip=False, device='cuda'):
+def evaluate_model_retrieval_withGTNeg(model, data_loader, test_raw_clip=False, with_gt_neg=True, device='cuda'):
     """
     Evaluate the model on the retrieval task. (h_neg直接给出GT，而不是通过Lens预测)
     
@@ -176,8 +176,11 @@ def evaluate_model_retrieval_withGTNeg(model, data_loader, test_raw_clip=False, 
         # ---------------------------------------
         else: # 使用当前模型
             model.eval()
-            # scores_T2I, scores_I2T = model(I_rep, h, level_h, l_neg) # 使用gt
-            scores_T2I, scores_I2T = model(I_rep, h, level_h) # 使用lens预测h_neg
+            if with_gt_neg:
+                scores_T2I, scores_I2T = model(I_rep, h, level_h, l_neg) # 使用gt
+            else:
+                # scores_T2I, scores_I2T = model(I_rep, h, level_h) # 使用lens预测h_neg
+                scores_T2I, scores_I2T = model(I_rep, h, level_h, torch.zeros_like(l_neg)) # 使用zero
         
         # 将 scores_T2I 根据 caption_to_img 从 [N_caps, N_imgs] 还原为 [N_caps, N_imgs]
         cti = torch.tensor(caption_to_img, dtype=torch.long, device=device)  # [N_caps]
