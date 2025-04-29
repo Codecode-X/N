@@ -40,10 +40,8 @@ class Glasses(nn.Module):
             - scores_I2T: 图像->文本的分数 [N_imgs=B, N_caps]
         """
         if l_neg is None:
-            print(">> Glasses: l_neg is None, 使用 lens 预测得到的 h_neg")
             h_neg = self.lens(h, level_h_list)
         else:
-            print(">> Glasses: 直接使用 GT 的 h_neg")
             h_neg = l_neg # 测试直接使用GT的h_neg
         assert I.size(0) == h_neg.size(0) == h.size(0), f"frame要求图片应该和文本一对一对应"
         scores_T2I = self.frame(I, h, h_neg)
@@ -339,7 +337,7 @@ if __name__ == "__main__":
         'epochs': 30,
         'batch_size': 64,
         # 'lr': 5e-3, # 57.47%
-        'lr': 1e-3, # r@5: 57.73%
+        'lr': 1e-5, # r@5: 57.73%
         # 'lr': 1e-4, # r@5: 58.82%
         # 'lr': 10, # r@5: 57.91% - 36.37%
         # 'lr': 1e-5, # r@5: 57.33
@@ -391,37 +389,27 @@ if __name__ == "__main__":
             'dtype': torch.float32, 
         }
     }
-    print("==============配置项===============")
-    for k, v in cfg.items():
-        if isinstance(v, dict):
-            print(f"{k}:")
-            for k1, v1 in v.items():
-                print(f"  {k1}: {v1}")
-        else:
-            print(f"{k}: {v}")
-    print("===================================")
-    
 
-    # 训练模型
-    model = Glasses.load_model(cfg)
-    # model = train_Retrieval(cfg, model) # 训练Glasses模型 | 代理任务: Retrieval with Lens pred
-    model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=True) # 训练Glasses模型 | 代理任务: Retrieval with gtneg
+    # # 训练模型
+    # model = Glasses.load_model(cfg)
+    # # model = train_Retrieval(cfg, model) # 训练Glasses模型 | 代理任务: Retrieval with Lens pred
+    # model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=True) # 训练Glasses模型 | 代理任务: Retrieval with gtneg
     
-    # # 测试模型
-    # cfg['test_raw_clip'] = False, # 是否使用原始的CLIP模型进行测试
-    # cfg['test'] = True
-    # # cfg['model_path'] = 'weights/best_clip_Glasses_5882.pth' # 测试模型权重路径
-    # cfg['model_path'] = 'weights/best_clip_Glasses.pth' # 测试模型权重路径
+    # 测试模型
+    cfg['test_raw_clip'] = False, # 是否使用原始的CLIP模型进行测试
+    cfg['test'] = True
+    # cfg['model_path'] = 'weights/best_clip_Glasses_5882.pth' # 测试模型权重路径
+    cfg['model_path'] = 'weights/best_clip_Glasses.pth' # 测试模型权重路径
     
-    # # Retrieval
-    # test_retrieval_dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
-    # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'])
-    # if cfg['test_raw_clip'] is True:
-    #     evaluate_model_retrieval_withGTNeg(None, test_retrieval_dataloader, test_raw_clip=True, with_gt_neg=False)
-    # else:
-    #     model = Glasses.load_model(cfg)
-    #     evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=True) # 使用GT的h_neg
-    #     # evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=False)
+    # Retrieval
+    test_retrieval_dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
+    test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'])
+    if cfg['test_raw_clip'] is True:
+        evaluate_model_retrieval_withGTNeg(None, test_retrieval_dataloader, test_raw_clip=True, with_gt_neg=False)
+    else:
+        model = Glasses.load_model(cfg)
+        evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=True) # 使用GT的h_neg
+        # evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=False)
         
     # test_retrieval_dataset = RetrievalDataset(cfg['Retrieval']['test_dataset_path'])
     # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'], collate_fn=retrieval_collate_fn)
@@ -431,11 +419,23 @@ if __name__ == "__main__":
     #     model = Glasses.load_model(cfg)
     #     evaluate_model_retrieval(model, test_retrieval_dataloader, test_raw_clip=False)
         
-    # # MCQ    
-    # test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
-    # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
-    # if cfg['test_raw_clip'] is True:
-    #     evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
-    # else:
-    #     model = Glasses.load_model(cfg)
-    #     evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)
+    # MCQ    
+    test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
+    test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
+    if cfg['test_raw_clip'] is True:
+        evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
+    else:
+        model = Glasses.load_model(cfg)
+        evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)
+    
+    
+    
+    print("==============配置项===============")
+    for k, v in cfg.items():
+        if isinstance(v, dict):
+            print(f"{k}:")
+            for k1, v1 in v.items():
+                print(f"  {k1}: {v1}")
+        else:
+            print(f"{k}: {v}")
+    print("===================================")

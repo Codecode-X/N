@@ -18,156 +18,107 @@ from GlassesDataset import GlassesDataset
 from torch.utils.data import DataLoader
 
 class CLIPGlassesFrame(nn.Module):
-    def __init__(self, cfg, embed_dim=512, hidden_dim=2048):
+    def __init__(self, cfg, embed_dim=512, hidden_dim=1024):
         super().__init__()
         self.cfg = cfg
         self.lambda_0 = cfg['lambda_0']
         self.register_buffer('logit_scale', Clip_model.logit_scale.detach())
         
-        # 深度跨模态交互模块（3层Transformer）
-        self.cross_transformer = nn.TransformerEncoder(
-            encoder_layer=nn.TransformerEncoderLayer(
-                d_model=embed_dim,
-                nhead=8,
-                dim_feedforward=hidden_dim,
-                dropout=0.3,
-                activation='gelu',
-                batch_first=True
-            ),
-            num_layers=3
+        # 跨模态交互模块
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=8,
+            # dropout=0.5, # 1.8826
+            dropout=0.7, # 1.8698
+            # dropout=0.8, # 1.8905
+            # dropout=0.9, # 1.9377
+            batch_first=True
         )
         
-        # 多模态特征融合网络（带门控残差连接）
+        # 增强的特征融合网络
         self.feature_fusion = nn.Sequential(
-            *[ResidualBlock(embed_dim*3, hidden_dim) for _ in range(2)],
-            nn.Linear(embed_dim*3, embed_dim),  # 新增维度压缩层
+            nn.Linear(embed_dim*3, hidden_dim),
+            nn.GELU(),
+            # nn.Dropout(0.5), # 1.8826
+            nn.Dropout(0.7), # 1.8698
+            # nn.Dropout(0.8), # 1.8905
+            # nn.Dropout(0.9), # 1.9377
+            nn.LayerNorm(hidden_dim),
+            nn.Linear(hidden_dim, embed_dim),
             nn.LayerNorm(embed_dim)
         )
         
-        # 动态lambda生成器（交叉注意力机制）
+        # 动态lambda生成器（双通道结构）
         self.lambda_generator = nn.ModuleDict({
-            'cross_attn': nn.MultiheadAttention(
-                embed_dim=embed_dim,
-                num_heads=4,
-                dropout=0.2,
-                batch_first=True
-            ),
-            'gate_controller': nn.Sequential(
-                nn.Linear(2*embed_dim, 1),
-                nn.Sigmoid()
-            )
+            'semantic_branch': nn.Sequential(
+                nn.Linear(embed_dim*2, hidden_dim),
+                nn.GELU(),
+                nn.LayerNorm(hidden_dim)),
+            'syntactic_branch': nn.Sequential(
+                nn.Linear(embed_dim*2, hidden_dim//2),
+                nn.GELU(),
+                nn.LayerNorm(hidden_dim//2)),
+            'fusion': nn.Sequential(
+                nn.Linear(hidden_dim + hidden_dim//2, 1),
+                nn.Sigmoid())
         })
         
-        # 自适应残差系数
-        self.alpha = nn.Parameter(torch.ones(2)*0.1)  # 多阶段残差
+        # 残差连接参数
+        self.alpha = nn.Parameter(torch.tensor(0.1))
         
-        # 初始化适配
+        # 初始化
         self._init_weights()
-
+        
     def _init_weights(self):
-        # Transformer初始化
-        for p in self.cross_transformer.parameters():
-            if p.dim() > 1:
-                nn.init.xavier_uniform_(p)
+        # 跨模态注意力初始化
+        nn.init.xavier_uniform_(self.cross_attn.in_proj_weight)
+        nn.init.constant_(self.cross_attn.out_proj.bias, 0.0)
         
         # 特征融合网络初始化
-        for module in self.feature_fusion:
-            if isinstance(module, ResidualBlock):
-                nn.init.kaiming_normal_(module.fc1.weight, mode='fan_in')
-                nn.init.zeros_(module.fc2.weight)
-                nn.init.xavier_normal_(module.gate.weight)
-            elif isinstance(module, nn.Linear):
-                nn.init.kaiming_normal_(module.weight, mode='fan_in')
-                if module.bias is not None:
-                    nn.init.zeros_(module.bias)
+        nn.init.kaiming_normal_(self.feature_fusion[0].weight, mode='fan_in')
+        nn.init.zeros_(self.feature_fusion[-2].weight)
 
     def forward(self, I, h, h_neg):
+        """
+        参数:
+            - I: 图像特征 [N_imgs, embed_dim]
+            - h: CLIP文本编码器最后一层的输出文本特征(EOS特征) [N_caps=N_imgs, embed_dim]
+            - h_neg: 被否定对象的文本特征 [N_caps=N_imgs, embed_dim]
+        返回:
+            - scores: CLIPGlassesFrame 计算得到的 文本->图像 匹配得分 [N_imgs, N_caps=N_imgs]
+        """
         # 特征归一化
-        I_norm = F.normalize(I, p=2, dim=-1)
-        h_norm = F.normalize(h, p=2, dim=-1)
-        h_neg_norm = F.normalize(h_neg, p=2, dim=-1)
+        I_norm = F.normalize(I, p=2, dim=-1) # [N_imgs, embed_dim]
+        h_norm = F.normalize(h, p=2, dim=-1) # [N_imgs, embed_dim]
+        h_neg_norm = F.normalize(h_neg, p=2, dim=-1) # [N_imgs, embed_dim]
         
-        # 深度跨模态交互
-        cross_features = self.cross_transformer(
-            torch.cat([h_norm.unsqueeze(1), I_norm.unsqueeze(1)], dim=1)
+        # 跨模态注意力交互
+        attn_output, _ = self.cross_attn(
+            query=h_norm.unsqueeze(1),
+            key=I_norm.unsqueeze(1),
+            value=I_norm.unsqueeze(1)
         )
-        h_attn = self.alpha[0]*h_norm + cross_features[:,0]
+        h_attn = h_norm + self.alpha * attn_output.squeeze(1)
         
-        # 多模态特征融合
+        # 多层次特征融合
         fused_feature = self.feature_fusion(
-            torch.cat([
-                h_attn, 
-                h_neg_norm, 
-                h_attn * h_neg_norm  # 新增交互特征
-            ], dim=-1)
+            torch.cat([h_attn, h_neg_norm, h_attn-h_neg_norm], dim=-1)
         )
         
-        # 动态lambda生成（交叉注意力机制）
-        attn_output, _ = self.lambda_generator['cross_attn'](
-            query=h_attn.unsqueeze(1),
-            key=h_neg_norm.unsqueeze(1),
-            value=h_neg_norm.unsqueeze(1)
-        )
-        gate_input = torch.cat([h_attn, attn_output.squeeze(1)], dim=-1)
-        lambda_base = self.lambda_generator['gate_controller'](gate_input)
+        # 双通道lambda生成
+        semantic_feat = self.lambda_generator['semantic_branch'](torch.cat([fused_feature, h_neg_norm], dim=-1))
+        syntactic_feat = self.lambda_generator['syntactic_branch'](torch.cat([h_norm, h_neg_norm], dim=-1))
+        lambda_base = self.lambda_generator['fusion'](torch.cat([semantic_feat, syntactic_feat], dim=-1))
         lambda_dynamic = self.lambda_0 * lambda_base
         
-        # 保持CLIP基础能力的自适应匹配
+        # 文本->图像匹配得分
         with torch.amp.autocast('cuda', enabled=True):
             logit_scale = self.logit_scale.exp()
-            scores_base = logit_scale * (h_norm @ I_norm.t()) # 原CLIP预测的h和I的匹配分数
-            
-            # 新增增强匹配路径
-            enhanced_feature = self.alpha[0]*h_norm + self.alpha[1]*fused_feature
-            scores_enhanced = logit_scale * (enhanced_feature @ I_norm.t())
-            
-            # 否定感知调整
             scores_N2I = logit_scale * (h_neg_norm @ I_norm.t())
-            scores = scores_enhanced - lambda_dynamic * scores_N2I
+            scores_H2I = logit_scale * (h_norm @ I_norm.t())
+            scores = scores_H2I - lambda_dynamic * scores_N2I # [N_imgs, N_caps]
             
-            # 残差连接保持基础能力
-            scores = scores + scores_base.detach()  # scores_base.detach() 防止梯度回传到原始CLIP模型
-        
         return scores.float()
-    
-    @staticmethod
-    def load_model(cfg):
-        """
-        Load the trained CLIPGlassesFrame model from a checkpoint
-        
-        参数:
-            - cfg: 配置参数
-            - model_path: 模型路径
-            
-        返回:
-            - model: 加载的模型
-        """
-        model = CLIPGlassesFrame(cfg)
-        if 'model_path' in cfg.keys() and cfg['model_path'] is not None:
-            print(f"正在加载 CLIPGlassesFrame 模型权重: {cfg['model_path']}")
-            model.load_state_dict(torch.load(cfg['model_path'], weights_only=False))
-        model = model.to(cfg['device'])
-        model.eval()
-        return model
-
-class ResidualBlock(nn.Module):
-    def __init__(self, input_dim, hidden_dim):
-        super().__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, input_dim)
-        self.gate = nn.Linear(input_dim, 1)
-        self.layer_norm = nn.LayerNorm(input_dim)
-        
-    def forward(self, x):
-        residual = x
-        x = F.gelu(self.fc1(x))
-        x = F.dropout(x, p=0.3, training=self.training)
-        x = self.fc2(x)
-        
-        # 门控残差连接
-        gate = torch.sigmoid(self.gate(residual))
-        return self.layer_norm(gate * x + (1 - gate) * residual)
-    
     
     def calc_losses(self, scores, I, l_pos, img_ids, h=None):
         """

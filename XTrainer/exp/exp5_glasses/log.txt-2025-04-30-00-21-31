@@ -1,0 +1,200 @@
+Loading preprocessed features from cache: LensDataset_cache.pt...
+Loaded 25004 samples from cache
+>>> train_rate, val_rate, test_rate: 0.9, 0.1, 0.0
+N_imgs: 2030, N_caps: 2501
+使用GT neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 4.96%
+  Recall@5: 13.35%
+  Recall@10: 19.35%
+
+Image→Text Retrieval:
+  Recall@1: 3.74%
+  Recall@5: 11.48%
+  Recall@10: 17.24%
+
+Mean Retrieval:
+  Recall@1: 4.35%
+  Recall@5: 12.42%
+  Recall@10: 18.30%
+Ep1/30  Loss: 1.6013 contrastive_loss: 1.6013
+N_imgs: 2030, N_caps: 2501
+使用GT neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 34.39%
+  Recall@5: 63.61%
+  Recall@10: 75.77%
+
+Image→Text Retrieval:
+  Recall@1: 47.44%
+  Recall@5: 74.88%
+  Recall@10: 84.88%
+
+Mean Retrieval:
+  Recall@1: 40.91%
+  Recall@5: 69.25%
+  Recall@10: 80.32%
+Best model saved at epoch 0 with recall@5: 69.24570073448453
+Training completed. Best validation recall5: 69.2457
+Ep2/30  Loss: 0.4038 contrastive_loss: 0.4038
+N_imgs: 2030, N_caps: 2501
+使用GT neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 62.26%
+  Recall@5: 88.36%
+  Recall@10: 94.72%
+
+Image→Text Retrieval:
+  Recall@1: 68.87%
+  Recall@5: 90.05%
+  Recall@10: 95.37%
+
+Mean Retrieval:
+  Recall@1: 65.56%
+  Recall@5: 89.21%
+  Recall@10: 95.05%
+Best model saved at epoch 1 with recall@5: 89.20695761104426
+Training completed. Best validation recall5: 89.2070
+Ep3/30  Loss: 0.2225 contrastive_loss: 0.2225
+N_imgs: 2030, N_caps: 2501
+使用GT neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 76.85%
+  Recall@5: 95.32%
+  Recall@10: 98.32%
+
+Image→Text Retrieval:
+  Recall@1: 79.41%
+  Recall@5: 96.21%
+  Recall@10: 98.67%
+
+Mean Retrieval:
+  Recall@1: 78.13%
+  Recall@5: 95.76%
+  Recall@10: 98.50%
+Best model saved at epoch 2 with recall@5: 95.76438390161178
+Training completed. Best validation recall5: 95.7644
+Ep4/30  Loss: 0.1436 contrastive_loss: 0.1436
+N_imgs: 2030, N_caps: 2501
+使用GT neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 82.37%
+  Recall@5: 98.12%
+  Recall@10: 99.64%
+
+Image→Text Retrieval:
+  Recall@1: 84.93%
+  Recall@5: 98.03%
+  Recall@10: 99.46%
+
+Mean Retrieval:
+  Recall@1: 83.65%
+  Recall@5: 98.08%
+  Recall@10: 99.55%
+Best model saved at epoch 3 with recall@5: 98.0751541747833
+Training completed. Best validation recall5: 98.0752
+Ep5/30  Loss: 0.0977 contrastive_loss: 0.0977
+N_imgs: 2030, N_caps: 2501
+使用GT neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 87.84%
+  Recall@5: 99.32%
+  Recall@10: 99.92%
+
+Image→Text Retrieval:
+  Recall@1: 89.90%
+  Recall@5: 99.06%
+  Recall@10: 99.61%
+
+Mean Retrieval:
+  Recall@1: 88.87%
+  Recall@5: 99.19%
+  Recall@10: 99.76%
+Best model saved at epoch 4 with recall@5: 99.19215565005526
+Training completed. Best validation recall5: 99.1922
+Ep6/30  Loss: nan contrastive_loss: nan
+N_imgs: 2030, N_caps: 2501
+使用GT neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 0.04%
+  Recall@5: 0.24%
+  Recall@10: 0.52%
+
+Image→Text Retrieval:
+  Recall@1: 0.05%
+  Recall@5: 0.25%
+  Recall@10: 0.49%
+
+Mean Retrieval:
+  Recall@1: 0.04%
+  Recall@5: 0.24%
+  Recall@10: 0.51%
+💔recall5 drop from 99.1922 to 0.2431, cur patience_counter add to 1
+Training completed. Best validation recall5: 99.1922
+Ep7/30  Loss: nan contrastive_loss: nan
+N_imgs: 2030, N_caps: 2501
+使用GT neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 0.04%
+  Recall@5: 0.24%
+  Recall@10: 0.52%
+
+Image→Text Retrieval:
+  Recall@1: 0.05%
+  Recall@5: 0.25%
+  Recall@10: 0.49%
+
+Mean Retrieval:
+  Recall@1: 0.04%
+  Recall@5: 0.24%
+  Recall@10: 0.51%
+💔recall5 drop from 99.1922 to 0.2431, cur patience_counter add to 2
+Training completed. Best validation recall5: 99.1922
+Ep8/30  Loss: nan contrastive_loss: nan
+N_imgs: 2030, N_caps: 2501
+使用GT neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 0.04%
+  Recall@5: 0.24%
+  Recall@10: 0.52%
+
+Image→Text Retrieval:
+  Recall@1: 0.05%
+  Recall@5: 0.25%
+  Recall@10: 0.49%
+
+Mean Retrieval:
+  Recall@1: 0.04%
+  Recall@5: 0.24%
+  Recall@10: 0.51%
+💔recall5 drop from 99.1922 to 0.2431, cur patience_counter add to 3
+Training completed. Best validation recall5: 99.1922
+Ep9/30  Loss: nan contrastive_loss: nan
+N_imgs: 2030, N_caps: 2501
+使用GT neg_obj作为被否定对象的文本特征:
+
+Text→Image Retrieval:
+  Recall@1: 0.04%
+  Recall@5: 0.24%
+  Recall@10: 0.52%
+
+Image→Text Retrieval:
+  Recall@1: 0.05%
+  Recall@5: 0.25%
+  Recall@10: 0.49%
+
+Mean Retrieval:
+  Recall@1: 0.04%
+  Recall@5: 0.24%
+  Recall@10: 0.51%
+💔recall5 drop from 99.1922 to 0.2431, cur patience_counter add to 4
+Training completed. Best validation recall5: 99.1922
