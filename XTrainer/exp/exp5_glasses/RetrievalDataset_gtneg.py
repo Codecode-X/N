@@ -165,7 +165,7 @@ def evaluate_model_retrieval_withGTNeg(model, data_loader, test_raw_clip=False, 
         l_neg = torch.stack(all_neg_feats, dim=0).to(device) # [N_caps, D]
         level_h = torch.stack(all_level_text_feats, dim=0).to(device) # [N_caps, L, D]
       
-        # ----TEST: 直接使用原始的clip输出计算-----
+        # ----TEST: 直接使用原始的clip输出计算----- 55.84%
         if test_raw_clip:
             print("直接使用原始的clip输出计算:")
             I_norm = F.normalize(I_rep, p=2, dim=-1)
@@ -177,10 +177,14 @@ def evaluate_model_retrieval_withGTNeg(model, data_loader, test_raw_clip=False, 
         else: # 使用当前模型
             model.eval()
             if with_gt_neg:
-                scores_T2I, scores_I2T = model(I_rep, h, level_h, l_neg) # 使用gt
+                print("使用GT neg_obj作为被否定对象的文本特征:")
+                scores_T2I, scores_I2T = model(I_rep, h, level_h, l_neg) # 使用gt 57.74%
             else:
-                # scores_T2I, scores_I2T = model(I_rep, h, level_h) # 使用lens预测h_neg
-                scores_T2I, scores_I2T = model(I_rep, h, level_h, torch.zeros_like(l_neg)) # 使用zero
+                print("使用Lens预测的neg_obj作为被否定对象的文本特征:")
+                scores_T2I, scores_I2T = model(I_rep, h, level_h) # 使用lens预测h_neg 58.77%
+                # zeor_neg = torch.zeros_like(l_neg)
+                # print(f"使用全0向量作为被否定对象的文本特征: ", zeor_neg)
+                # scores_T2I, scores_I2T = model(I_rep, h, level_h, zeor_neg) # 使用zero # 55.86%
         
         # 将 scores_T2I 根据 caption_to_img 从 [N_caps, N_imgs] 还原为 [N_caps, N_imgs]
         cti = torch.tensor(caption_to_img, dtype=torch.long, device=device)  # [N_caps]

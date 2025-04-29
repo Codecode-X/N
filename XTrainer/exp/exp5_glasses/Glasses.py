@@ -40,8 +40,10 @@ class Glasses(nn.Module):
             - scores_I2T: 图像->文本的分数 [N_imgs=B, N_caps]
         """
         if l_neg is None:
+            print(">> Glasses: l_neg is None, 使用 lens 预测得到的 h_neg")
             h_neg = self.lens(h, level_h_list)
         else:
+            print(">> Glasses: 直接使用 GT 的 h_neg")
             h_neg = l_neg # 测试直接使用GT的h_neg
         assert I.size(0) == h_neg.size(0) == h.size(0), f"frame要求图片应该和文本一对一对应"
         scores_T2I = self.frame(I, h, h_neg)
@@ -150,7 +152,6 @@ def train_Retrieval(cfg, model):
             I = torch.stack(all_image_feats, dim=0).to(device)  # [N_imgs, D]
             h = torch.stack(all_text_feats, dim=0).to(device)  # [N_caps, D]
             level_h = torch.stack(all_level_text_feats, dim=0).to(device) # [N_caps, L, D]
-            N_imgs, N_caps = I.size(0), h.size(0)
             
             # 构造一对一的 I_rep，使其和 h/level_h 在 batch 维度上对齐
             idx = torch.tensor(caption_to_img, dtype=torch.long, device=device) # [N_caps]
@@ -215,6 +216,121 @@ def train_Retrieval(cfg, model):
     
     return model
 
+
+def train_Retrieval_with_gtneg(cfg, model:Glasses, with_gt_neg=True):   
+    """
+    训练Glasses模型 | 代理任务: Retrieval with gtneg
+    
+    参数:
+        - cfg: 配置文件
+    """
+    # 读取配置
+    device = cfg['device']
+    epochs = cfg['epochs']
+    batch_size = cfg['batch_size']
+    early_stop_patience = cfg['early_stop_patience'] # Early stopping patience
+    lr = cfg['lr']
+    num_workers = cfg['num_workers']
+    train_rate, val_rate, test_rate = cfg['RetrievalWithGtNeg']['split']
+
+    # 创建数据集和数据加载器
+    dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
+    print(f">>> train_rate, val_rate, test_rate: {train_rate}, {val_rate}, {test_rate}")
+    train_size = int(len(dataset) * train_rate)
+    val_size = len(dataset) - train_size
+    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+
+    # 优化器
+    optimizer = optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.98))
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    
+    # 训练前测试
+    evaluate_model_retrieval_withGTNeg(model, val_loader, test_raw_clip=False, with_gt_neg=with_gt_neg)
+    
+    # Training loop
+    best_recall5 = 0
+    patience_counter = 0
+    for epoch in range(epochs):
+        
+        model.train()
+        epoch_loss = 0
+        losses = {'contrastive_loss': 0}
+              
+        # 遍历每一个batch
+        for batch in tqdm(train_loader, desc=f"Epoch{epoch+1}/{epochs}"):
+            h = batch['h'].to(device) # CLIP文本编码器最后一层的输出文本特征(EOS特征) [batch_size, embed_dim]
+            level_h = batch['level_h_list'].to(device) # [batch_size, num_layers, embed_dim] CLIP文本编码器每一层的EOS特征
+            l_pos = batch['l_pos'].to(device) # 肯定文本特征 [batch_size, embed_dim]
+            l_neg = batch['neg_obj'].to(device) # 被否定对象的文本特征 [batch_size, embed_dim]
+            I = batch['I'].to(device) # 图像特征 [batch_size, embed_dim]
+            image_ids = batch['img_id'].to(device) # 图像ID [batch_size]
+            
+            unique_img_ids, remapped_ids = torch.unique(image_ids, sorted=True, return_inverse=True)
+            caption_to_img = remapped_ids.cpu().numpy()
+            
+            # Forward pass
+            if with_gt_neg is True:
+                scores_T2I, scores_I2T = model(I, h, level_h, l_neg) # 使用GT的h_neg
+            else:
+                scores_T2I, scores_I2T = model(I, h, level_h) # 使用lens预测的h_neg
+            
+            # 将 scores_T2I 根据 caption_to_img 从 [N_caps, N_imgs] 还原为 [N_caps, N_imgs]
+            cti = torch.tensor(caption_to_img, dtype=torch.long, device=device)  # [N_caps]
+            unique_vals = torch.unique(cti, sorted=True)
+            first_idx = []
+            for val in unique_vals:
+                idx = (cti == val).nonzero(as_tuple=True)[0][0]
+                first_idx.append(idx)
+            first_idx = torch.stack(first_idx, dim=0)  # [N_imgs]
+            scores_T2I = scores_T2I[:, first_idx]  # [N_caps, N_imgs]
+            scores_I2T = scores_T2I.t()
+            
+            # Compute loss
+            loss, loss_dict = model.calc_losses(scores_T2I, scores_I2T, caption_to_img)
+            epoch_loss += loss.item()
+            losses['contrastive_loss'] += loss_dict['contrastive_loss']
+            
+            # Backward pass and optimization
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        
+        batch_count = len(train_loader)
+        print(f"Ep{epoch+1}/{epochs}  Loss: {epoch_loss/batch_count:.4f} contrastive_loss: {losses['contrastive_loss']/batch_count:.4f}")
+        scheduler.step()    
+        
+        # validation
+        val_recall5 = evaluate_model_retrieval_withGTNeg(model, val_loader, test_raw_clip=False, with_gt_neg=with_gt_neg)['mean'][5] # mean-recall@5 
+        
+        # Save best model
+        if val_recall5 > best_recall5:
+            best_recall5 = val_recall5
+            patience_counter = 0
+            torch.save(model.state_dict(), os.path.join(current_dir, cfg['save_path']))
+            print(f"Best model saved at epoch {epoch} with recall@5: {best_recall5}")
+        else: # 早停
+            patience_counter += 1 # 增加耐心计数器
+            print(f"💔recall5 drop from {best_recall5:.4f} to {val_recall5:.4f}, cur patience_counter add to {patience_counter}")
+            if early_stop_patience > 0 and patience_counter >= early_stop_patience:
+                print(f"Early stopping after {epoch+1} epochs")
+                break    
+        # Save checkpoint
+        if epoch % 5 == 0 or epoch == epochs - 1:
+            checkpoint = {
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'loss': epoch_loss,
+                'recall5': val_recall5
+            }
+            torch.save(checkpoint, os.path.join(current_dir, f"checkpoint_epoch_{epoch}.pth"))
+        
+        print(f"Training completed. Best validation recall5: {best_recall5:.4f}")
+    
+    return model
 
 if __name__ == "__main__":
     # Example usagerue
@@ -288,22 +404,24 @@ if __name__ == "__main__":
 
     # 训练模型
     model = Glasses.load_model(cfg)
-    model = train_Retrieval(cfg, model)
+    # model = train_Retrieval(cfg, model) # 训练Glasses模型 | 代理任务: Retrieval with Lens pred
+    model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=True) # 训练Glasses模型 | 代理任务: Retrieval with gtneg
     
     # # 测试模型
     # cfg['test_raw_clip'] = False, # 是否使用原始的CLIP模型进行测试
     # cfg['test'] = True
-    # cfg['model_path'] = 'weights/best_clip_Glasses_5882.pth' # 测试模型权重路径
-    # # cfg['model_path'] = 'weights/best_clip_Glasses.pth' # 测试模型权重路径
+    # # cfg['model_path'] = 'weights/best_clip_Glasses_5882.pth' # 测试模型权重路径
+    # cfg['model_path'] = 'weights/best_clip_Glasses.pth' # 测试模型权重路径
     
     # # Retrieval
     # test_retrieval_dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
     # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'])
     # if cfg['test_raw_clip'] is True:
-    #     evaluate_model_retrieval_withGTNeg(None, test_retrieval_dataloader, test_raw_clip=True)
+    #     evaluate_model_retrieval_withGTNeg(None, test_retrieval_dataloader, test_raw_clip=True, with_gt_neg=False)
     # else:
     #     model = Glasses.load_model(cfg)
-    #     evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False)
+    #     evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=True) # 使用GT的h_neg
+    #     # evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=False)
         
     # test_retrieval_dataset = RetrievalDataset(cfg['Retrieval']['test_dataset_path'])
     # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'], collate_fn=retrieval_collate_fn)
