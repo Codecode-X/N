@@ -11,6 +11,7 @@ set_random_seed(3407)  # 设置随机种子
 from Lens import CLIPGlassesLens
 from Frame import CLIPGlassesFrame
 from McqDataset import McqDataset, evaluate_model_mcq
+from RetrievalDataset_gtneg import RetrievalNegGtDataset, evaluate_model_retrieval_withGTNeg
 from RetrievalDataset import RetrievalDataset, evaluate_model_retrieval, retrieval_collate_fn
 import torch.nn as nn
 import torch
@@ -26,18 +27,22 @@ class Glasses(nn.Module):
         self.device = cfg['device']
         self.lens = CLIPGlassesLens.load_model(cfg['Lens'])
         self.frame = CLIPGlassesFrame.load_model(cfg['Frame'])
-        
-    def forward(self, I, h, level_h_list):
+    
+    def forward(self, I, h, level_h_list, l_neg=None):
         """
         参数:
             - I: 图像特征 [N_imgs=B, D]
             - h: 最后一层特征 [N_caps=B*num_options, D]
             - level_h_list: 各层特征列表 [N_caps=B*num_options, L, D]
+            - l_neg: 被否定对象的文本特征 [N_caps=B*num_options, D] | 当为None时，使用lens预测
         返回:
             - scores_T2I: 文本->图像的分数 [N_caps, N_imgs=B]
             - scores_I2T: 图像->文本的分数 [N_imgs=B, N_caps]
         """
-        h_neg = self.lens(h, level_h_list)
+        if l_neg is None:
+            h_neg = self.lens(h, level_h_list)
+        else:
+            h_neg = l_neg # 测试直接使用GT的h_neg
         assert I.size(0) == h_neg.size(0) == h.size(0), f"frame要求图片应该和文本一对一对应"
         scores_T2I = self.frame(I, h, h_neg)
         scores_I2T = scores_T2I.T
@@ -120,11 +125,18 @@ def train_Retrieval(cfg, model):
         losses = {'contrastive_loss': 0}
         
         # 遍历每一个batch
-        for image_feats, caption_feats, level_H_list, image_ids in tqdm(train_loader, desc="Extract feats"):
-            
+        for batch in tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}"):
+            caption_feats = batch['h'].to(device) # CLIP文本编码器最后一层的输出文本特征(EOS特征) [batch_size, embed_dim]
+            level_H_list = batch['level_h_list'].to(device) # [batch_size, num_layers, embed_dim] CLIP文本编码器每一层的EOS特征
+            l_pos = batch['l_pos'].to(device) # 肯定文本特征 [batch_size, embed_dim]
+            l_neg = batch['neg_obj'].to(device) # 被否定对象的文本特征 [batch_size, embed_dim]
+            image_feats = batch['I'].to(device) # 图像特征 [batch_size, embed_dim]
+            image_ids = batch['img_id'].to(device) # 图像ID [batch_size]
+                
             # prepare data
             all_image_feats = []
             all_text_feats  = [] # 原始CLIP最终输出的文本特征
+            all_neg_feats = [] # 被否定对象的文本特征
             all_level_text_feats = [] # 原始CLIP每一层输出的文本特征列表
             caption_to_img  = [] # 记录 caption 属于哪张图
             
@@ -135,15 +147,18 @@ def train_Retrieval(cfg, model):
                 img_idx = len(all_image_feats)-1 # 这张图在 list 中的新索引
                 # 把这张图的每条 caption 都收集起来，并记录它们对应 img_idx
                 caps_b = caption_feats[batch_idx] # [num_caps_i, D]
+                neg_b = l_neg[batch_idx] # [num_caps_i, D]
                 levels_b = level_H_list[batch_idx] # [num_caps_i, L, D]
                 for cap_f, lvl_f in zip(caps_b, levels_b):
                     all_text_feats.append(cap_f.cpu())  # [D]
+                    all_neg_feats.append(neg_b.cpu()) # [D]
                     all_level_text_feats.append(lvl_f.cpu()) # [L, D]
                     caption_to_img.append(img_idx) # 记录 caption 属于哪张图
             
             # Stack 成大 tensor
             I = torch.stack(all_image_feats, dim=0).to(device)  # [N_imgs, D]
             h = torch.stack(all_text_feats, dim=0).to(device)  # [N_caps, D]
+            l_neg = torch.stack(all_neg_feats, dim=0).to(device) # [N_caps, D]
             level_h = torch.stack(all_level_text_feats, dim=0).to(device) # [N_caps, L, D]
             N_imgs, N_caps = I.size(0), h.size(0)
             
@@ -152,7 +167,7 @@ def train_Retrieval(cfg, model):
             I_rep = I[idx]  # [N_caps, D]
             
             # Forward pass
-            scores_T2I, scores_I2T = model(I_rep, h, level_h)
+            scores_T2I, scores_I2T = model(I_rep, h, level_h, l_neg)
             
             # 将 scores_T2I 根据 caption_to_img 从 [N_caps, N_imgs] 还原为 [N_caps, N_imgs]
             cti = torch.tensor(caption_to_img, dtype=torch.long, device=device)  # [N_caps]
@@ -190,7 +205,7 @@ def train_Retrieval(cfg, model):
             print(f"Best model saved at epoch {epoch} with recall@5: {best_recall5}")
         else: # 早停
             patience_counter += 1 # 增加耐心计数器
-            print(f"💔recall5 improve from {best_recall5:.4f} to {val_recall5:.4f}, cur patience_counter add to {patience_counter}")
+            print(f"💔recall5 drop from {best_recall5:.4f} to {val_recall5:.4f}, cur patience_counter add to {patience_counter}")
             if early_stop_patience > 0 and patience_counter >= early_stop_patience:
                 print(f"Early stopping after {epoch+1} epochs")
                 break    
@@ -206,7 +221,7 @@ def train_Retrieval(cfg, model):
             }
             torch.save(checkpoint, os.path.join(current_dir, f"checkpoint_epoch_{epoch}.pth"))
         
-        print(f"Training completed. Best validation loss: {best_recall5:.4f}")
+        print(f"Training completed. Best validation recall5: {best_recall5:.4f}")
     
     return model
         
@@ -217,8 +232,9 @@ if __name__ == "__main__":
         'epochs': 30,
         'batch_size': 64,
         # 'lr': 5e-3, # 57.47%
-        # 'lr': 1e-3, # r@5: 57.73%
-        'lr': 1e-4, # r@5: 58.82%
+        'lr': 1e-3, # r@5: 57.73%
+        # 'lr': 1e-4, # r@5: 58.82%
+        # 'lr': 10, # r@5: 57.91% - 36.37%
         # 'lr': 1e-5, # r@5: 57.33
         'num_workers': 4,
         'early_stop_patience': 10, # Early stopping patience
@@ -228,19 +244,18 @@ if __name__ == "__main__":
         'pretrain': False, # 是否使用预训练Glasses
         
         # -----模型参数-----
-        'test_raw_clip': False, # 是否使用原始的CLIP模型进行测试
         'Lens': {
             'device': 'cuda',
             'dtype': torch.float32,
             'num_heads': 4,
             'dropout': 0.1,
-            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9832_0027.pth' # Lens的预训练权重
+            # 'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9832_0027.pth' # Lens的预训练权重
         },
         'Frame': {
             'device': 'cuda',
             'dtype': torch.float32,
             'lambda_0': 0.1, # 基础惩罚强度
-            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_Frame_mse_v1869.pth' # Frame的预训练权重
+            # 'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_Frame_mse_v1869.pth' # Frame的预训练权重
             # 'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/best_clip_Frame.pth' # Frame的预训练权重
         },
 
@@ -260,6 +275,14 @@ if __name__ == "__main__":
             'train_dataset_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv',
             'test_dataset_path': '/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv',
         },
+        'RetrievalWithGtNeg': { # h_neg直接作为GT给出，只训练和测试Frame
+            'batch_size': 64,
+            'num_workers': 4, 
+            'split': [0.9, 0.1, 0.0],  # train, val, test split
+            'pos_csv_path': "/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_retrieval.csv",
+            'negpos_csv_path': "/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv",
+            'dtype': torch.float32, 
+        }
     }
     print("==============配置项===============")
     for k, v in cfg.items():
@@ -277,10 +300,20 @@ if __name__ == "__main__":
     # model = train_Retrieval(cfg, model)
     
     # 测试模型
+    cfg['test_raw_clip'] = False, # 是否使用原始的CLIP模型进行测试
     cfg['test'] = True
     cfg['model_path'] = 'weights/best_clip_Glasses_5882.pth' # 测试模型权重路径
+    # cfg['model_path'] = 'weights/best_clip_Glasses.pth' # 测试模型权重路径
     
-    # # Retrieval
+    # Retrieval
+    test_retrieval_dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
+    test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'])
+    if cfg['test_raw_clip'] is True:
+        evaluate_model_retrieval_withGTNeg(None, test_retrieval_dataloader, test_raw_clip=True)
+    else:
+        model = Glasses.load_model(cfg)
+        evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False)
+        
     # test_retrieval_dataset = RetrievalDataset(cfg['Retrieval']['test_dataset_path'])
     # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'], collate_fn=retrieval_collate_fn)
     # if cfg['test_raw_clip'] is True:
@@ -289,11 +322,11 @@ if __name__ == "__main__":
     #     model = Glasses.load_model(cfg)
     #     evaluate_model_retrieval(model, test_retrieval_dataloader, test_raw_clip=False)
         
-    # MCQ    
-    test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
-    test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
-    if cfg['test_raw_clip'] is True:
-        evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
-    else:
-        model = Glasses.load_model(cfg)
-        evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)
+    # # MCQ    
+    # test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
+    # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
+    # if cfg['test_raw_clip'] is True:
+    #     evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
+    # else:
+    #     model = Glasses.load_model(cfg)
+    #     evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)

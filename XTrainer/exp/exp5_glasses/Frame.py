@@ -184,7 +184,7 @@ class CLIPGlassesFrame(nn.Module):
             - model: 加载的模型
         """
         model = CLIPGlassesFrame(cfg)
-        if cfg['model_path'] is not None:
+        if 'model_path' in cfg.keys() and cfg['model_path'] is not None:
             print(f"正在加载 CLIPGlassesFrame 模型权重: {cfg['model_path']}")
             model.load_state_dict(torch.load(cfg['model_path'], weights_only=False))
         model = model.to(cfg['device'])
