@@ -113,7 +113,7 @@ class CLIPGlassesLens(nn.Module):
         model = CLIPGlassesLens(cfg)
         if 'model_path' in cfg.keys() and cfg['model_path'] is not None:
             print(f"正在加载 CLIPGlassesLens 模型权重: {cfg['model_path']}")
-            model.load_state_dict(torch.load(cfg['model_path'], weights_only=False))
+            model.load_state_dict(torch.load(cfg['model_path'], weights_only=True))
         model = model.to(cfg['device'])
         model.eval()
         return model

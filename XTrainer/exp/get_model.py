@@ -51,6 +51,25 @@ def extract_sentence_features(sentence:str):
         level_text_features_list = [level_text_features.cpu().numpy()[0] for level_text_features in level_text_features_list]
         return text_features, level_text_features_list # [embed_dim], [embed_dim]*num_layers
 
+def extract_all_sentence_features(sentences:list):
+    """
+    批量并行提取多个句子的CLIP文本特征
+    
+    参数：
+        - sentences: 输入句子列表(list<str>)
+        
+    返回：
+        - text_features(torch.Tensor): CLIP文本编码器的输出文本特征(EOS特征) [embed_dim]
+    """
+    with torch.no_grad():  # 关闭梯度计算
+        tokenized_texts = [tokenize(sentence) for sentence in sentences]
+        tokenized_texts = torch.cat(tokenized_texts, dim=0)
+        tokenized_texts = tokenized_texts.to(Clip_model.device)
+        text_features, _ = Clip_model.encode_text(tokenized_texts)
+        text_features = text_features.cpu().numpy()
+        return text_features
+
+
 
 def extract_objs_features(objs:list):
     """

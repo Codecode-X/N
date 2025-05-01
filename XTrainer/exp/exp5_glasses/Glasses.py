@@ -10,6 +10,7 @@ setup_logger(os.path.join(current_dir, "log.txt")) # 将输出重定向到log.tx
 set_random_seed(3407)  # 设置随机种子
 from Lens import CLIPGlassesLens
 from Frame import CLIPGlassesFrame
+from NegDetector import NegationDetector
 from McqDataset import McqDataset, evaluate_model_mcq
 from RetrievalDataset_gtneg import RetrievalNegGtDataset, evaluate_model_retrieval_withGTNeg
 from RetrievalDataset import RetrievalDataset, evaluate_model_retrieval, retrieval_collate_fn
@@ -27,6 +28,11 @@ class Glasses(nn.Module):
         self.device = cfg['device']
         self.lens = CLIPGlassesLens.load_model(cfg['Lens'])
         self.frame = CLIPGlassesFrame.load_model(cfg['Frame'])
+        self.negDetector = NegationDetector.load_model(cfg['NegationDetector']) # 轻量级否定分类器 | 1:包含否定 0:肯定
+       
+        # 冻结negDetector
+        for param in self.negDetector.parameters():
+            param.requires_grad = False
     
     def forward(self, I, h, level_h_list, l_neg=None):
         """
@@ -39,13 +45,25 @@ class Glasses(nn.Module):
             - scores_T2I: 文本->图像的分数 [N_caps, N_imgs=B]
             - scores_I2T: 图像->文本的分数 [N_imgs=B, N_caps]
         """
+        # 否定检测
+        with torch.no_grad():
+            # neg_mask = self.negDetector(h).squeeze(-1) > 1.0  # 全是肯定 R:55.86% M:36.41%
+            # neg_mask = self.negDetector(h).squeeze(-1) > 0.7  # 多肯定 R:79.86% M:33.61%
+            # neg_mask = self.negDetector(h).squeeze(-1) > 0.3  # 多否定 R:81.54% M:33.83%
+            neg_mask = self.negDetector(h).squeeze(-1) > -1.0  # 全是否定 R:82.24% M:41.66%
+        
+        # Lens        
         if l_neg is None:
             h_neg = self.lens(h, level_h_list)
         else:
             h_neg = l_neg # 测试直接使用GT的h_neg
         assert I.size(0) == h_neg.size(0) == h.size(0), f"frame要求图片应该和文本一对一对应"
-        scores_T2I = self.frame(I, h, h_neg)
+        
+        # Frame
+        # scores_T2I = self.frame(I, h, h_neg)
+        scores_T2I = self.frame(I, h, h_neg, neg_mask=neg_mask) # 增加了neg_mask
         scores_I2T = scores_T2I.T
+        
         return scores_T2I, scores_I2T
     
     def calc_losses(self, scores_T2I, scores_I2T, caption_to_img):
@@ -75,12 +93,23 @@ class Glasses(nn.Module):
             - model: 加载的模型
         """
         model = Glasses(cfg)
+        
+        # 导入NegationDetector的权重
+        print(f"正在加载 NegationDetector 模型权重: {cfg['NegationDetector']['model_path']}")
+        model.negDetector.load_state_dict(torch.load(cfg['NegationDetector']['model_path'], weights_only=True))
+        
+        # 导入Lens和Frame的权重
         if 'pretrain' in cfg.keys() and cfg['pretrain'] and cfg['model_path'] is not None:
-            print(f"训练：正在加载预训练 Glasses 模型权重: {cfg['model_path']}, 将覆盖 Lens 和 Frame 的权重")
-            model.load_state_dict(torch.load(os.path.join(current_dir, cfg['model_path']), weights_only=False))
+            print(f"训练：正在加载预训练 Glasses 模型权重: {cfg['model_path']}, 将覆盖 Lens 和 Frame 的权重，不覆盖 NegationDetector 的权重")
+            full_ckpt = torch.load(os.path.join(current_dir, cfg['model_path']), map_location='cpu')
+            filtered_ckpt = {k: v for k, v in full_ckpt.items() if not k.startswith("negDetector.")}
+            model.load_state_dict(filtered_ckpt, strict=False)
         if 'test' in cfg.keys() and cfg['test'] is True and cfg['model_path'] is not None:
-            print(f"测试：正在加载被测试 Glasses 模型权重: {cfg['model_path']}, 将覆盖 Lens 和 Frame 的权重")
-            model.load_state_dict(torch.load(os.path.join(current_dir, cfg['model_path']), weights_only=False))
+            print(f"测试：正在加载被测试 Glasses 模型权重: {cfg['model_path']}, 将覆盖 Lens 和 Frame 的权重，不覆盖 NegationDetector 的权重")
+            full_ckpt = torch.load(os.path.join(current_dir, cfg['model_path']), map_location='cpu')
+            filtered_ckpt = {k: v for k, v in full_ckpt.items() if not k.startswith("negDetector.")}
+            model.load_state_dict(filtered_ckpt, strict=False)
+        
         return model
    
 def train_Retrieval(cfg, model):   
@@ -411,7 +440,11 @@ if __name__ == "__main__":
             # 'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_Frame_mse_v1869.pth' # Frame的预训练权重
             # 'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/best_clip_Frame.pth' # Frame的预训练权重
         },
-
+        'NegationDetector': {
+            'device': 'cuda',
+            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth' # NegationDetector的预训练权重
+        },
+        
         # -----数据参数-----
         'Mcq': {
             'batch_size': 64,
@@ -419,7 +452,8 @@ if __name__ == "__main__":
             'num_options': 4,
             'split': [0.9, 0.1, 0.0],
             'train_dataset_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv',
-            'test_dataset_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv',
+            # 'test_dataset_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv', # 35.90%
+            'test_dataset_path': '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv',  # 41.66%
         },
         'Retrieval': {
             'batch_size': 64,
@@ -456,11 +490,13 @@ if __name__ == "__main__":
     # model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=False) # 二阶段: 联合lens训练Glasses模型 | 代理任务: Retrieval
     
     # 测试模型
-    cfg['test_raw_clip'] = False, # 是否使用原始的CLIP模型进行测试
+    cfg['test_raw_clip'] = False,
     cfg['test'] = True
-    cfg['model_path'] = 'weights/best_clip_Glasses_7597_8224_3590(after_joint).pth' # 测试模型权重路径
+    cfg['model_path'] = 'weights/v1/best_clip_Glasses_7597_8224_3590(after_joint).pth' # 测试模型权重路径
+    cfg['Lens']['model_path'], cfg['Frame']['model_path'] = None, None # 不覆盖joint训练后的Glasses
+    cfg['NegationDetector']['model_path'] = '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth' #
     
-    # Retrieval
+    # Retrieval with gtbeg
     test_retrieval_dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
     test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'])
     if cfg['test_raw_clip'] is True:
@@ -469,7 +505,8 @@ if __name__ == "__main__":
         model = Glasses.load_model(cfg)
         # evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=True) # 使用GT的h_neg
         evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
-        
+    
+    # # Retrieval    
     # test_retrieval_dataset = RetrievalDataset(cfg['Retrieval']['test_dataset_path'])
     # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'], collate_fn=retrieval_collate_fn)
     # if cfg['test_raw_clip'] is True:

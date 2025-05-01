@@ -57,7 +57,8 @@ class McqDataset(Dataset):
             self.captions_feats = cached_data['captions_feats']
             self.level_H = cached_data['level_H_list']
             self.labels = cached_data['labels']
-            self.types = [ANSWERTYPE_ID_MAP.get(d, -1) for d in cached_data['types']]
+            self.types = cached_data['types']
+            # self.types = [ANSWERTYPE_ID_MAP.get(d, -1) for d in cached_data['types']] # 改为在存缓存时转换
             print(f"Loaded {len(self.image_features)} samples from cache")
             return
         
@@ -88,7 +89,8 @@ class McqDataset(Dataset):
             self.captions_feats.append(row_h)
             self.level_H.append(row_level_h)
             self.labels.append(row['correct_answer'])
-            self.types.append(row['correct_answer_template'])
+            # self.types.append(row['correct_answer_template'])
+            self.types.append(ANSWERTYPE_ID_MAP.get(row['correct_answer_template'], -1))
         
         print(f"Saving features to cache: {cache_path}")
         torch.save({

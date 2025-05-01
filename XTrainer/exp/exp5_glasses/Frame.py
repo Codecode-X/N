@@ -82,7 +82,17 @@ class CLIPGlassesFrame(nn.Module):
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
 
-    def forward(self, I, h, h_neg):
+    def forward(self, I, h, h_neg, neg_mask=None):
+        """
+        参数：
+            - I: 图像特征 [batch_size, embed_dim]
+            - h: CLIP文本编码器最后一层的输出文本特征(EOS特征) [batch_size, embed_dim]
+            - h_neg: 被否定对象的文本特征 [batch_size, embed_dim]
+            - neg_mask: 是否有否定对象mask [batch_size] | 1:有否定对象 | 0: 无否定对象
+        
+        返回：
+            - scores: CLIPGlassesFrame 计算得到的 h2I 匹配得分 [N_caps, N_imgs]
+        """
         # 特征归一化
         I_norm = F.normalize(I, p=2, dim=-1)
         h_norm = F.normalize(h, p=2, dim=-1)
@@ -116,18 +126,28 @@ class CLIPGlassesFrame(nn.Module):
         # 保持CLIP基础能力的自适应匹配
         with torch.amp.autocast('cuda', enabled=True):
             logit_scale = self.logit_scale.exp()
-            scores_base = logit_scale * (h_norm @ I_norm.t()) # 原CLIP预测的h和I的匹配分数
             
-            # 新增增强匹配路径
+            # 原CLIP预测的h和I的匹配分数 
+            scores_base = logit_scale * (h_norm @ I_norm.t())
+            
+            # 增强匹配路径
             enhanced_feature = self.alpha[0]*h_norm + self.alpha[1]*fused_feature
             scores_enhanced = logit_scale * (enhanced_feature @ I_norm.t())
             
             # 否定感知调整
             scores_N2I = logit_scale * (h_neg_norm @ I_norm.t())
-            scores = scores_enhanced - lambda_dynamic * scores_N2I
+            adjusted_scores = scores_enhanced - lambda_dynamic * scores_N2I
             
-            # 残差连接保持基础能力
-            scores = scores + scores_base.detach()  # scores_base.detach() 防止梯度回传到原始CLIP模型
+            # 条件混合
+            if neg_mask is not None:
+                neg_mask = neg_mask.to(scores_base.dtype)
+                scores = torch.where(
+                    neg_mask.bool().view(-1,1),  # 将mask转换为[B,1]用于行广播
+                    adjusted_scores + scores_base.detach(),  # True时使用修正分数
+                    scores_base  # False时使用原始分数
+                )
+            else:
+                scores = adjusted_scores + scores_base.detach() # 无mask时保持原有逻辑 | scores_base.detach() 防止梯度回传到原始CLIP模型
         
         return scores.float()
     
@@ -445,7 +465,7 @@ if __name__ == "__main__":
     # 加载当前Frame模型预训练权重
     if cfg['model_path'] is not None:
         print(f"正在加载 CLIPGlassesFrame 模型权重: {cfg['model_path']}")
-        model.load_state_dict(torch.load(cfg['model_path'], weights_only=False))
+        model.load_state_dict(torch.load(cfg['model_path'], weights_only=True))
     
     # 加载冻结的预训练的Lens模型
     from Lens import CLIPGlassesLens
