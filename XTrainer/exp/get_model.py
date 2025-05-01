@@ -79,7 +79,6 @@ def extract_objs_features(objs:list):
         - objs: 对象列表(list<str>)
         
     返回：
-        # - objs_features: CLIP文本编码器的输出文本特征(EOS特征) [num_objs, embed_dim]
         - objs_features(list<torch.Tensor>: CLIP文本编码器的输出文本特征(EOS特征) [embed_dim]*num_objs
     """
     objs_features = []

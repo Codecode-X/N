@@ -14,6 +14,7 @@ from NegDetector import NegationDetector
 from McqDataset import McqDataset, evaluate_model_mcq
 from RetrievalDataset_gtneg import RetrievalNegGtDataset, evaluate_model_retrieval_withGTNeg
 from RetrievalDataset import RetrievalDataset, evaluate_model_retrieval, retrieval_collate_fn
+from CCNegDataset_gtneg import CCNegGtDataset, evaluate_model_CCNeg_etrieval_withGTNeg
 import torch.nn as nn
 import torch
 from torch.utils.data import DataLoader
@@ -469,6 +470,14 @@ if __name__ == "__main__":
             'pos_csv_path': "/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_retrieval.csv",
             'negpos_csv_path': "/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv",
             'dtype': torch.float32, 
+        },
+        'CCNegGtDataset': {
+            'batch_size': 64,
+            'num_workers': 4,
+            'split': [0.9, 0.1, 0.0],  # train, val, test split
+            'csv_path': '/root/NP-CLIP/NegBench/data/ccneg_converted.csv',
+            'dtype': torch.float32, 
+            
         }
     }
 
@@ -490,39 +499,38 @@ if __name__ == "__main__":
     # model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=False) # 二阶段: 联合lens训练Glasses模型 | 代理任务: Retrieval
     
     # 测试模型
-    cfg['test_raw_clip'] = False,
+    cfg['test_raw_clip'] = True
     cfg['test'] = True
     cfg['model_path'] = 'weights/v1/best_clip_Glasses_7597_8224_3590(after_joint).pth' # 测试模型权重路径
     cfg['Lens']['model_path'], cfg['Frame']['model_path'] = None, None # 不覆盖joint训练后的Glasses
     cfg['NegationDetector']['model_path'] = '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth' #
     
-    # Retrieval with gtbeg
-    test_retrieval_dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
-    test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'])
+    test_ccneg_dataset = CCNegGtDataset(cfg['CCNegGtDataset'])
+    test_ccneg_dataloader = torch.utils.data.DataLoader(test_ccneg_dataset, batch_size=cfg['CCNegGtDataset']['batch_size'], shuffle=False, num_workers=cfg['CCNegGtDataset']['num_workers'])
     if cfg['test_raw_clip'] is True:
-        evaluate_model_retrieval_withGTNeg(None, test_retrieval_dataloader, test_raw_clip=True, with_gt_neg=False)
+        evaluate_model_CCNeg_etrieval_withGTNeg(None, test_ccneg_dataloader, test_raw_clip=True, with_gt_neg=False)
     else:
         model = Glasses.load_model(cfg)
-        # evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=True) # 使用GT的h_neg
-        evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
+        evaluate_model_CCNeg_etrieval_withGTNeg(model, test_ccneg_dataloader, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
     
-    # # Retrieval    
-    # test_retrieval_dataset = RetrievalDataset(cfg['Retrieval']['test_dataset_path'])
-    # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'], collate_fn=retrieval_collate_fn)
+    # # Retrieval with gtbeg
+    # test_retrieval_dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
+    # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'])
     # if cfg['test_raw_clip'] is True:
-    #     evaluate_model_retrieval(None, test_retrieval_dataloader, test_raw_clip=True)
+    #     evaluate_model_retrieval_withGTNeg(None, test_retrieval_dataloader, test_raw_clip=True, with_gt_neg=False)
     # else:
     #     model = Glasses.load_model(cfg)
-    #     evaluate_model_retrieval(model, test_retrieval_dataloader, test_raw_clip=False)
+    #     # evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=True) # 使用GT的h_neg
+    #     evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
         
-    # MCQ    
-    test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
-    test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
-    if cfg['test_raw_clip'] is True:
-        evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
-    else:
-        model = Glasses.load_model(cfg)
-        evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)
+    # # MCQ    
+    # test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
+    # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
+    # if cfg['test_raw_clip'] is True:
+    #     evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
+    # else:
+    #     model = Glasses.load_model(cfg)
+    #     evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)
     
     
     

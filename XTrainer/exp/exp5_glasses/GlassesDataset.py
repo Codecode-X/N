@@ -31,8 +31,8 @@ class GlassesDataset(Dataset):
             return
         
         # Read CSV files
-        df_np = pd.read_csv(self.negpos_csv_path)[:10]
-        df_p = pd.read_csv(self.pos_csv_path)[:10]
+        df_np = pd.read_csv(self.negpos_csv_path)
+        df_p = pd.read_csv(self.pos_csv_path)
         
         # Create image_id lookup dictionaries
         np_by_id = {}

@@ -27,7 +27,7 @@ class RetrievalNegGtDataset(Dataset):
             - 如果没有则提取，并保存预处理数据文件，下次直接加载
         """
         # Create cache file path based on CSV path
-        cache_path = f"LensDataset_cache.pt"
+        cache_path = f"RetrievalNegGtDataset_cache.pt"
         # Check if cache file exists
         if os.path.exists(cache_path):
             print(f"Loading preprocessed features from cache: {cache_path}...")
@@ -36,8 +36,8 @@ class RetrievalNegGtDataset(Dataset):
             return
         
         # Read CSV files
-        df_np = pd.read_csv(self.negpos_csv_path)[:10]
-        df_p = pd.read_csv(self.pos_csv_path)[:10]
+        df_np = pd.read_csv(self.negpos_csv_path)
+        df_p = pd.read_csv(self.pos_csv_path)
         
         # Create image_id lookup dictionaries
         np_by_id = {}
