@@ -162,7 +162,26 @@ def evaluate_model_CCNeg_etrieval_withGTNeg(model, data_loader, test_raw_clip=Fa
                 # 使用模型预测的否定对象
                 _, scores_I_hp = model(I, hp, level_hp) # I2T [num_images=N, num_texts=N]
                 _, scores_I_hn = model(I, hn, level_hn) 
-                
+        
+        # 计算每个图像在全集所有正负文本中的recall@1，recall@5，recall@10
+        num_images = I.size(0)
+        # 合并所有文本特征和分数
+        scores_combined = torch.cat([scores_I_hp, scores_I_hn], dim=1) # I2T [num_images=N, num_texts=2N]
+        # 对于每个图像，其正确匹配的文本索引应该是i
+        correct_indices = torch.arange(num_images, device=device)
+        print(f"correct_indices: {correct_indices[:10]}")
+        # 计算准确率：图像i的最高分数应该是与正文本hp[i]
+        _, top_indices = scores_combined.topk(k=1, dim=1)
+        print(f"top_indices: {top_indices[:10]}")
+        global_r1 = (top_indices.squeeze() == correct_indices).float().mean().item() * 100
+        # 计算每个图像在全集所有正负文本中的recall@5，recall@10
+        _, top_indices = scores_combined.topk(k=5, dim=1)
+        print(f"top_indices: {top_indices[:10]}")
+        global_r5 = (top_indices == correct_indices.unsqueeze(1)).float().sum(dim=1).mean().item() * 100
+        _, top_indices = scores_combined.topk(k=10, dim=1)
+        print(f"top_indices: {top_indices[:10]}")
+        global_r10 = (top_indices == correct_indices.unsqueeze(1)).float().sum(dim=1).mean().item() * 100
+          
         # 计算每个图像的Sp与Sn之差的均值和预测准确率
         diag_scores_hp = torch.diag(scores_I_hp)  # [N]
         diag_scores_hn = torch.diag(scores_I_hn)  # [N]
@@ -172,10 +191,12 @@ def evaluate_model_CCNeg_etrieval_withGTNeg(model, data_loader, test_raw_clip=Fa
         accuracy = (diag_scores_hp > diag_scores_hn).float().mean().item() * 100
         # 输出结果
         print("="*50)
-        print(f"Retrieval Accuracy: {accuracy:.2f}%")
+        print(f"global Retrieval Recall@1,5,10: {global_r1:.2f}% {global_r5:.2f}% {global_r10:.2f}%")
+        print(f"Select Accuracy: {accuracy:.2f}%")
         print(f"Mean Similarity Difference (Sp-Sn): {mean_diff:.4f}")
         
         return {
+            'global_R1': global_r1,
             'accuracy': accuracy,
             'mean_diff': mean_diff
         }
@@ -212,85 +233,85 @@ def evaluate_model_CCNeg_etrieval_withGTNeg(model, data_loader, test_raw_clip=Fa
 #     all_img_ids = []
     
 #     with torch.no_grad():
-#         # 遍历每一个batch收集特征
-#         for batch in tqdm(data_loader, desc="Extracting features", total=len(data_loader)):
-#             image_feats = batch['I'].to(device)  # [batch_size, embed_dim]
-#             hp_feats = batch['hp'].to(device)    # [batch_size, embed_dim]
-#             hn_feats = batch['hn'].to(device)    # [batch_size, embed_dim]
-#             level_hp_list = batch['level_hp_list'].to(device)  # [batch_size, num_layers, embed_dim]
-#             level_hn_list = batch['level_hn_list'].to(device)  # [batch_size, num_layers, embed_dim]
-#             neg_obj_feats = batch['neg_obj'].to(device)  # [batch_size, embed_dim]
-#             img_ids = batch['img_id']
+        # 遍历每一个batch收集特征
+        for batch in tqdm(data_loader, desc="Extracting features", total=len(data_loader)):
+            image_feats = batch['I'].to(device)  # [batch_size, embed_dim]
+            hp_feats = batch['hp'].to(device)    # [batch_size, embed_dim]
+            hn_feats = batch['hn'].to(device)    # [batch_size, embed_dim]
+            level_hp_list = batch['level_hp_list'].to(device)  # [batch_size, num_layers, embed_dim]
+            level_hn_list = batch['level_hn_list'].to(device)  # [batch_size, num_layers, embed_dim]
+            neg_obj_feats = batch['neg_obj'].to(device)  # [batch_size, embed_dim]
+            img_ids = batch['img_id']
             
-#             all_image_feats.extend(image_feats.cpu().numpy())
-#             all_hp_feats.extend(hp_feats.cpu().numpy())
-#             all_hn_feats.extend(hn_feats.cpu().numpy())
-#             all_level_hp_feats.extend(level_hp_list.cpu().numpy())
-#             all_level_hn_feats.extend(level_hn_list.cpu().numpy())
-#             all_neg_obj_feats.extend(neg_obj_feats.cpu().numpy())
-#             all_img_ids.extend(img_ids.cpu().numpy())
+            all_image_feats.extend(image_feats.cpu().numpy())
+            all_hp_feats.extend(hp_feats.cpu().numpy())
+            all_hn_feats.extend(hn_feats.cpu().numpy())
+            all_level_hp_feats.extend(level_hp_list.cpu().numpy())
+            all_level_hn_feats.extend(level_hn_list.cpu().numpy())
+            all_neg_obj_feats.extend(neg_obj_feats.cpu().numpy())
+            all_img_ids.extend(img_ids.cpu().numpy())
         
-#         # 转换为tensor
-#         I = torch.tensor(all_image_feats, device=device)
-#         hp = torch.tensor(all_hp_feats, device=device)
-#         hn = torch.tensor(all_hn_feats, device=device)
-#         assert not torch.equal(hp, hn), "hp and hn should not be equal"
-#         level_hp = torch.tensor(all_level_hp_feats, device=device)
-#         level_hn = torch.tensor(all_level_hn_feats, device=device)
-#         neg_obj = torch.tensor(all_neg_obj_feats, device=device)
+        # 转换为tensor
+        I = torch.tensor(all_image_feats, device=device)
+        hp = torch.tensor(all_hp_feats, device=device)
+        hn = torch.tensor(all_hn_feats, device=device)
+        assert not torch.equal(hp, hn), "hp and hn should not be equal"
+        level_hp = torch.tensor(all_level_hp_feats, device=device)
+        level_hn = torch.tensor(all_level_hn_feats, device=device)
+        neg_obj = torch.tensor(all_neg_obj_feats, device=device)
         
-#         # 计算相似度分数
-#         if test_raw_clip:
-#             # 使用原始CLIP计算相似度
-#             print("测试原始CLIP模型")
-#             I_norm = F.normalize(I, p=2, dim=-1)
-#             hp_norm = F.normalize(hp, p=2, dim=-1)
-#             hn_norm = F.normalize(hn, p=2, dim=-1)
+        # 计算相似度分数
+        if test_raw_clip:
+            # 使用原始CLIP计算相似度
+            print("测试原始CLIP模型")
+            I_norm = F.normalize(I, p=2, dim=-1)
+            hp_norm = F.normalize(hp, p=2, dim=-1)
+            hn_norm = F.normalize(hn, p=2, dim=-1)
             
-#             logit_scale = Clip_model.logit_scale.exp()
-#             scores_I_hp = logit_scale * (I_norm @ hp_norm.t()) # I2T [num_images=N, num_texts=N]
-#             scores_I_hn = logit_scale * (I_norm @ hn_norm.t())  
-#         else:
-#             # 使用提供的模型计算相似度
-#             print("测试Glasses模型")
-#             model.eval()
-#             if with_gt_neg:
-#                 # 使用GT否定对象
-#                 _, scores_I_hp = model(I, hp, level_hp, neg_obj) # I2T [num_images=N, num_texts=N]
-#                 _, scores_I_hn = model(I, hn, level_hn, neg_obj) 
-#             else:
-#                 # 使用模型预测的否定对象
-#                 _, scores_I_hp = model(I, hp, level_hp) # I2T [num_images=N, num_texts=N]
-#                 _, scores_I_hn = model(I, hn, level_hn) 
+            logit_scale = Clip_model.logit_scale.exp()
+            scores_I_hp = logit_scale * (I_norm @ hp_norm.t()) # I2T [num_images=N, num_texts=N]
+            scores_I_hn = logit_scale * (I_norm @ hn_norm.t())  
+        else:
+            # 使用提供的模型计算相似度
+            print("测试Glasses模型")
+            model.eval()
+            if with_gt_neg:
+                # 使用GT否定对象
+                _, scores_I_hp = model(I, hp, level_hp, neg_obj) # I2T [num_images=N, num_texts=N]
+                _, scores_I_hn = model(I, hn, level_hn, neg_obj) 
+            else:
+                # 使用模型预测的否定对象
+                _, scores_I_hp = model(I, hp, level_hp) # I2T [num_images=N, num_texts=N]
+                _, scores_I_hn = model(I, hn, level_hn) 
                 
-#         # 计算每个图像在所有正负文本中的准确率
-#         num_images = I.size(0)
+        # 计算每个图像在所有正负文本中的准确率
+        num_images = I.size(0)
         
-#         # 合并所有文本特征和分数
-#         scores_combined = torch.cat([scores_I_hp, scores_I_hn], dim=1) # I2T [num_images=N, num_texts=2N]
+        # 合并所有文本特征和分数
+        scores_combined = torch.cat([scores_I_hp, scores_I_hn], dim=1) # I2T [num_images=N, num_texts=2N]
         
-#         # 对于每个图像，其正确匹配的文本索引应该是i
-#         correct_indices = torch.arange(num_images, device=device)
-#         print(f"correct_indices: {correct_indices[:10]}")
+        # 对于每个图像，其正确匹配的文本索引应该是i
+        correct_indices = torch.arange(num_images, device=device)
+        print(f"correct_indices: {correct_indices[:10]}")
         
-#         # 计算准确率：图像i的最高分数应该是与正文本hp[i]
-#         _, top_indices = scores_combined.topk(k=1, dim=1)
-#         print(f"top_indices: {top_indices[:10]}")
-#         accuracy = (top_indices.squeeze() == correct_indices).float().mean().item() * 100
+        # 计算准确率：图像i的最高分数应该是与正文本hp[i]
+        _, top_indices = scores_combined.topk(k=1, dim=1)
+        print(f"top_indices: {top_indices[:10]}")
+        accuracy = (top_indices.squeeze() == correct_indices).float().mean().item() * 100
         
-#         # 计算每个图像的Sp与Sn之差的均值
-#         diag_scores_hp = torch.diag(scores_I_hp)  # [N]
-#         diag_scores_hn = torch.diag(scores_I_hn)  # [N]
-#         print(f"diag_scores_hp: {diag_scores_hp[:10]}")
-#         print(f"diag_scores_hn: {diag_scores_hn[:10]}")
-#         mean_diff = (diag_scores_hp - diag_scores_hn).mean().item()
+        # 计算每个图像的Sp与Sn之差的均值
+        diag_scores_hp = torch.diag(scores_I_hp)  # [N]
+        diag_scores_hn = torch.diag(scores_I_hn)  # [N]
+        print(f"diag_scores_hp: {diag_scores_hp[:10]}")
+        print(f"diag_scores_hn: {diag_scores_hn[:10]}")
+        mean_diff = (diag_scores_hp - diag_scores_hn).mean().item()
         
-#         # 输出结果
-#         print("="*50)
-#         print(f"Retrieval Accuracy: {accuracy:.2f}%")
-#         print(f"Mean Similarity Difference (Sp-Sn): {mean_diff:.4f}")
+        # 输出结果
+        print("="*50)
+        print(f"Retrieval Accuracy: {accuracy:.2f}%")
+        print(f"Mean Similarity Difference (Sp-Sn): {mean_diff:.4f}")
         
-#         return {
-#             'accuracy': accuracy,
-#             'mean_diff': mean_diff
-#         }
+        return {
+            'accuracy': accuracy,
+            'mean_diff': mean_diff
+        }

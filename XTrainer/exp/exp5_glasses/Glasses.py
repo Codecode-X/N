@@ -104,12 +104,12 @@ class Glasses(nn.Module):
         # 导入Lens和Frame的权重
         if 'pretrain' in cfg.keys() and cfg['pretrain'] and cfg['model_path'] is not None:
             print(f"训练：正在加载预训练 Glasses 模型权重: {cfg['model_path']}, 将覆盖 Lens 和 Frame 的权重，不覆盖 NegationDetector 的权重")
-            full_ckpt = torch.load(os.path.join(current_dir, cfg['model_path']), map_location='cpu')
+            full_ckpt = torch.load(os.path.join(current_dir, cfg['model_path']), map_location='cpu', weights_only=False)
             filtered_ckpt = {k: v for k, v in full_ckpt.items() if not k.startswith("negDetector.")}
             model.load_state_dict(filtered_ckpt, strict=False)
         if 'test' in cfg.keys() and cfg['test'] is True and cfg['model_path'] is not None:
             print(f"测试：正在加载被测试 Glasses 模型权重: {cfg['model_path']}, 将覆盖 Lens 和 Frame 的权重，不覆盖 NegationDetector 的权重")
-            full_ckpt = torch.load(os.path.join(current_dir, cfg['model_path']), map_location='cpu')
+            full_ckpt = torch.load(os.path.join(current_dir, cfg['model_path']), map_location='cpu', weights_only=False)
             filtered_ckpt = {k: v for k, v in full_ckpt.items() if not k.startswith("negDetector.")}
             model.load_state_dict(filtered_ckpt, strict=False)
         
@@ -355,7 +355,6 @@ def train_Retrieval_with_gtneg(cfg, model:Glasses, with_gt_neg=True):
             
             # 梯度裁剪
             if clip_grad:
-                print("进行梯度裁剪")
                 nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             
             optimizer.step()
@@ -439,14 +438,14 @@ if __name__ == "__main__":
         'Frame': {
             'device': 'cuda',
             'dtype': torch.float32,
-            'lambda_0': 0.1, # 基础惩罚强度
+            'lambda_0': 1, # 基础惩罚强度
             # 'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_Frame_mse_v1869.pth' # Frame的预训练权重
             # 'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/best_clip_Frame.pth' # Frame的预训练权重
         },
         'NegationDetector': {
             'device': 'cuda',
             'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth', # NegationDetector的预训练权重
-            'neg_thr': 1, # 否定阈值(大于该值则为否定) 例如：全否定: -1.0, 全肯定: 1.0
+            'neg_thr': 0.5, # 否定阈值(大于该值则为否定) 例如：全否定: -1.0, 全肯定: 1.0
         },
         
         # -----数据参数-----
@@ -485,7 +484,8 @@ if __name__ == "__main__":
     }
 
     # # 一阶段训练：使用gtneg代替lens输出，单独训练Frame模型，不训练Lens模型 -- Recall@5: 99.71%
-    # cfg['lr'] = 1e-5
+    # cfg['lr'] = 1e-4
+    # cfg['neg_thr'] = -1
     # cfg['epochs'] = 10
     # model = Glasses.load_model(cfg)
     # model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=True) # 一阶段: 训练Glasses模型 | 代理任务: Retrieval with gtneg
@@ -495,7 +495,8 @@ if __name__ == "__main__":
     # # 三阶段训练：联合训练lens和Frame模型，进行适配 -- Recall@5: val: 75.97% full: 82.24%  -- MCQ: 35.90%
     # cfg['pretrain'] = True
     # cfg['lr'] = 1e-3
-    # cfg['model_path'] = 'weights/best_clip_Glasses_9971.pth' # 一阶段预模型权重路径
+    # cfg['model_path'] = 'best_clip_Glasses.pth' # 一阶段预模型权重路径
+    # cfg['neg_thr'] = -1
     # cfg['clip_grad'] = True # 梯度裁剪
     # model = Glasses.load_model(cfg)
     # model.lens = CLIPGlassesLens.load_model(cfg['Lens']) # 加载lens模型的预训练权重
@@ -504,7 +505,9 @@ if __name__ == "__main__":
     # 测试模型
     cfg['test_raw_clip'] = False
     cfg['test'] = True
-    cfg['model_path'] = 'weights/v1/best_clip_Glasses_7597_8224_3590(after_joint).pth' # 测试模型权重路径
+    # cfg['model_path'] = 'weights/v1/best_clip_Glasses_7597_8224_3590(after_joint).pth' # 测试模型权重路径
+    cfg['model_path'] = 'weights/v2/best_clip_Glasses.pth'
+    # cfg['model_path'] = 'best_clip_Glasses.pth'
     cfg['Lens']['model_path'], cfg['Frame']['model_path'] = None, None # 不覆盖joint训练后的Glasses
     cfg['NegationDetector']['model_path'] = '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth' #
     
@@ -516,25 +519,35 @@ if __name__ == "__main__":
         model = Glasses.load_model(cfg)
         evaluate_model_CCNeg_etrieval_withGTNeg(model, test_ccneg_dataloader, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
     
-    # # Retrieval with gtbeg
-    # test_retrieval_dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
-    # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'])
-    # if cfg['test_raw_clip'] is True:
-    #     evaluate_model_retrieval_withGTNeg(None, test_retrieval_dataloader, test_raw_clip=True, with_gt_neg=False)
-    # else:
-    #     model = Glasses.load_model(cfg)
-    #     # evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=True) # 使用GT的h_neg
-    #     evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
+    # Retrieval with gtbeg
+    test_retrieval_dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
+    test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'])
+    if cfg['test_raw_clip'] is True:
+        evaluate_model_retrieval_withGTNeg(None, test_retrieval_dataloader, test_raw_clip=True, with_gt_neg=False)
+    else:
+        model = Glasses.load_model(cfg)
+        # evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=True) # 使用GT的h_neg
+        evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
         
-    # # MCQ    
-    # test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
-    # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
-    # if cfg['test_raw_clip'] is True:
-    #     evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
-    # else:
-    #     model = Glasses.load_model(cfg)
-    #     evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)
-    
+    # MCQ VOC 
+    cfg['Mcq']['test_dataset_path'] = '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv'
+    test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
+    test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
+    if cfg['test_raw_clip'] is True:
+        evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
+    else:
+        model = Glasses.load_model(cfg)
+        evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)
+        
+    # MCQ COCO
+    cfg['Mcq']['test_dataset_path'] = '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv'
+    test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
+    test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
+    if cfg['test_raw_clip'] is True:
+        evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
+    else:
+        model = Glasses.load_model(cfg)
+        evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)
     
     
     print("==============配置项===============")
