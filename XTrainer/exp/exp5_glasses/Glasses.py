@@ -30,6 +30,7 @@ class Glasses(nn.Module):
         self.lens = CLIPGlassesLens.load_model(cfg['Lens'])
         self.frame = CLIPGlassesFrame.load_model(cfg['Frame'])
         self.negDetector = NegationDetector.load_model(cfg['NegationDetector']) # 轻量级否定分类器 | 1:包含否定 0:肯定
+        self.neg_thr = cfg['NegationDetector']['neg_thr'] # 否定阈值
        
         # 冻结negDetector
         for param in self.negDetector.parameters():
@@ -51,7 +52,8 @@ class Glasses(nn.Module):
             # neg_mask = self.negDetector(h).squeeze(-1) > 1.0  # 全是肯定 R:55.86% M:36.41%
             # neg_mask = self.negDetector(h).squeeze(-1) > 0.7  # 多肯定 R:79.86% M:33.61%
             # neg_mask = self.negDetector(h).squeeze(-1) > 0.3  # 多否定 R:81.54% M:33.83%
-            neg_mask = self.negDetector(h).squeeze(-1) > -1.0  # 全是否定 R:82.24% M:41.66%
+            # neg_mask = self.negDetector(h).squeeze(-1) > -1.0  # 全是否定 R:82.24% M:41.66%
+            neg_mask = self.negDetector(h).squeeze(-1) > self.neg_thr # 否定阈值
         
         # Lens        
         if l_neg is None:
@@ -432,7 +434,7 @@ if __name__ == "__main__":
             'dtype': torch.float32,
             'num_heads': 4,
             'dropout': 0.1,
-            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_lens_9922.pth' # Lens的预训练权重
+            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/v1/best_clip_lens_9922.pth' # Lens的预训练权重
         },
         'Frame': {
             'device': 'cuda',
@@ -443,7 +445,8 @@ if __name__ == "__main__":
         },
         'NegationDetector': {
             'device': 'cuda',
-            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth' # NegationDetector的预训练权重
+            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth', # NegationDetector的预训练权重
+            'neg_thr': 1, # 否定阈值(大于该值则为否定) 例如：全否定: -1.0, 全肯定: 1.0
         },
         
         # -----数据参数-----
@@ -499,7 +502,7 @@ if __name__ == "__main__":
     # model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=False) # 二阶段: 联合lens训练Glasses模型 | 代理任务: Retrieval
     
     # 测试模型
-    cfg['test_raw_clip'] = True
+    cfg['test_raw_clip'] = False
     cfg['test'] = True
     cfg['model_path'] = 'weights/v1/best_clip_Glasses_7597_8224_3590(after_joint).pth' # 测试模型权重路径
     cfg['Lens']['model_path'], cfg['Frame']['model_path'] = None, None # 不覆盖joint训练后的Glasses

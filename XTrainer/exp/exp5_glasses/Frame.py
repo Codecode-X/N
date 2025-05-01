@@ -38,13 +38,6 @@ class CLIPGlassesFrame(nn.Module):
             num_layers=3
         )
         
-        # 多模态特征融合网络（带门控残差连接）
-        self.feature_fusion = nn.Sequential(
-            *[ResidualBlock(embed_dim*3, hidden_dim) for _ in range(2)],
-            nn.Linear(embed_dim*3, embed_dim),  # 新增维度压缩层
-            nn.LayerNorm(embed_dim)
-        )
-        
         # 动态lambda生成器（交叉注意力机制）
         self.lambda_generator = nn.ModuleDict({
             'cross_attn': nn.MultiheadAttention(
@@ -60,7 +53,7 @@ class CLIPGlassesFrame(nn.Module):
         })
         
         # 自适应残差系数
-        self.alpha = nn.Parameter(torch.ones(2)*0.1)  # 多阶段残差
+        self.alpha = nn.Parameter(torch.ones(1)*0.1)  # 多阶段残差
         
         # 初始化适配
         self._init_weights()
@@ -71,16 +64,6 @@ class CLIPGlassesFrame(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
         
-        # 特征融合网络初始化
-        for module in self.feature_fusion:
-            if isinstance(module, ResidualBlock):
-                nn.init.kaiming_normal_(module.fc1.weight, mode='fan_in')
-                nn.init.zeros_(module.fc2.weight)
-                nn.init.xavier_normal_(module.gate.weight)
-            elif isinstance(module, nn.Linear):
-                nn.init.kaiming_normal_(module.weight, mode='fan_in')
-                if module.bias is not None:
-                    nn.init.zeros_(module.bias)
 
     def forward(self, I, h, h_neg, neg_mask=None):
         """
@@ -102,16 +85,7 @@ class CLIPGlassesFrame(nn.Module):
         cross_features = self.cross_transformer(
             torch.cat([h_norm.unsqueeze(1), I_norm.unsqueeze(1)], dim=1)
         )
-        h_attn = self.alpha[0]*h_norm + cross_features[:,0]
-        
-        # 多模态特征融合
-        fused_feature = self.feature_fusion(
-            torch.cat([
-                h_attn, 
-                h_neg_norm, 
-                h_attn * h_neg_norm  # 新增交互特征
-            ], dim=-1)
-        )
+        h_attn = self.alpha*h_norm + cross_features[:,0]
         
         # 动态lambda生成（交叉注意力机制）
         attn_output, _ = self.lambda_generator['cross_attn'](
@@ -130,24 +104,20 @@ class CLIPGlassesFrame(nn.Module):
             # 原CLIP预测的h和I的匹配分数 
             scores_base = logit_scale * (h_norm @ I_norm.t())
             
-            # 增强匹配路径
-            enhanced_feature = self.alpha[0]*h_norm + self.alpha[1]*fused_feature
-            scores_enhanced = logit_scale * (enhanced_feature @ I_norm.t())
-            
             # 否定感知调整
             scores_N2I = logit_scale * (h_neg_norm @ I_norm.t())
-            adjusted_scores = scores_enhanced - lambda_dynamic * scores_N2I
+            adjusted_scores = lambda_dynamic * scores_N2I # 不同的否定内容惩罚不同
             
             # 条件混合
             if neg_mask is not None:
                 neg_mask = neg_mask.to(scores_base.dtype)
                 scores = torch.where(
                     neg_mask.bool().view(-1,1),  # 将mask转换为[B,1]用于行广播
-                    adjusted_scores + scores_base.detach(),  # True时使用修正分数
+                    scores_base.detach()-adjusted_scores,  # True时使用修正分数
                     scores_base  # False时使用原始分数
                 )
             else:
-                scores = adjusted_scores + scores_base.detach() # 无mask时保持原有逻辑 | scores_base.detach() 防止梯度回传到原始CLIP模型
+                scores = scores_base.detach()-adjusted_scores  # 无mask时保持原有逻辑 | scores_base.detach() 防止梯度回传到原始CLIP模型
         
         return scores.float()
     
@@ -171,25 +141,6 @@ class CLIPGlassesFrame(nn.Module):
         model.eval()
         return model
 
-class ResidualBlock(nn.Module):
-    def __init__(self, input_dim, hidden_dim):
-        super().__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, input_dim)
-        self.gate = nn.Linear(input_dim, 1)
-        self.layer_norm = nn.LayerNorm(input_dim)
-        
-    def forward(self, x):
-        residual = x
-        x = F.gelu(self.fc1(x))
-        x = F.dropout(x, p=0.3, training=self.training)
-        x = torch.clamp(x, min=-5.0, max=5.0)  # 梯度截断
-        x = self.fc2(x)
-        
-        # 门控残差连接
-        gate = torch.sigmoid(self.gate(residual))
-        return self.layer_norm(gate * x + (1 - gate) * residual)
-    
     
     def calc_losses(self, scores, I, l_pos, img_ids, h=None):
         """

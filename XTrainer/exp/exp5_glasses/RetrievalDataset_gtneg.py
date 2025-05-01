@@ -30,7 +30,7 @@ class RetrievalNegGtDataset(Dataset):
         cache_path = f"RetrievalNegGtDataset_cache.pt"
         # Check if cache file exists
         if os.path.exists(cache_path):
-            print(f"Loading preprocessed features from cache: {cache_path}...")
+            print(f"正在加载Retrieval-gtNegObj数据集 cache: {cache_path}...")
             self.data = torch.load(cache_path, weights_only=False)
             print(f"Loaded {len(self.data)} samples from cache")
             return
@@ -50,7 +50,7 @@ class RetrievalNegGtDataset(Dataset):
         # Match samples and extract features
         common_ids = set(np_by_id.keys()) & set(p_by_id.keys())
         
-        for img_id in tqdm.tqdm(common_ids, desc="Processing data"):
+        for img_id in tqdm(common_ids, desc="Processing data"):
             np_row = np_by_id[img_id]
             p_row = p_by_id[img_id]
             

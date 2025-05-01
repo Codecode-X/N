@@ -45,7 +45,7 @@ class RetrievalDataset(Dataset):
         
         # Check if cache file exists
         if os.path.exists(cache_path):
-            print(f"Loading preprocessed features from cache: {cache_path} of {self.csv_path} ...")
+            print(f"正在加载Retrieval数据集 cache: {cache_path} of {self.csv_path} ...")
             cached_data = torch.load(cache_path, weights_only=False)
             self.image_features = cached_data['image_features']
             self.captions_feats = cached_data['captions_feats']
