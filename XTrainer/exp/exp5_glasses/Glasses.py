@@ -18,7 +18,7 @@ from CCNegDataset_gtneg import CCNegGtDataset, evaluate_model_CCNeg_etrieval_wit
 from CLSDataset import CLSDataset, evaluate_model_CLS
 import torch.nn as nn
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 import torch.optim as optim
 from torch.nn import functional as F
@@ -38,13 +38,14 @@ class Glasses(nn.Module):
         for param in self.negDetector.parameters():
             param.requires_grad = False
     
-    def forward(self, I, h, level_h_list, l_neg=None):
+    def forward(self, I, h, level_h_list, l_neg=None, chunk_size=-1):
         """
         参数:
             - I: 图像特征 [N_imgs=B, D]
             - h: 最后一层特征 [N_caps=B*num_options, D]
             - level_h_list: 各层特征列表 [N_caps=B*num_options, L, D]
             - l_neg: 被否定对象的文本特征 [N_caps=B*num_options, D] | 当为None时，使用lens预测
+            - chunk_size: 分块大小 | -1表示不分块
         返回:
             - scores_T2I: 文本->图像的分数 [N_caps, N_imgs=B]
             - scores_I2T: 图像->文本的分数 [N_imgs=B, N_caps]
@@ -62,7 +63,7 @@ class Glasses(nn.Module):
         
         # Frame
         # scores_T2I = self.frame(I, h, h_neg)
-        scores_T2I = self.frame(I, h, h_neg, neg_mask=neg_mask) # 增加了neg_mask
+        scores_T2I = self.frame(I, h, h_neg, neg_mask=neg_mask, chunk_size=chunk_size) # 增加了neg_mask | torch.Size([40000, num_imgs=64, num_caps=64])
         scores_I2T = scores_T2I.T
         
         return scores_T2I, scores_I2T
@@ -83,7 +84,7 @@ class Glasses(nn.Module):
         total_loss = contrastive_loss
         return total_loss, {'contrastive_loss': contrastive_loss.item()}
     
-    def calc_ccneg_losses(scores_T2Ip, scores_Ip2T):
+    def calc_ccneg_losses(self, scores_T2Ip, scores_Ip2T):
         """
         - Ip: 正样本图像 [N]
         - hp: 正样本文本 [N]
@@ -126,7 +127,7 @@ class Glasses(nn.Module):
             'loss_T2I': loss_T2I.item()
         }
         
-    def calc_ccneg_4_losses(scores_Tpn2Ip, scores_Ip2Tpn, scores_In2Tpn, scores_Tpn2In):
+    def calc_ccneg_4_losses(self, scores_Tpn2Ip, scores_Ip2Tpn, scores_In2Tpn, scores_Tpn2In):
         """
         - Ip: 正样本图像 [N]
         - In: 负样本图像 [N]（与hn一一对应）
@@ -388,17 +389,16 @@ def train_CCNeg_with_gtneg(cfg, model:Glasses, with_gt_neg=True):
     early_stop_patience = cfg['early_stop_patience']
     lr = cfg['lr']
     num_workers = cfg['num_workers']
-    train_rate, val_rate, test_rate = cfg['CCNegGtDataset']['split']
 
     # 创建数据集和数据加载器
     dataset = CCNegGtDataset(cfg['CCNegGtDataset'])
-    print(f">>> train_rate, val_rate, test_rate: {train_rate}, {val_rate}, {test_rate}")
-    train_size = int(len(dataset) * train_rate)
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-
+    
+    train_size, val_size = len(dataset)-40000, 40000
+    train_dataset = Subset(dataset, list(range(train_size))) # 训练集 [0,-40000)
+    val_dataset = Subset(dataset, list(range(train_size, train_size+5000))) # 验证集 [-40000, -1)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, drop_last=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=True)
+    
     # 优化器
     if cfg.get('only_train_moudle', None) == 'lens':
         print("只训练lens模型")
@@ -428,7 +428,7 @@ def train_CCNeg_with_gtneg(cfg, model:Glasses, with_gt_neg=True):
     evaluate_model_CCNeg_etrieval_withGTNeg(model, val_loader, test_raw_clip=False, with_gt_neg=with_gt_neg)
     
     # Training loop
-    best_recall5 = 0
+    best_acc = 0
     patience_counter = 0
     for epoch in range(epochs):
         
@@ -438,7 +438,7 @@ def train_CCNeg_with_gtneg(cfg, model:Glasses, with_gt_neg=True):
                 
         # 遍历每一个batch
         for batch in tqdm(train_loader, desc=f"Epoch{epoch+1}/{epochs}"):
-            Ip = batch['I'].to(device)  # 图像特征 [batch_size, embed_dim]
+            Ip = batch['Ip'].to(device)  # 图像特征 [batch_size, embed_dim]
             In = batch['In'].to(device)  # 负样本图像特征 [batch_size, embed_dim]
             hp = batch['hp'].to(device)  # 肯定文本特征 [batch_size, embed_dim]
             hn = batch['hn'].to(device)  # 加了否定词的干扰错误文本特征 [batch_size, embed_dim]
@@ -487,22 +487,27 @@ def train_CCNeg_with_gtneg(cfg, model:Glasses, with_gt_neg=True):
             optimizer.step()
         
         batch_count = len(train_loader)
-        print(f"Ep{epoch+1}/{epochs}  Loss: {epoch_loss/batch_count:.4f} contrastive_loss: {losses['contrastive_loss']/batch_count:.4f}")
+        print(f"Ep{epoch+1}/{epochs}  Loss: {epoch_loss/batch_count:.4f} \
+              loss_Ip2Tpn: {losses['loss_Ip2Tpn']/batch_count:.4f} \
+              loss_Tpn2Ip: {losses['loss_Tpn2Ip']/batch_count:.4f} \
+              loss_In2Tnp: {losses['loss_In2Tnp']/batch_count:.4f} \
+              loss_Tpn2In: {losses['loss_Tpn2In']/batch_count:.4f}")
+        
         scheduler.step()    
         
         # validation
         val_results = evaluate_model_CCNeg_etrieval_withGTNeg(model, val_loader, test_raw_clip=False, with_gt_neg=with_gt_neg)
-        val_recall5 = val_results['mean'][5]  # mean-recall@5 
+        val_acc = val_results['accuracy'] # ACC
         
         # Save best model
-        if val_recall5 > best_recall5:
-            best_recall5 = val_recall5
+        if val_acc > best_acc:
+            best_acc = val_acc
             patience_counter = 0
             torch.save(model.state_dict(), os.path.join(current_dir, cfg['save_path']))
-            print(f"Best model saved at epoch {epoch} with recall@5: {best_recall5}")
+            print(f"Best model saved at epoch {epoch} with ACC: {best_acc}")
         else:  # 早停
             patience_counter += 1  # 增加耐心计数器
-            print(f"💔recall5 drop from {best_recall5:.4f} to {val_recall5:.4f}, cur patience_counter add to {patience_counter}")
+            print(f"💔ACC drop from {best_acc:.4f} to {val_acc:.4f}, cur patience_counter add to {patience_counter}")
             if early_stop_patience > 0 and patience_counter >= early_stop_patience:
                 print(f"Early stopping after {epoch+1} epochs")
                 break    
@@ -515,11 +520,11 @@ def train_CCNeg_with_gtneg(cfg, model:Glasses, with_gt_neg=True):
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
                 'loss': epoch_loss,
-                'recall5': val_recall5
+                'val_acc': val_acc
             }
             torch.save(checkpoint, os.path.join(current_dir, f"checkpoint_epoch_{epoch}.pth"))
         
-    print(f"Training completed. Best validation recall5: {best_recall5:.4f}")
+    print(f"Training completed. Best validation ACC: {best_acc:.4f}")
     
     return model
 
@@ -542,7 +547,7 @@ if __name__ == "__main__":
             'dtype': torch.float32,
             'num_heads': 4,
             'dropout': 0.1,
-            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/v1_COCO/best_clip_lens_9922.pth' # Lens的预训练权重
+            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/v2_COCO/best_clip_lens_9922.pth' # Lens的预训练权重
         },
         'Frame': {
             'device': 'cuda',
@@ -579,15 +584,15 @@ if __name__ == "__main__":
             'negpos_csv_path': "/root/NP-CLIP/NegBench/data/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv",
             'dtype': torch.float32, 
         },
-        'CCNegGtDataset': {
+        'CCNegGtDataset': { # CC-Neg数据集
             'batch_size': 64,
             'num_workers': 4,
-            'split': [0.9, 0.1, 0.0],  # train, val, test split
             'csv_path': '/root/NP-CLIP/NegBench/data/ccneg_converted.csv',
+            'negative_image_ft_mapping_path': '/root/NP-CLIP/NegBench/data/distractor_image_mapping.pt', # 难例负样本图像索引
             'dtype': torch.float32, 
             
         },
-        'ClsEvalDataset': {
+        'ClsEvalDataset': {  # 传统分类测试数据集
             'csv_path': '/root/NP-CLIP/NegBench/data/CLS_Imagenet/imagenet_train.csv',
             'batch_size': 64,
             'num_workers': 4,
@@ -605,6 +610,7 @@ if __name__ == "__main__":
     # model = train_COCORetr_with_gtneg(cfg, model, with_gt_neg=True) # 一阶段: 训练Glasses模型 | 代理任务: Retrieval with gtneg
     
     # # 二阶段训练：使用GT_neg作为监督单独训练lens, 在lens.py中完成
+    # cfg['Lens']['model_path'] = 'weights/v2_COCO/best_clip_lens_9922.pth' # lens模型的预训练权重路径
     
     # # 三阶段训练：联合训练lens和Frame模型，进行适配 -- Recall@5: val: 75.97% full: 82.24%  -- MCQ: 35.90%
     # cfg['pretrain'] = True
@@ -621,28 +627,29 @@ if __name__ == "__main__":
     # 在CC-Neg上训练
     # 一阶段训练：使用gtneg代替lens输出，单独训练Frame模型，不训练Lens模型 -- Recall@5: 99.71%
     cfg['lr'] = 1e-4
-    cfg['neg_thr'] = -1
+    cfg['neg_thr'] = -1 # 否定阈值
     cfg['epochs'] = 10
     model = Glasses.load_model(cfg)
     model = train_CCNeg_with_gtneg(cfg, model, with_gt_neg=True) # 一阶段: 训练Glasses模型 | 代理任务: Retrieval with gtneg
     
-    # 二阶段训练：使用GT_neg作为监督单独训练lens, 在lens.py中完成
+    # # 二阶段训练：使用GT_neg作为监督单独训练lens, 在lens.py中完成
+    # cfg['Lens']['model_path'] = 'weights/v2_COCO/best_clip_lens_9922.pth' # lens模型的预训练权重路径
     
-    # 三阶段训练：联合训练lens和Frame模型，进行适配 -- Recall@5: val: 75.97% full: 82.24%  -- MCQ: 35.90%
-    cfg['pretrain'] = True
-    cfg['lr'] = 1e-3
-    cfg['model_path'] = 'best_clip_Glasses.pth' # 一阶段预模型权重路径
-    cfg['neg_thr'] = -1
-    cfg['clip_grad'] = True # 梯度裁剪
-    model = Glasses.load_model(cfg)
-    model.lens = CLIPGlassesLens.load_model(cfg['Lens']) # 加载lens模型的预训练权重
-    model = train_CCNeg_with_gtneg(cfg, model, with_gt_neg=False) # 二阶段: 联合lens训练Glasses模型 | 代理任务: Retrieval
+    # # 三阶段训练：联合训练lens和Frame模型，进行适配 -- Recall@5: val: 75.97% full: 82.24%  -- MCQ: 35.90%
+    # cfg['pretrain'] = True
+    # cfg['lr'] = 1e-3
+    # cfg['model_path'] = 'best_clip_Glasses.pth' # 一阶段预模型权重路径
+    # cfg['neg_thr'] = -1
+    # cfg['clip_grad'] = True # 梯度裁剪
+    # model = Glasses.load_model(cfg)
+    # model.lens = CLIPGlassesLens.load_model(cfg['Lens']) # 加载lens模型的预训练权重
+    # model = train_CCNeg_with_gtneg(cfg, model, with_gt_neg=False) # 二阶段: 联合lens训练Glasses模型 | 代理任务: Retrieval
     
     
     # # --------------------------------------测试配置(COCO & CC-Neg)----------------------------------------------
     
     # # 测试 COCO 上训练的Glasses模型通用配置
-    # cfg['test_raw_clip'] = True
+    # cfg['test_raw_clip'] = False # 测试原始CLIP模型
     # cfg['test'] = True
     # cfg['model_path'] = 'weights/v2_COCO/best_clip_Glasses.pth'
     # cfg['Lens']['model_path'], cfg['Frame']['model_path'] = None, None # 不覆盖joint训练后的Glasses
@@ -652,16 +659,19 @@ if __name__ == "__main__":
     # #TODO: 待训练
     
     # # --------------------------------------测试模型性能(对比实验)--------------------------------------
-    # # 测试 CC-Neg
-    # test_ccneg_dataset = CCNegGtDataset(cfg['CCNegGtDataset'])
+    
+    # # 测试 CC-Neg 
+    # test_ccneg_dataset = CCNegGtDataset(cfg['CCNegGtDataset']) # CLIP: 62.86%  ours:88.81%
+    # train_size, val_size = len(test_ccneg_dataset)-40000, 40000
+    # val_dataset = Subset(test_ccneg_dataset, list(range(train_size, train_size+val_size))) # 验证集 [-40000, -1)
     # test_ccneg_dataloader = torch.utils.data.DataLoader(test_ccneg_dataset, batch_size=cfg['CCNegGtDataset']['batch_size'], shuffle=False, num_workers=cfg['CCNegGtDataset']['num_workers'])
     # if cfg['test_raw_clip'] is True:
-    #     evaluate_model_CCNeg_etrieval_withGTNeg(None, test_ccneg_dataloader, test_raw_clip=True, with_gt_neg=False)
+    #     evaluate_model_CCNeg_etrieval_withGTNeg(None, val_dataset, test_raw_clip=True, with_gt_neg=False)
     # else:
     #     model = Glasses.load_model(cfg)
-    #     evaluate_model_CCNeg_etrieval_withGTNeg(model, test_ccneg_dataloader, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
+    #     evaluate_model_CCNeg_etrieval_withGTNeg(model, val_dataset, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
     
-    # # 测试 Retrieval with gtbeg
+    # # 测试 COCO-Retrieval with gtbeg
     # test_retrieval_dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
     # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'])
     # if cfg['test_raw_clip'] is True:

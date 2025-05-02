@@ -65,13 +65,14 @@ class CLIPGlassesFrame(nn.Module):
                 nn.init.xavier_uniform_(p)
         
 
-    def forward(self, I, h, h_neg, neg_mask=None):
+    def forward(self, I, h, h_neg, neg_mask=None, chunk_size=-1):
         """
         参数：
             - I: 图像特征 [batch_size, embed_dim]
             - h: CLIP文本编码器最后一层的输出文本特征(EOS特征) [batch_size, embed_dim]
             - h_neg: 被否定对象的文本特征 [batch_size, embed_dim]
             - neg_mask: 是否有否定对象mask [batch_size] | 1:有否定对象 | 0: 无否定对象
+            - chunk_size: 分块大小，-1表示不分块 | 设为2的幂次
         
         返回：
             - scores: CLIPGlassesFrame 计算得到的 h2I 匹配得分 [N_caps, N_imgs]
@@ -105,21 +106,66 @@ class CLIPGlassesFrame(nn.Module):
             # 原CLIP预测的h和I的匹配分数 
             scores_base = logit_scale * (h_norm @ I_norm.t())
             
-            # 否定感知调整
-            scores_N2I = logit_scale * (h_neg_norm @ I_norm.t())
-            adjusted_scores = lambda_dynamic * scores_N2I # 不同的否定内容惩罚不同
-            adjusted_scores = torch.clamp(adjusted_scores, min=0.0) # 限制adjusted_scores>0
-            
-            # 条件混合
-            if neg_mask is not None:
-                neg_mask = neg_mask.to(scores_base.dtype)
-                scores = torch.where(
-                    neg_mask.bool().view(-1,1),  # 将mask转换为[B,1]用于行广播
-                    scores_base.detach()-adjusted_scores,  # True时使用修正分数
-                    scores_base  # False时使用原始分数
-                )
-            else:
-                scores = scores_base.detach()-adjusted_scores  # 无mask时保持原有逻辑 | scores_base.detach() 防止梯度回传到原始CLIP模型
+            if chunk_size < 1: # 不分块
+                # 否定感知调整
+                scores_N2I = logit_scale * (h_neg_norm @ I_norm.t())
+                adjusted_scores = lambda_dynamic * scores_N2I # 不同的否定内容惩罚不同
+                adjusted_scores = torch.clamp(adjusted_scores, min=0.0) # 限制adjusted_scores>0
+                
+                # 条件混合
+                if neg_mask is not None:
+                    neg_mask = neg_mask.to(scores_base.dtype)
+                    scores = torch.where(
+                        neg_mask.bool().view(-1,1),  # 将mask转换为[B,1]用于行广播
+                        scores_base.detach()-adjusted_scores,  # True时使用修正分数
+                        scores_base  # False时使用原始分数
+                    )
+                else:
+                    scores = scores_base.detach()-adjusted_scores  # 无mask时保持原有逻辑 | scores_base.detach() 防止梯度回传到原始CLIP模型
+
+            else: # 分块计算
+                batch_size = h.size(0)
+                num_images = I.size(0)
+                scores = torch.zeros(batch_size, num_images, dtype=torch.float32)
+
+                # 双重分块：文本分块 × 图像分块
+                for txt_start in range(0, batch_size, chunk_size):
+                    txt_end = min(txt_start + chunk_size, batch_size)
+                    
+                    # 文本分块特征
+                    h_chunk = h_norm[txt_start:txt_end].view(-1, h_norm.size(-1))  # [C_txt, D]
+                    h_neg_chunk = h_neg_norm[txt_start:txt_end].view(-1, h_neg_norm.size(-1))  # [C_txt, D]
+                    lambda_chunk = lambda_dynamic[txt_start:txt_end].flatten()  # [C_txt]
+                    
+                    # 图像分块循环
+                    for img_start in range(0, num_images, chunk_size):
+                        img_end = min(img_start + chunk_size, num_images)
+                        
+                        # 图像分块特征
+                        I_chunk = I_norm[img_start:img_end].view(-1, I_norm.size(-1))  # [C_img, D]
+                        
+                        # 分块计算基础分数（强制二维输出）
+                        scores_base = logit_scale * torch.mm(h_chunk, I_chunk.t())  # [C_txt, C_img]
+                        
+                        # 分块计算否定修正（强制二维输出）
+                        scores_N2I = logit_scale * torch.mm(h_neg_chunk, I_chunk.t()) # [C_txt, C_img]
+                        adjusted = lambda_chunk.unsqueeze(-1) * scores_N2I  # [C_txt, C_img]
+                        adjusted.clamp_(min=0.0)
+                        
+                        # 条件混合
+                        if neg_mask is not None:
+                            mask_chunk = neg_mask[txt_start:txt_end].bool().view(-1, 1)  # [C_txt, 1]
+                            chunk_scores = torch.where(mask_chunk, scores_base - adjusted, scores_base)
+                        else:
+                            chunk_scores = scores_base - adjusted
+                        
+                        # 直接写入结果矩阵
+                        scores[txt_start:txt_end, img_start:img_end] = chunk_scores
+                        
+                        # 显存清理
+                        del scores_base, scores_N2I, adjusted, chunk_scores
+                        torch.cuda.empty_cache()
+                        assert scores.shape[0] == scores.shape[1], f"分块计算后scores维度异常: {scores.shape}"
         
         return scores.float()
  

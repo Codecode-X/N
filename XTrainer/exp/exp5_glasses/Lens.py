@@ -134,14 +134,14 @@ class CLIPGlassesLens(nn.Module):
             syntax_feats.append(proj_feat)
         
         # 语义流处理 (最后一层)
-        K = self.semantic_k_proj(h)  # [B, D]
-        Vs = [proj(h) for proj in self.semantic_v_proj]  # 3x[B, D]
+        K = self.semantic_k_proj(h)  # [B, D] | K (key)
+        Vs = [proj(h) for proj in self.semantic_v_proj]  # 3x[B, D] | V1,V2,V3 (value)
         
         # 分层注意力计算
         c_neg = 0
         scale_factor = torch.sqrt(torch.tensor(self.embed_dim, dtype=torch.float32)) # 注意力缩放因子
         for i in range(3):
-            Q = syntax_feats[i]
+            Q = syntax_feats[i] # [B, D] | Q1,Q2,Q3 (query)
             A = torch.bmm(Q.unsqueeze(1), K.unsqueeze(-1)).squeeze(-1) / scale_factor  # [B, 1]
             # A = F.softmax(A * self.attention_scale[i], dim=0)  # 归一化注意力权重
             A = F.softmax(A * self.attention_log_scale[i], dim=0)  # 归一化注意力权重
