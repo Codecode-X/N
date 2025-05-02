@@ -12,11 +12,14 @@ from get_model import extract_img_features, extract_sentence_features, extract_o
 
 # Dataset class for training
 class CCNegGtDataset(Dataset):
-    """ CCNegDataset + GT negative object """
+    """ CCNegDataset + GT negative object + negative photo """
     def __init__(self, cfg):
         self.cfg = cfg
         self.csv_path = cfg['csv_path'] # COCO_val_retrieval.csv
         self.data = [] # 在_preprocess_features()中填充
+        
+        self.negatives_mapping_cc3m_to_coco = torch.load(cfg['negative_image_ft_mapping_path']) # 否定文本对应的负样本图像索引
+        
         self._preprocess_features()
         
     def _preprocess_features(self):
@@ -67,8 +70,13 @@ class CCNegGtDataset(Dataset):
         return len(self.data)
     
     def __getitem__(self, idx):
+        # 根据negatives_mapping_cc3m_to_coco得到负文本hn对应的负样本图像索引
+        topk_indices = self.negatives_mapping_cc3m_to_coco[idx]
+        top1_index = topk_indices[0]
+        
         return {
-            'I': self.data[idx]['I'], # 图像特征 [embed_dim]
+            'Ip': self.data[idx]['I'], # 图像特征 [embed_dim]
+            'In': self.data[top1_index]['I'], # 负样本图像特征 [embed_dim]   
             'hp': self.data[idx]['hp'], # 肯定文本特征 [embed_dim]
             'hn': self.data[idx]['hn'], # 加了否定词的干扰错误文本特征 [embed_dim]
             'level_hp_list': self.data[idx]['level_hp_list'], # (每层)否定文本特征列表 [num_layers, embed_dim]

@@ -83,6 +83,104 @@ class Glasses(nn.Module):
         total_loss = contrastive_loss
         return total_loss, {'contrastive_loss': contrastive_loss.item()}
     
+    def calc_ccneg_losses(scores_T2Ip, scores_Ip2T):
+        """
+        - Ip: 正样本图像 [N]
+        - hp: 正样本文本 [N]
+        - hn: 难负样本文本 [N]
+        
+        参数：
+            scores_T2Ip : [2N, N] 文本到正图像相似度矩阵（前N为hp，后N为hn）
+            scores_Ip2T : [N, 2N] 正图像到文本相似度矩阵
+        """
+        batch_size = scores_Ip2T.size(0)
+        device = scores_Ip2T.device
+        
+        # 构造标签映射
+        # 图像到文本：每个图像i的正样本为hp_i（索引i）
+        labels_I2T = torch.arange(batch_size, device=device)
+        
+        # 文本到图像：前N个hp的正样本为图像i，后N个hn无正样本（设为-1）
+        labels_T2I = torch.cat([
+            torch.arange(batch_size, device=device),
+            -torch.ones(batch_size, device=device)  # hn无对应图像
+        ])
+        
+        # 计算图像到文本损失
+        loss_I2T = F.cross_entropy(scores_Ip2T, labels_I2T)
+        
+        # 计算文本到图像损失（仅考虑前N个hp）
+        valid_mask = (labels_T2I != -1)
+        valid_scores = scores_T2Ip[valid_mask]
+        valid_labels = labels_T2I[valid_mask].long()
+        if valid_labels.numel() > 0:
+            loss_T2I = F.cross_entropy(valid_scores, valid_labels)
+        else:
+            loss_T2I = torch.tensor(0.0, device=device)
+        
+        # 加权平均
+        total_loss = (loss_I2T + loss_T2I) / 2
+        
+        return total_loss, {
+            'loss_I2T': loss_I2T.item(),
+            'loss_T2I': loss_T2I.item()
+        }
+        
+    def calc_ccneg_4_losses(scores_Tpn2Ip, scores_Ip2Tpn, scores_In2Tpn, scores_Tpn2In):
+        """
+        - Ip: 正样本图像 [N]
+        - In: 负样本图像 [N]（与hn一一对应）
+        - hp: 正样本文本 [N]
+        - hn: 难负样本文本 [N]
+        
+        参数：
+            scores_Tpn2Ip : [2N, N] 文本到正图像相似度矩阵（前N为hp，后N为hn）
+            scores_Ip2Tpn : [N, 2N] 正图像到文本相似度矩阵
+            scores_In2Tpn : [2N, N] 文本到负图像相似度矩阵（前N为hp，后N为hn）
+            scores_Tpn2In : [N, 2N] 负图像到文本相似度矩阵
+            caption_to_img : [N] 每个caption对应图像索引（此处应为0~N-1）
+        """
+        batch_size = scores_Ip2Tpn.size(0)
+        device = scores_Ip2Tpn.device
+        
+        # ========== 正图像-正文本对 ==========
+        # 正图像Ip匹配正文本hp
+        labels_Ip = torch.arange(batch_size, device=device)
+        
+        # Ip2T损失：每个Ip应匹配对应的hp
+        loss_Ip2Tpn = F.cross_entropy(scores_Ip2Tpn, labels_Ip) # Ip应匹配对应hp
+        
+        # T2Ip损失：hp应匹配对应Ip（排除hn）
+        hp_scores_Tpn2Ip = scores_Tpn2Ip[:batch_size]  # 前N行hp
+        loss_Tpn2Ip = F.cross_entropy(hp_scores_Tpn2Ip, labels_Ip) # hp应匹配对应Ip
+
+        # ========== 负图像-难负文本对 ==========
+        # 反转文本顺序：hn在前，hp在后（适配In匹配hn）
+        hn_scores_In2Tpn = scores_In2Tpn[:, batch_size:]  # In匹配hn的分数 [N, N]
+        hp_scores_In2Tpn = scores_In2Tpn[:, :batch_size]   # In匹配hp的分数 [N, N]
+        scores_In2Tnp = torch.cat([hn_scores_In2Tpn, hp_scores_In2Tpn], dim=1)  # [N, 2N] 反转Tp和Tn的顺序
+        
+        # In2T损失：每个In应匹配对应的hn
+        loss_In2Tnp = F.cross_entropy(scores_In2Tnp, labels_Ip) # In应匹配对应hn
+        
+        # TODO: xjh新增，待实验结果判断是否添加
+        # # T2In损失：hn应匹配对应In
+        loss_Tpn2In = torch.tensor(0.0, device=device)
+        # hn_scores_Tpn2In = scores_Tpn2In[batch_size:]  # 后N行hn
+        # loss_Tpn2In = F.cross_entropy(hn_scores_Tpn2In, labels_Ip) # hn应匹配对应In
+        
+        # ========== 综合损失 ==========
+        total_loss = (loss_Ip2Tpn + loss_Tpn2Ip + loss_In2Tnp + loss_Tpn2In)/4
+        
+        return total_loss, {
+            'total_loss': total_loss.item(),
+            'loss_Ip2T': loss_Ip2Tpn.item(),
+            'loss_T2Ip': loss_Tpn2Ip.item(),
+            'loss_In2T': loss_In2Tnp.item(),
+            'loss_T2In': loss_Tpn2In.item(),
+        }
+        
+        
     @staticmethod
     def load_model(cfg):
         """
@@ -114,7 +212,7 @@ class Glasses(nn.Module):
         return model
 
 
-def train_Retrieval_with_gtneg(cfg, model:Glasses, with_gt_neg=True):   
+def train_COCORetr_with_gtneg(cfg, model:Glasses, with_gt_neg=True):   
     """
     训练Glasses模型 | 代理任务: Retrieval with gtneg
     
@@ -253,6 +351,172 @@ def train_Retrieval_with_gtneg(cfg, model:Glasses, with_gt_neg=True):
             torch.save(checkpoint, os.path.join(current_dir, f"checkpoint_epoch_{epoch}.pth"))
         
         print(f"Training completed. Best validation recall5: {best_recall5:.4f}")
+    
+    return model
+
+
+def train_CCNeg_with_gtneg(cfg, model:Glasses, with_gt_neg=True):   
+    """
+    CCNeg数据集:
+        
+    def __getitem__(self, idx):
+        return {
+            'Ip': self.data[idx]['I'], # 正样本图像特征 [embed_dim]
+            'In': self.data[top1_index]['I'] # 负样本图像特征 [embed_dim] 
+            'hp': self.data[idx]['hp'], # 肯定文本特征 [embed_dim]
+            'hn': self.data[idx]['hn'], # 加了否定词的干扰错误文本特征 [embed_dim]
+            'level_hp_list': self.data[idx]['level_hp_list'], # (每层)否定文本特征列表 [num_layers, embed_dim]
+            'level_hn_list': self.data[idx]['level_hn_list'], # (每层)加了否定词的干扰错误文本特征列表 [num_layers, embed_dim]
+            'l_pos': self.data[idx]['l_pos'], # 肯定文本特征 [embed_dim]
+            'l_neg': self.data[idx]['l_neg'], # 加了否定词的干扰错误文本特征 [embed_dim]
+            'neg_obj': self.data[idx]['neg_obj'], # 否定对象的文本特征 [num_objs, embed_dim]
+            'img_path': self.data[idx]['img_path'], # 图像路径
+            'img_id': self.data[idx]['img_id'], # 图像ID
+        }
+
+    训练Glasses模型 | 代理任务: CCNeg with gtneg
+    
+    参数:
+        - cfg: 配置文件
+        - model: Glasses模型
+        - with_gt_neg: 是否使用GT的h_neg
+    """
+    # 读取配置
+    device = cfg['device']
+    epochs = cfg['epochs']
+    clip_grad = True if cfg.get('clip_grad', False) else False
+    batch_size = cfg['batch_size']
+    early_stop_patience = cfg['early_stop_patience']
+    lr = cfg['lr']
+    num_workers = cfg['num_workers']
+    train_rate, val_rate, test_rate = cfg['CCNegGtDataset']['split']
+
+    # 创建数据集和数据加载器
+    dataset = CCNegGtDataset(cfg['CCNegGtDataset'])
+    print(f">>> train_rate, val_rate, test_rate: {train_rate}, {val_rate}, {test_rate}")
+    train_size = int(len(dataset) * train_rate)
+    val_size = len(dataset) - train_size
+    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+
+    # 优化器
+    if cfg.get('only_train_moudle', None) == 'lens':
+        print("只训练lens模型")
+        for param in model.frame.parameters():
+            param.requires_grad = False
+        optimizer = optim.AdamW(model.lens.parameters(), lr=lr, betas=(0.9, 0.98))
+    elif cfg.get('only_train_moudle', None) == 'frame':
+        print("只训练frame模型")
+        for param in model.lens.parameters():
+            param.requires_grad = False
+        optimizer = optim.AdamW(model.frame.parameters(), lr=lr, betas=(0.9, 0.98))
+    else: # 训练所有模块
+        print("训练Glasses所有模块")
+        optimizer = optim.AdamW(model.parameters(), lr=lr, betas=(0.9, 0.98))
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    
+    # 梯度监控钩子
+    print("注册梯度监控钩子")
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            param.register_hook(
+                lambda grad, name=name: print(f"梯度 {name} 范数: {grad.norm().item():.4f}")
+                if grad.norm() > 5e2 else None
+            )
+    
+    # 训练前测试
+    evaluate_model_CCNeg_etrieval_withGTNeg(model, val_loader, test_raw_clip=False, with_gt_neg=with_gt_neg)
+    
+    # Training loop
+    best_recall5 = 0
+    patience_counter = 0
+    for epoch in range(epochs):
+        
+        model.train()
+        epoch_loss = 0
+        losses = {'contrastive_loss': 0}
+                
+        # 遍历每一个batch
+        for batch in tqdm(train_loader, desc=f"Epoch{epoch+1}/{epochs}"):
+            Ip = batch['I'].to(device)  # 图像特征 [batch_size, embed_dim]
+            In = batch['In'].to(device)  # 负样本图像特征 [batch_size, embed_dim]
+            hp = batch['hp'].to(device)  # 肯定文本特征 [batch_size, embed_dim]
+            hn = batch['hn'].to(device)  # 加了否定词的干扰错误文本特征 [batch_size, embed_dim]
+            level_hp_list = batch['level_hp_list'].to(device)  # 肯定文本特征列表 [batch_size, num_layers, embed_dim]
+            level_hn_list = batch['level_hn_list'].to(device)  # 否定文本特征列表 [batch_size, num_layers, embed_dim]
+            neg_obj = batch['neg_obj'].to(device)  # 否定对象的文本特征 [batch_size, embed_dim]
+            img_id = batch['img_id'].to(device)  # 图像ID [batch_size]
+            
+            batch_size = Ip.size(0)
+            
+            # Forward pass for both positive and negative text features
+            if with_gt_neg is True:
+                _, scores_Ip2Tp = model(Ip, hp, level_hp_list, neg_obj) # I2T [num_images=N, num_texts=N]
+                _, scores_Ip2Tn = model(Ip, hn, level_hn_list, neg_obj) 
+                _, scores_In2Tp = model(In, hp, level_hp_list, neg_obj) # I2T [num_images=N, num_texts=N]
+                _, scores_In2Tn = model(In, hn, level_hn_list, neg_obj)
+            else:
+                _, scores_Ip2Tp = model(Ip, hp, level_hp_list) # I2T [num_images=N, num_texts=N]
+                _, scores_Ip2Tn = model(Ip, hn, level_hn_list)
+                _, scores_In2Tp = model(In, hp, level_hp_list) # I2T [num_images=N, num_texts=N]
+                _, scores_In2Tn = model(In, hn, level_hn_list)
+            
+            scores_Ip2T = torch.cat([scores_Ip2Tp, scores_Ip2Tn], dim=1) # I2T [num_images=N, num_texts=2N]
+            scores_T2Ip = scores_Ip2T.t() # T2I [num_texts=2N, num_images=N]
+            scores_In2T = torch.cat([scores_In2Tp, scores_In2Tn], dim=1) # I2T [num_images=N, num_texts=2N]
+            scores_T2In = scores_In2T.t() # T2I [num_texts=2N, num_images=N]
+            
+            # 每个图片对应一个hp（正样本文本）和 hn（难例负样本，通过否定化hp实现，无可匹配图像），batch内其余图片的hp和hn为普通负样本
+            loss, loss_dict = model.calc_ccneg_losses(scores_T2Ip, scores_Ip2T, scores_In2T, scores_T2In)
+            
+            epoch_loss += loss.item()
+            losses['contrastive_loss'] += loss_dict['contrastive_loss']
+            
+            # Backward pass and optimization
+            optimizer.zero_grad()
+            loss.backward()
+            
+            # 梯度裁剪
+            if clip_grad:
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
+            optimizer.step()
+        
+        batch_count = len(train_loader)
+        print(f"Ep{epoch+1}/{epochs}  Loss: {epoch_loss/batch_count:.4f} contrastive_loss: {losses['contrastive_loss']/batch_count:.4f}")
+        scheduler.step()    
+        
+        # validation
+        val_results = evaluate_model_CCNeg_etrieval_withGTNeg(model, val_loader, test_raw_clip=False, with_gt_neg=with_gt_neg)
+        val_recall5 = val_results['mean'][5]  # mean-recall@5 
+        
+        # Save best model
+        if val_recall5 > best_recall5:
+            best_recall5 = val_recall5
+            patience_counter = 0
+            torch.save(model.state_dict(), os.path.join(current_dir, cfg['save_path']))
+            print(f"Best model saved at epoch {epoch} with recall@5: {best_recall5}")
+        else:  # 早停
+            patience_counter += 1  # 增加耐心计数器
+            print(f"💔recall5 drop from {best_recall5:.4f} to {val_recall5:.4f}, cur patience_counter add to {patience_counter}")
+            if early_stop_patience > 0 and patience_counter >= early_stop_patience:
+                print(f"Early stopping after {epoch+1} epochs")
+                break    
+        
+        # Save checkpoint
+        if epoch % 5 == 0 or epoch == epochs - 1:
+            checkpoint = {
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'loss': epoch_loss,
+                'recall5': val_recall5
+            }
+            torch.save(checkpoint, os.path.join(current_dir, f"checkpoint_epoch_{epoch}.pth"))
+        
+    print(f"Training completed. Best validation recall5: {best_recall5:.4f}")
     
     return model
 
