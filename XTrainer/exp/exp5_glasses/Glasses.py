@@ -356,7 +356,7 @@ if __name__ == "__main__":
     # model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=False) # 二阶段: 联合lens训练Glasses模型 | 代理任务: Retrieval
     
     # 测试模型通用配置
-    cfg['test_raw_clip'] = False
+    cfg['test_raw_clip'] = True
     cfg['test'] = True
     # cfg['model_path'] = 'weights/v1/best_clip_Glasses_7597_8224_3590(after_joint).pth' # 测试模型权重路径
     cfg['model_path'] = 'weights/v2/best_clip_Glasses.pth'
@@ -365,7 +365,7 @@ if __name__ == "__main__":
     cfg['NegationDetector']['model_path'] = '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth'
     
     # 测试Imagenet传统分类能力保留程度
-    cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/imagenet_val.csv'
+    cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/imagenet_val.csv' # ours:52.40% CLIP:53.87%
     test_dataset = CLSDataset(cfg['ClsEvalDataset'])
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ClsEvalDataset']['batch_size'], shuffle=False, num_workers=cfg['ClsEvalDataset']['num_workers'])
     if cfg['test_raw_clip'] is True:
