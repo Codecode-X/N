@@ -202,37 +202,37 @@ def evaluate_model_CCNeg_etrieval_withGTNeg(model, data_loader, test_raw_clip=Fa
         }
         
         
-# def evaluate_model_CCNeg_etrieval_withGTNeg(model, data_loader, test_raw_clip=False, with_gt_neg=True, device='cuda'):
-#     """
-#     评估model在CCNeg数据集上的检索任务性能指标：
-#         - 图片检索文本在全集中的 Accuracy，每个图片对应一个hp(正确匹配文本)和hn(加了否定词的干扰错误文本)，此处Accuracy应该在有所有图片的hp和hn组成的全集中计算
-#         - 每个图片的 Sp(每个图片与hp的相似度) 与 Sn(每个图片与hn的相似度) 之间的差值的均值
+def evaluate_model_CCNeg_etrieval_withGTNeg(model, data_loader, test_raw_clip=False, with_gt_neg=True, device='cuda'):
+    """
+    评估model在CCNeg数据集上的检索任务性能指标：
+        - 图片检索文本在全集中的 Accuracy，每个图片对应一个hp(正确匹配文本)和hn(加了否定词的干扰错误文本)，此处Accuracy应该在有所有图片的hp和hn组成的全集中计算
+        - 每个图片的 Sp(每个图片与hp的相似度) 与 Sn(每个图片与hn的相似度) 之间的差值的均值
     
-#     CCNeg数据集的__getitem__:
-#     return {
-#             'I': self.data[idx]['I'], # 图像特征 [embed_dim]
-#             'hp': self.data[idx]['hp'], # 正确匹配文本特征 [embed_dim]
-#             'hn': self.data[idx]['hn'], # 加了否定词的干扰错误文本特征 [embed_dim]
-#             'level_hp_list': self.data[idx]['level_hp_list'], # 否定文本特征 [num_layers, embed_dim]
-#             'level_hn_list': self.data[idx]['level_hn_list'], # 否定文本特征 [num_layers, embed_dim]
-#             'l_pos': self.data[idx]['l_pos'], # 肯定文本特征 [embed_dim]
-#             'l_neg': self.data[idx]['l_neg'], # 否定文本特征 [embed_dim]
-#             'neg_obj': self.data[idx]['neg_obj'], # 否定对象的文本特征 [num_objs, embed_dim]
-#             'img_path': self.data[idx]['img_path'], # 图像路径
-#             'img_id': self.data[idx]['img_id'] # 图像ID
-#         }
+    CCNeg数据集的__getitem__:
+    return {
+            'I': self.data[idx]['I'], # 图像特征 [embed_dim]
+            'hp': self.data[idx]['hp'], # 正确匹配文本特征 [embed_dim]
+            'hn': self.data[idx]['hn'], # 加了否定词的干扰错误文本特征 [embed_dim]
+            'level_hp_list': self.data[idx]['level_hp_list'], # 否定文本特征 [num_layers, embed_dim]
+            'level_hn_list': self.data[idx]['level_hn_list'], # 否定文本特征 [num_layers, embed_dim]
+            'l_pos': self.data[idx]['l_pos'], # 肯定文本特征 [embed_dim]
+            'l_neg': self.data[idx]['l_neg'], # 否定文本特征 [embed_dim]
+            'neg_obj': self.data[idx]['neg_obj'], # 否定对象的文本特征 [num_objs, embed_dim]
+            'img_path': self.data[idx]['img_path'], # 图像路径
+            'img_id': self.data[idx]['img_id'] # 图像ID
+        }
 
-#     """
-#     # 收集所有特征
-#     all_image_feats = []
-#     all_hp_feats = []  # 肯定文本特征
-#     all_hn_feats = []  # 否定文本特征
-#     all_level_hp_feats = []  # 每层肯定文本特征
-#     all_level_hn_feats = []  # 每层否定文本特征
-#     all_neg_obj_feats = []  # 否定对象特征
-#     all_img_ids = []
+    """
+    # 收集所有特征
+    all_image_feats = []
+    all_hp_feats = []  # 肯定文本特征
+    all_hn_feats = []  # 否定文本特征
+    all_level_hp_feats = []  # 每层肯定文本特征
+    all_level_hn_feats = []  # 每层否定文本特征
+    all_neg_obj_feats = []  # 否定对象特征
+    all_img_ids = []
     
-#     with torch.no_grad():
+    with torch.no_grad():
         # 遍历每一个batch收集特征
         for batch in tqdm(data_loader, desc="Extracting features", total=len(data_loader)):
             image_feats = batch['I'].to(device)  # [batch_size, embed_dim]
