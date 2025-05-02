@@ -15,6 +15,7 @@ from McqDataset import McqDataset, evaluate_model_mcq
 from RetrievalDataset_gtneg import RetrievalNegGtDataset, evaluate_model_retrieval_withGTNeg
 from RetrievalDataset import RetrievalDataset, evaluate_model_retrieval, retrieval_collate_fn
 from CCNegDataset_gtneg import CCNegGtDataset, evaluate_model_CCNeg_etrieval_withGTNeg
+from CLSDataset import CLSDataset, evaluate_model_CLS
 import torch.nn as nn
 import torch
 from torch.utils.data import DataLoader
@@ -31,6 +32,7 @@ class Glasses(nn.Module):
         self.frame = CLIPGlassesFrame.load_model(cfg['Frame'])
         self.negDetector = NegationDetector.load_model(cfg['NegationDetector']) # 轻量级否定分类器 | 1:包含否定 0:肯定
         self.neg_thr = cfg['NegationDetector']['neg_thr'] # 否定阈值
+        self.dtype = cfg['dtype']
        
         # 冻结negDetector
         for param in self.negDetector.parameters():
@@ -49,10 +51,6 @@ class Glasses(nn.Module):
         """
         # 否定检测
         with torch.no_grad():
-            # neg_mask = self.negDetector(h).squeeze(-1) > 1.0  # 全是肯定 R:55.86% M:36.41%
-            # neg_mask = self.negDetector(h).squeeze(-1) > 0.7  # 多肯定 R:79.86% M:33.61%
-            # neg_mask = self.negDetector(h).squeeze(-1) > 0.3  # 多否定 R:81.54% M:33.83%
-            # neg_mask = self.negDetector(h).squeeze(-1) > -1.0  # 全是否定 R:82.24% M:41.66%
             neg_mask = self.negDetector(h).squeeze(-1) > self.neg_thr # 否定阈值
         
         # Lens        
@@ -480,7 +478,13 @@ if __name__ == "__main__":
             'csv_path': '/root/NP-CLIP/NegBench/data/ccneg_converted.csv',
             'dtype': torch.float32, 
             
+        },
+        'ImagenetCLSevalDataset': {
+            'csv_path': '/root/NP-CLIP/NegBench/data/CLS_Imagenet/imagenet_train.csv',
+            'batch_size': 64,
+            'num_workers': 4,
         }
+        
     }
 
     # # 一阶段训练：使用gtneg代替lens输出，单独训练Frame模型，不训练Lens模型 -- Recall@5: 99.71%
@@ -511,43 +515,54 @@ if __name__ == "__main__":
     cfg['Lens']['model_path'], cfg['Frame']['model_path'] = None, None # 不覆盖joint训练后的Glasses
     cfg['NegationDetector']['model_path'] = '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth' #
     
-    test_ccneg_dataset = CCNegGtDataset(cfg['CCNegGtDataset'])
-    test_ccneg_dataloader = torch.utils.data.DataLoader(test_ccneg_dataset, batch_size=cfg['CCNegGtDataset']['batch_size'], shuffle=False, num_workers=cfg['CCNegGtDataset']['num_workers'])
+    # 测试Imagenet传统分类能力保留程度
+    cfg['ImagenetCLSevalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS_Imagenet/imagenet_train.csv'
+    test_dataset = CLSDataset(cfg['ImagenetCLSevalDataset'])
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ImagenetCLSevalDataset']['batch_size'], shuffle=False, num_workers=cfg['ImagenetCLSevalDataset']['num_workers'])
     if cfg['test_raw_clip'] is True:
-        evaluate_model_CCNeg_etrieval_withGTNeg(None, test_ccneg_dataloader, test_raw_clip=True, with_gt_neg=False)
+        evaluate_model_CLS(None, test_dataloader, test_raw_clip=True)
     else:
         model = Glasses.load_model(cfg)
-        evaluate_model_CCNeg_etrieval_withGTNeg(model, test_ccneg_dataloader, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
+        evaluate_model_CLS(model, test_dataloader, test_raw_clip=False)
     
-    # Retrieval with gtbeg
-    test_retrieval_dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
-    test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'])
-    if cfg['test_raw_clip'] is True:
-        evaluate_model_retrieval_withGTNeg(None, test_retrieval_dataloader, test_raw_clip=True, with_gt_neg=False)
-    else:
-        model = Glasses.load_model(cfg)
-        # evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=True) # 使用GT的h_neg
-        evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
+    # # 测试 CC-Neg
+    # test_ccneg_dataset = CCNegGtDataset(cfg['CCNegGtDataset'])
+    # test_ccneg_dataloader = torch.utils.data.DataLoader(test_ccneg_dataset, batch_size=cfg['CCNegGtDataset']['batch_size'], shuffle=False, num_workers=cfg['CCNegGtDataset']['num_workers'])
+    # if cfg['test_raw_clip'] is True:
+    #     evaluate_model_CCNeg_etrieval_withGTNeg(None, test_ccneg_dataloader, test_raw_clip=True, with_gt_neg=False)
+    # else:
+    #     model = Glasses.load_model(cfg)
+    #     evaluate_model_CCNeg_etrieval_withGTNeg(model, test_ccneg_dataloader, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
+    
+    # # 测试 Retrieval with gtbeg
+    # test_retrieval_dataset = RetrievalNegGtDataset(cfg['RetrievalWithGtNeg'])
+    # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Retrieval']['batch_size'], shuffle=False, num_workers=cfg['Retrieval']['num_workers'])
+    # if cfg['test_raw_clip'] is True:
+    #     evaluate_model_retrieval_withGTNeg(None, test_retrieval_dataloader, test_raw_clip=True, with_gt_neg=False)
+    # else:
+    #     model = Glasses.load_model(cfg)
+    #     # evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=True) # 使用GT的h_neg
+    #     evaluate_model_retrieval_withGTNeg(model, test_retrieval_dataloader, test_raw_clip=False, with_gt_neg=False) # 使用lens预测的h_neg
         
-    # MCQ VOC 
-    cfg['Mcq']['test_dataset_path'] = '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv'
-    test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
-    test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
-    if cfg['test_raw_clip'] is True:
-        evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
-    else:
-        model = Glasses.load_model(cfg)
-        evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)
+    # # 测试 MCQ VOC 
+    # cfg['Mcq']['test_dataset_path'] = '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv'
+    # test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
+    # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
+    # if cfg['test_raw_clip'] is True:
+    #     evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
+    # else:
+    #     model = Glasses.load_model(cfg)
+    #     evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)
         
-    # MCQ COCO
-    cfg['Mcq']['test_dataset_path'] = '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv'
-    test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
-    test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
-    if cfg['test_raw_clip'] is True:
-        evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
-    else:
-        model = Glasses.load_model(cfg)
-        evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)
+    # # 测试 MCQ COCO
+    # cfg['Mcq']['test_dataset_path'] = '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv'
+    # test_retrieval_dataset = McqDataset(cfg['Mcq']['test_dataset_path'])
+    # test_retrieval_dataloader = torch.utils.data.DataLoader(test_retrieval_dataset, batch_size=cfg['Mcq']['batch_size'], shuffle=False, num_workers=cfg['Mcq']['num_workers'])
+    # if cfg['test_raw_clip'] is True:
+    #     evaluate_model_mcq(None, test_retrieval_dataloader, test_raw_clip=True)
+    # else:
+    #     model = Glasses.load_model(cfg)
+    #     evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)
     
     
     print("==============配置项===============")

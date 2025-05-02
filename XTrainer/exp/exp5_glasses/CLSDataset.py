@@ -6,7 +6,7 @@ grandparent_dir = os.path.dirname(parent_dir)
 sys.path.insert(0, grandparent_dir)
 sys.path.insert(0, parent_dir)
 import torch
-import tqdm
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import torch.nn.functional as F
@@ -28,21 +28,12 @@ class CLSDataset(Dataset):
     1,val/ILSVRC2012_val_00000002.JPEG,goldfish
     2,val/ILSVRC2012_val_00000003.JPEG,great_white_shark
     """
-    def __init__(self, csv_path, clip_model, lens_model, transform=None):
+    def __init__(self, cfg):
         """
         Args:
             csv_path: Path to the ImageNet dataset csv file
-            clip_model: CLIP model for feature extraction
-            lens_model: CLIPGlassesLens model for feature extraction
-            transform: Optional transform to be applied on images
         """
-        self.csv_path = Path(csv_path)
-        self.clip_model = clip_model
-        self.lens_model = lens_model
-        self.transform = transform
-        self.device = next(lens_model.parameters()).device
-
-        # Load CSV data
+        self.csv_path = cfg['csv_path']
         self.df = pd.read_csv(self.csv_path)
         
         # 从中随机选5000个样本
@@ -69,7 +60,7 @@ class CLSDataset(Dataset):
         # Check if cache file exists
         if os.path.exists(cache_path):
             print(f"Loading preprocessed features from cache: {cache_path} of {self.csv_path} ...")
-            cached_data = torch.load(cache_path)
+            cached_data = torch.load(cache_path, weights_only=False)
             with torch.no_grad():
                 self.image_features = cached_data['image_features']
                 self.labels = cached_data['labels']
@@ -125,13 +116,13 @@ class CLSDataset(Dataset):
             label: Class label (long)
         """
         img_features = torch.tensor(self.image_features[idx], dtype=torch.float32) # [embed_dim]
-        text_features = torch.tensor(self.text_features, dtype=torch.float32) # [num_classes, embed_dim]
-        level_H = torch.tensor(self.level_H, dtype=torch.float32) # [num_classes, num_layers, embed_dim]
+        text_features = torch.tensor(np.array(self.text_features), dtype=torch.float32) # [num_classes, embed_dim]
+        level_H = torch.tensor(np.array(self.level_H), dtype=torch.float32) # [num_classes, num_layers, embed_dim]
         label = torch.tensor(self.labels[idx], dtype=torch.long) # long
         return img_features, text_features, level_H, label
 
 
-def evaluate_model_CLS(model, data_loader, test_raw_clip=False, device='cuda'):
+def evaluate_model_CLS(model, data_loader, test_raw_clip=False, device='cuda', dtype=torch.float32):
     """
     Evaluate the CLIPGlassesFrame model on the validation set.
     
@@ -147,13 +138,17 @@ def evaluate_model_CLS(model, data_loader, test_raw_clip=False, device='cuda'):
         - all_predictions: List of all predictions
         - all_labels: List of all true labels
     """
-    dtype = model.dtype
-    model.eval()
     val_loss = 0
     val_correct = 0
     val_total = 0
     all_predictions = []
     all_labels = []
+    
+    if test_raw_clip:
+        print("测试原始 CLIP 的分类能力")
+    else:
+        print("测试 CLIPGlasses 的分类能力")
+        model.eval()
     
     with torch.no_grad():
         for img_features, all_class_feats, level_H, labels in tqdm(data_loader, desc="Extract feats"):
@@ -166,33 +161,36 @@ def evaluate_model_CLS(model, data_loader, test_raw_clip=False, device='cuda'):
             img_features = img_features.to(device, dtype=dtype) # [batch_size, embed_dim]
             all_class_feats = all_class_feats.to(device, dtype=dtype) # [batch_size, num_options, embed_dim]
             level_H = level_H.to(device, dtype=dtype) # [batch_size, num_options, num_layers, embed_dim]
-            labels = labels.to(device, dtype=dtype) # [batch_size]
-            answer_types = answer_types.to(device, dtype=dtype) # [batch_size]
+            labels = labels.to(device) # [batch_size]
             
             # Get scores for all options
             num_cls = all_class_feats.shape[1]
-            # Process each option
-            all_scores = [None] * num_cls  # [batch_size, batch_size] * num_options
             
-            for i in range(num_cls):
-                # mini-batch中每个图像和第i个选项文本特征的匹配得分
-                choice_h = all_class_feats[:, i] # [batch_size, embed_dim]
-                level_h_list = level_H[:, i] # [batch_size, num_layers, embed_dim]
-                scores, _ = model(img_features, choice_h, level_h_list) # [batch_size, batch_size]
-                all_scores[i] = scores # [batch_size, batch_size]
-            
-            # # 错误方式（直接使用全矩阵）
-            # logits = torch.stack(all_scores, dim=1)  # 得到 [B, C, B]
-            # 正确方式（取对角线）
-            logits = torch.stack([s.diag() for s in all_scores], dim=1) # 只计算和图片对应的选项得分 [B, C]
-            
+            if test_raw_clip: # 53.68%
+                img_features = F.normalize(img_features, p=2, dim=-1) # [num_imgs=B, embed_dim]
+                all_class_feats = F.normalize(all_class_feats[0], p=2, dim=-1) # [num_options, embed_dim]
+                logit_scale = Clip_model.logit_scale.exp()
+                logits_per_image = logit_scale * (img_features @ all_class_feats.t()) # [num_imgs=B, num_options]
+            else: # 53.20%
+                all_scores = [None] * num_cls  # [batch_size, batch_size] * num_options
+                for i in range(num_cls):
+                    # mini-batch中每个图像和第i个选项文本特征的匹配得分
+                    choice_h = all_class_feats[:, i] # [batch_size, embed_dim]
+                    level_h_list = level_H[:, i] # [batch_size, num_layers, embed_dim]
+                    _, scores_I2T = model(img_features, choice_h, level_h_list) # [batch_size, batch_size]
+                    all_scores[i] = scores_I2T # [batch_size, batch_size]
+                # # 错误方式（直接使用全矩阵）
+                # logits = torch.stack(all_scores, dim=1)  # 得到 [B, C, B]
+                # 正确方式（取对角线）
+                logits_per_image = torch.stack([s.diag() for s in all_scores], dim=1) # 只计算和图片对应的选项得分 [B, C]
+        
             # Compute cross-entropy loss
-            loss = F.cross_entropy(logits, labels)
+            loss = F.cross_entropy(logits_per_image, labels)
             
             val_loss += loss.item()
             
             # Compute accuracy
-            _, predicted = torch.max(logits, 1)
+            _, predicted = torch.max(logits_per_image, 1)
             
             all_predictions.extend(predicted.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
