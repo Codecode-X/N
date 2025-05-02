@@ -547,7 +547,7 @@ if __name__ == "__main__":
             'dtype': torch.float32,
             'num_heads': 4,
             'dropout': 0.1,
-            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/v1/best_clip_lens_9922.pth' # Lens的预训练权重
+            'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/v1_COCO/best_clip_lens_9922.pth' # Lens的预训练权重
         },
         'Frame': {
             'device': 'cuda',
@@ -625,8 +625,8 @@ if __name__ == "__main__":
     # 测试模型通用配置
     cfg['test_raw_clip'] = True
     cfg['test'] = True
-    # cfg['model_path'] = 'weights/v1/best_clip_Glasses_7597_8224_3590(after_joint).pth' # 测试模型权重路径
-    cfg['model_path'] = 'weights/v2/best_clip_Glasses.pth'
+    # cfg['model_path'] = 'weights/v1_COCO/best_clip_Glasses_7597_8224_3590(after_joint).pth' # 测试模型权重路径
+    cfg['model_path'] = 'weights/v2_COCO/best_clip_Glasses.pth'
     # cfg['model_path'] = 'best_clip_Glasses.pth'
     cfg['Lens']['model_path'], cfg['Frame']['model_path'] = None, None # 不覆盖joint训练后的Glasses
     cfg['NegationDetector']['model_path'] = '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth'
