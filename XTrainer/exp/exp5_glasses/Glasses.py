@@ -173,11 +173,10 @@ class Glasses(nn.Module):
         total_loss = (loss_Ip2Tpn + loss_Tpn2Ip + loss_In2Tnp + loss_Tpn2In)/4
         
         return total_loss, {
-            'total_loss': total_loss.item(),
-            'loss_Ip2T': loss_Ip2Tpn.item(),
-            'loss_T2Ip': loss_Tpn2Ip.item(),
-            'loss_In2T': loss_In2Tnp.item(),
-            'loss_T2In': loss_Tpn2In.item(),
+            'loss_Ip2Tpn': loss_Ip2Tpn.item(),
+            'loss_Tpn2Ip': loss_Tpn2Ip.item(),
+            'loss_In2Tnp': loss_In2Tnp.item(),
+            'loss_Tpn2In': loss_Tpn2In.item(),
         }
         
         
@@ -435,7 +434,7 @@ def train_CCNeg_with_gtneg(cfg, model:Glasses, with_gt_neg=True):
         
         model.train()
         epoch_loss = 0
-        losses = {'contrastive_loss': 0}
+        losses = {'loss_Ip2Tpn': 0, 'loss_Tpn2Ip': 0, 'loss_In2Tnp': 0, 'loss_Tpn2In': 0}
                 
         # 遍历每一个batch
         for batch in tqdm(train_loader, desc=f"Epoch{epoch+1}/{epochs}"):
@@ -468,10 +467,14 @@ def train_CCNeg_with_gtneg(cfg, model:Glasses, with_gt_neg=True):
             scores_T2In = scores_In2T.t() # T2I [num_texts=2N, num_images=N]
             
             # 每个图片对应一个hp（正样本文本）和 hn（难例负样本，通过否定化hp实现，无可匹配图像），batch内其余图片的hp和hn为普通负样本
-            loss, loss_dict = model.calc_ccneg_losses(scores_T2Ip, scores_Ip2T, scores_In2T, scores_T2In)
+            loss, loss_dict = model.calc_ccneg_4_losses(scores_T2Ip, scores_Ip2T, scores_In2T, scores_T2In)
             
             epoch_loss += loss.item()
-            losses['contrastive_loss'] += loss_dict['contrastive_loss']
+
+            losses['loss_Ip2Tpn'] += loss_dict['loss_Ip2Tpn']
+            losses['loss_Tpn2Ip'] += loss_dict['loss_Tpn2Ip']
+            losses['loss_In2Tnp'] += loss_dict['loss_In2Tnp']
+            losses['loss_Tpn2In'] += loss_dict['loss_Tpn2In']
             
             # Backward pass and optimization
             optimizer.zero_grad()
