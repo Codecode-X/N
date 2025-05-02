@@ -524,16 +524,11 @@ def train_CCNeg_with_gtneg(cfg, model:Glasses, with_gt_neg=True):
     return model
 
 if __name__ == "__main__":
-    # Example usagerue
     cfg = {
         # -----训练参数-----
         'epochs': 30,
         'batch_size': 64,
-        # 'lr': 5e-3, # 57.47%
-        'lr': 1e-5, # r@5: 57.73%
-        # 'lr': 1e-4, # r@5: 58.82%
-        # 'lr': 10, # r@5: 57.91% - 36.37%
-        # 'lr': 1e-5, # r@5: 57.33
+        'lr': 1e-5,
         'num_workers': 4,
         'early_stop_patience': 5, # Early stopping patience
         'device': 'cuda',
@@ -553,13 +548,11 @@ if __name__ == "__main__":
             'device': 'cuda',
             'dtype': torch.float32,
             'lambda_0': 1, # 基础惩罚强度
-            # 'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_clip_Frame_mse_v1869.pth' # Frame的预训练权重
-            # 'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/best_clip_Frame.pth' # Frame的预训练权重
         },
         'NegationDetector': {
             'device': 'cuda',
             'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth', # NegationDetector的预训练权重
-            'neg_thr': 0.5, # 否定阈值(大于该值则为否定) 例如：全否定: -1.0, 全肯定: 1.0
+            'neg_thr': 0.5, # 否定阈值(大于该值则为否定) 例如：全否定: -1.0, 全肯定: 1.0 #TODO: 待调参
         },
         
         # -----数据参数-----
@@ -569,8 +562,7 @@ if __name__ == "__main__":
             'num_options': 4,
             'split': [0.9, 0.1, 0.0],
             'train_dataset_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv',
-            # 'test_dataset_path': '/root/NP-CLIP/NegBench/data/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv', # 35.90%
-            'test_dataset_path': '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv',  # 41.66%
+            'test_dataset_path': '/root/NP-CLIP/NegBench/data/images/MCQ/VOC2007_mcq_llama3.1_rephrased.csv',
         },
         'Retrieval': {
             'batch_size': 64,
@@ -600,15 +592,17 @@ if __name__ == "__main__":
             'batch_size': 64,
             'num_workers': 4,
         }
-        
     }
 
+    # # --------------------------------------------在COCO上训练----------------------------------------------
+    
+    # # 在COCO上训练
     # # 一阶段训练：使用gtneg代替lens输出，单独训练Frame模型，不训练Lens模型 -- Recall@5: 99.71%
     # cfg['lr'] = 1e-4
     # cfg['neg_thr'] = -1
     # cfg['epochs'] = 10
     # model = Glasses.load_model(cfg)
-    # model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=True) # 一阶段: 训练Glasses模型 | 代理任务: Retrieval with gtneg
+    # model = train_COCORetr_with_gtneg(cfg, model, with_gt_neg=True) # 一阶段: 训练Glasses模型 | 代理任务: Retrieval with gtneg
     
     # # 二阶段训练：使用GT_neg作为监督单独训练lens, 在lens.py中完成
     
@@ -620,59 +614,44 @@ if __name__ == "__main__":
     # cfg['clip_grad'] = True # 梯度裁剪
     # model = Glasses.load_model(cfg)
     # model.lens = CLIPGlassesLens.load_model(cfg['Lens']) # 加载lens模型的预训练权重
-    # model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=False) # 二阶段: 联合lens训练Glasses模型 | 代理任务: Retrieval
+    # model = train_COCORetr_with_gtneg(cfg, model, with_gt_neg=False) # 二阶段: 联合lens训练Glasses模型 | 代理任务: Retrieval
     
-    # 测试模型通用配置
-    cfg['test_raw_clip'] = True
-    cfg['test'] = True
-    # cfg['model_path'] = 'weights/v1_COCO/best_clip_Glasses_7597_8224_3590(after_joint).pth' # 测试模型权重路径
-    cfg['model_path'] = 'weights/v2_COCO/best_clip_Glasses.pth'
-    # cfg['model_path'] = 'best_clip_Glasses.pth'
-    cfg['Lens']['model_path'], cfg['Frame']['model_path'] = None, None # 不覆盖joint训练后的Glasses
-    cfg['NegationDetector']['model_path'] = '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth'
+    # # -------------------------------------------在CC-Neg上训练----------------------------------------------
     
-    # 测试Imagenet传统分类能力保留程度
-    cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/imagenet_val.csv' # ours:52.40% CLIP:53.87%
-    test_dataset = CLSDataset(cfg['ClsEvalDataset'])
-    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ClsEvalDataset']['batch_size'], shuffle=False, num_workers=cfg['ClsEvalDataset']['num_workers'])
-    if cfg['test_raw_clip'] is True:
-        evaluate_model_CLS(None, test_dataloader, test_raw_clip=True)
-    else:
-        model = Glasses.load_model(cfg)
-        evaluate_model_CLS(model, test_dataloader, test_raw_clip=False)
+    # 在CC-Neg上训练
+    # 一阶段训练：使用gtneg代替lens输出，单独训练Frame模型，不训练Lens模型 -- Recall@5: 99.71%
+    cfg['lr'] = 1e-4
+    cfg['neg_thr'] = -1
+    cfg['epochs'] = 10
+    model = Glasses.load_model(cfg)
+    model = train_CCNeg_with_gtneg(cfg, model, with_gt_neg=True) # 一阶段: 训练Glasses模型 | 代理任务: Retrieval with gtneg
     
-    # 测试Imagenet1K传统分类能力保留程度
-        
-    # # 测试caltech101传统分类能力保留程度
-    # cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/caltech101.csv' # ours:90.54% clip:90.74%
-    # test_dataset = CLSDataset(cfg['ClsEvalDataset'])
-    # test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ClsEvalDataset']['batch_size'], shuffle=False, num_workers=cfg['ClsEvalDataset']['num_workers'])
-    # if cfg['test_raw_clip'] is True:
-    #     evaluate_model_CLS(None, test_dataloader, test_raw_clip=True)
-    # else:
-    #     model = Glasses.load_model(cfg)
-    #     evaluate_model_CLS(model, test_dataloader, test_raw_clip=False)
-        
-    # # 测试CIFAR-100传统分类能力保留程度
-    # cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/cifar100.csv' # ours:38.50% clip:37.04%
-    # test_dataset = CLSDataset(cfg['ClsEvalDataset'])
-    # test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ClsEvalDataset']['batch_size'], shuffle=False, num_workers=cfg['ClsEvalDataset']['num_workers'])
-    # if cfg['test_raw_clip'] is True:
-    #     evaluate_model_CLS(None, test_dataloader, test_raw_clip=True)
-    # else:
-    #     model = Glasses.load_model(cfg)
-    #     evaluate_model_CLS(model, test_dataloader, test_raw_clip=False)
-        
-    # # 测试CIFAR-10传统分类能力保留程度
-    # cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/cifar10.csv' # ours:71.03% clip:71.08%
-    # test_dataset = CLSDataset(cfg['ClsEvalDataset'])
-    # test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ClsEvalDataset']['batch_size'], shuffle=False, num_workers=cfg['ClsEvalDataset']['num_workers'])
-    # if cfg['test_raw_clip'] is True:
-    #     evaluate_model_CLS(None, test_dataloader, test_raw_clip=True)
-    # else:
-    #     model = Glasses.load_model(cfg)
-    #     evaluate_model_CLS(model, test_dataloader, test_raw_clip=False)
+    # 二阶段训练：使用GT_neg作为监督单独训练lens, 在lens.py中完成
     
+    # 三阶段训练：联合训练lens和Frame模型，进行适配 -- Recall@5: val: 75.97% full: 82.24%  -- MCQ: 35.90%
+    cfg['pretrain'] = True
+    cfg['lr'] = 1e-3
+    cfg['model_path'] = 'best_clip_Glasses.pth' # 一阶段预模型权重路径
+    cfg['neg_thr'] = -1
+    cfg['clip_grad'] = True # 梯度裁剪
+    model = Glasses.load_model(cfg)
+    model.lens = CLIPGlassesLens.load_model(cfg['Lens']) # 加载lens模型的预训练权重
+    model = train_CCNeg_with_gtneg(cfg, model, with_gt_neg=False) # 二阶段: 联合lens训练Glasses模型 | 代理任务: Retrieval
+    
+    
+    # # --------------------------------------测试配置(COCO & CC-Neg)----------------------------------------------
+    
+    # # 测试 COCO 上训练的Glasses模型通用配置
+    # cfg['test_raw_clip'] = True
+    # cfg['test'] = True
+    # cfg['model_path'] = 'weights/v2_COCO/best_clip_Glasses.pth'
+    # cfg['Lens']['model_path'], cfg['Frame']['model_path'] = None, None # 不覆盖joint训练后的Glasses
+    # cfg['NegationDetector']['model_path'] = '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth'
+    
+    # # 测试 CC-Neg 上训练的Glasses模型通用配置
+    # #TODO: 待训练
+    
+    # # --------------------------------------测试模型性能(对比实验)--------------------------------------
     # # 测试 CC-Neg
     # test_ccneg_dataset = CCNegGtDataset(cfg['CCNegGtDataset'])
     # test_ccneg_dataloader = torch.utils.data.DataLoader(test_ccneg_dataset, batch_size=cfg['CCNegGtDataset']['batch_size'], shuffle=False, num_workers=cfg['CCNegGtDataset']['num_workers'])
@@ -711,6 +690,48 @@ if __name__ == "__main__":
     # else:
     #     model = Glasses.load_model(cfg)
     #     evaluate_model_mcq(model, test_retrieval_dataloader, test_raw_clip=False)
+    
+    
+    # # --------------------------------------测试CLIP传统ZERO-SHOT能力保留程度--------------------------------------
+    # # 测试Imagenet传统分类能力保留程度
+    # cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/imagenet_val.csv' # ours:52.40% CLIP:53.87%
+    # test_dataset = CLSDataset(cfg['ClsEvalDataset'])
+    # test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ClsEvalDataset']['batch_size'], shuffle=False, num_workers=cfg['ClsEvalDataset']['num_workers'])
+    # if cfg['test_raw_clip'] is True:
+    #     evaluate_model_CLS(None, test_dataloader, test_raw_clip=True)
+    # else:
+    #     model = Glasses.load_model(cfg)
+    #     evaluate_model_CLS(model, test_dataloader, test_raw_clip=False)
+        
+    # # 测试caltech101传统分类能力保留程度
+    # cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/caltech101.csv' # ours:90.54% clip:90.74%
+    # test_dataset = CLSDataset(cfg['ClsEvalDataset'])
+    # test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ClsEvalDataset']['batch_size'], shuffle=False, num_workers=cfg['ClsEvalDataset']['num_workers'])
+    # if cfg['test_raw_clip'] is True:
+    #     evaluate_model_CLS(None, test_dataloader, test_raw_clip=True)
+    # else:
+    #     model = Glasses.load_model(cfg)
+    #     evaluate_model_CLS(model, test_dataloader, test_raw_clip=False)
+        
+    # # 测试CIFAR-100传统分类能力保留程度
+    # cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/cifar100.csv' # ours:38.50% clip:37.04%
+    # test_dataset = CLSDataset(cfg['ClsEvalDataset'])
+    # test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ClsEvalDataset']['batch_size'], shuffle=False, num_workers=cfg['ClsEvalDataset']['num_workers'])
+    # if cfg['test_raw_clip'] is True:
+    #     evaluate_model_CLS(None, test_dataloader, test_raw_clip=True)
+    # else:
+    #     model = Glasses.load_model(cfg)
+    #     evaluate_model_CLS(model, test_dataloader, test_raw_clip=False)
+        
+    # # 测试CIFAR-10传统分类能力保留程度
+    # cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/cifar10.csv' # ours:71.03% clip:71.08%
+    # test_dataset = CLSDataset(cfg['ClsEvalDataset'])
+    # test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ClsEvalDataset']['batch_size'], shuffle=False, num_workers=cfg['ClsEvalDataset']['num_workers'])
+    # if cfg['test_raw_clip'] is True:
+    #     evaluate_model_CLS(None, test_dataloader, test_raw_clip=True)
+    # else:
+    #     model = Glasses.load_model(cfg)
+    #     evaluate_model_CLS(model, test_dataloader, test_raw_clip=False)
     
     
     print("==============配置项===============")
