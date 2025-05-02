@@ -35,7 +35,7 @@ class CCNegGtDataset(Dataset):
             return
         
         # Read CSV files
-        df = pd.read_csv(self.csv_path)[:5000] #FIXME
+        df = pd.read_csv(self.csv_path)[-40000:] #最后40000个样本为验证集
         for idx, row in tqdm(df.iterrows(), total=len(df), desc="Preprocessing features"):
             # str
             caption_p = eval(row['captions'])[0] # 肯定文本

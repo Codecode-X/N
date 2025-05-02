@@ -479,7 +479,7 @@ if __name__ == "__main__":
             'dtype': torch.float32, 
             
         },
-        'ImagenetCLSevalDataset': {
+        'ClsEvalDataset': {
             'csv_path': '/root/NP-CLIP/NegBench/data/CLS_Imagenet/imagenet_train.csv',
             'batch_size': 64,
             'num_workers': 4,
@@ -506,24 +506,56 @@ if __name__ == "__main__":
     # model.lens = CLIPGlassesLens.load_model(cfg['Lens']) # 加载lens模型的预训练权重
     # model = train_Retrieval_with_gtneg(cfg, model, with_gt_neg=False) # 二阶段: 联合lens训练Glasses模型 | 代理任务: Retrieval
     
-    # 测试模型
+    # 测试模型通用配置
     cfg['test_raw_clip'] = False
     cfg['test'] = True
     # cfg['model_path'] = 'weights/v1/best_clip_Glasses_7597_8224_3590(after_joint).pth' # 测试模型权重路径
     cfg['model_path'] = 'weights/v2/best_clip_Glasses.pth'
     # cfg['model_path'] = 'best_clip_Glasses.pth'
     cfg['Lens']['model_path'], cfg['Frame']['model_path'] = None, None # 不覆盖joint训练后的Glasses
-    cfg['NegationDetector']['model_path'] = '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth' #
+    cfg['NegationDetector']['model_path'] = '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth'
     
     # 测试Imagenet传统分类能力保留程度
-    cfg['ImagenetCLSevalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS_Imagenet/imagenet_train.csv'
-    test_dataset = CLSDataset(cfg['ImagenetCLSevalDataset'])
-    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ImagenetCLSevalDataset']['batch_size'], shuffle=False, num_workers=cfg['ImagenetCLSevalDataset']['num_workers'])
+    cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/imagenet_val.csv'
+    test_dataset = CLSDataset(cfg['ClsEvalDataset'])
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ClsEvalDataset']['batch_size'], shuffle=False, num_workers=cfg['ClsEvalDataset']['num_workers'])
     if cfg['test_raw_clip'] is True:
         evaluate_model_CLS(None, test_dataloader, test_raw_clip=True)
     else:
         model = Glasses.load_model(cfg)
         evaluate_model_CLS(model, test_dataloader, test_raw_clip=False)
+    
+    # 测试Imagenet1K传统分类能力保留程度
+        
+    # # 测试caltech101传统分类能力保留程度
+    # cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/caltech101.csv' # ours:90.54% clip:90.74%
+    # test_dataset = CLSDataset(cfg['ClsEvalDataset'])
+    # test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ClsEvalDataset']['batch_size'], shuffle=False, num_workers=cfg['ClsEvalDataset']['num_workers'])
+    # if cfg['test_raw_clip'] is True:
+    #     evaluate_model_CLS(None, test_dataloader, test_raw_clip=True)
+    # else:
+    #     model = Glasses.load_model(cfg)
+    #     evaluate_model_CLS(model, test_dataloader, test_raw_clip=False)
+        
+    # # 测试CIFAR-100传统分类能力保留程度
+    # cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/cifar100.csv' # ours:38.50% clip:37.04%
+    # test_dataset = CLSDataset(cfg['ClsEvalDataset'])
+    # test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ClsEvalDataset']['batch_size'], shuffle=False, num_workers=cfg['ClsEvalDataset']['num_workers'])
+    # if cfg['test_raw_clip'] is True:
+    #     evaluate_model_CLS(None, test_dataloader, test_raw_clip=True)
+    # else:
+    #     model = Glasses.load_model(cfg)
+    #     evaluate_model_CLS(model, test_dataloader, test_raw_clip=False)
+        
+    # # 测试CIFAR-10传统分类能力保留程度
+    # cfg['ClsEvalDataset']['csv_path'] = '/root/NP-CLIP/NegBench/data/CLS/cifar10.csv' # ours:71.03% clip:71.08%
+    # test_dataset = CLSDataset(cfg['ClsEvalDataset'])
+    # test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg['ClsEvalDataset']['batch_size'], shuffle=False, num_workers=cfg['ClsEvalDataset']['num_workers'])
+    # if cfg['test_raw_clip'] is True:
+    #     evaluate_model_CLS(None, test_dataloader, test_raw_clip=True)
+    # else:
+    #     model = Glasses.load_model(cfg)
+    #     evaluate_model_CLS(model, test_dataloader, test_raw_clip=False)
     
     # # 测试 CC-Neg
     # test_ccneg_dataset = CCNegGtDataset(cfg['CCNegGtDataset'])

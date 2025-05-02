@@ -36,9 +36,9 @@ class CLSDataset(Dataset):
         self.csv_path = cfg['csv_path']
         self.df = pd.read_csv(self.csv_path)
         
-        # 从中随机选5000个样本
-        if len(self.df) > 5000:
-            self.df = self.df.sample(n=5000, random_state=3407).reset_index(drop=True)
+        # # 从中随机选5000个样本
+        # if len(self.df) > 5000:
+        #     self.df = self.df.sample(n=5000, random_state=3407).reset_index(drop=True)
 
         # Extract unique classes and create a mapping
         self.class_list = self.df['label'].unique().tolist()
@@ -76,7 +76,7 @@ class CLSDataset(Dataset):
         self.labels = []
         
         # Extract image features for all images
-        for idx, row in tqdm.tqdm(self.df.iterrows(), total=len(self.df)):
+        for idx, row in tqdm(self.df.iterrows(), total=len(self.df)):
             # Extract image features
             img_path = str(row['image_path'])
             img_features = extract_img_features(img_path)
@@ -86,7 +86,7 @@ class CLSDataset(Dataset):
         
         # Extract text features for all classes
         print("Extracting text features for all classes...")
-        for class_name in tqdm.tqdm(self.class_list):
+        for class_name in tqdm(self.class_list):
             # Create prompt for class
             prompt = f"A photo of a {class_name.replace('_', ' ')}."
             # Extract text features
