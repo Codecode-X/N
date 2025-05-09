@@ -12,6 +12,7 @@ class EvaluatorBase:
         - evaluate：计算评估结果并返回。
     """
 
+<<<<<<< HEAD
     def __init__(self, cfg, dm):
         """ 
         初始化评估器。
@@ -22,6 +23,10 @@ class EvaluatorBase:
         """
         self.cfg = cfg
         self.dm = dm
+=======
+    def __init__(self, cfg):
+        self.cfg = cfg
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
     def reset(self):
         """重置评估器状态。"""

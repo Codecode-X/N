@@ -199,10 +199,17 @@ class Clip(ModelBase):
         文本编码器，提取文本特征。
 
         参数：
+<<<<<<< HEAD
             - text (Tensor): 文本数据 | [num_classes, context_length(上下文长度,Clip默认为77)]
 
         返回：
             - text_features (Tensor): 文本特征 | [num_classes, embed_dim]
+=======
+            - text (Tensor): 文本数据 | [batch_size, context_length]
+
+        返回：
+            - text_features (Tensor): 文本特征 | [batch_size, embed_dim]
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
         
         主要步骤：
             1. 将输入文本转换为 token 嵌入
@@ -212,12 +219,18 @@ class Clip(ModelBase):
             5. 将 EOT (End-of-Text) token 对应的特征作为整个文本序列的表示 (类似 Bert 用 [cls] token)
             6. 通过 `text_projection` 进行线性变换，得到最终的文本特征
         """
+<<<<<<< HEAD
         # 将输入文本转换为 token 嵌入
         x = self.token_embedding(text).type(self.dtype)  # [num_classes, context_length, transformer_width]
+=======
+        # 将输入文本转换为 token 嵌入，形状为 [batch_size, n_ctx(上下文长度), transformer_width]
+        x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
         # 加上可训练的位置编码，保留序列位置信息
         x = x + self.positional_embedding.type(self.dtype)
         
         # 通过 Transformer 进行文本编码
+<<<<<<< HEAD
         x = x.permute(1, 0, 2)  # 调整维度为 [context_length, num_classes, transformer_width] 以适配 Transformer
         x, level_x_list = self.transformer(x)
         x = x.permute(1, 0, 2)  # 还原维度为 [num_classes, context_length, transformer_width]
@@ -236,6 +249,22 @@ class Clip(ModelBase):
         level_text_features_list = [EOT @ self.text_projection for EOT in level_EOT_list]  # 对每一层的输出进行线性变换
 
         return text_features, level_text_features_list # [num_classes, embed_dim], [num_classes, transformer_width] * transformer_layers
+=======
+        x = x.permute(1, 0, 2)  # 调整维度为 [n_ctx, batch_size, transformer_width] 以适配 Transformer
+        x = self.transformer(x)
+        x = x.permute(1, 0, 2)  # 还原维度为 [batch_size, n_ctx, transformer_width]
+
+        # 通过 layerNorm 层归一化数据
+        x = self.ln_final(x).type(self.dtype)
+
+        # 使用 EOT (End-of-Text) token 对应的特征作为整个文本序列的表示 (类似 Bert 用 [cls] token)
+        EOT = x[torch.arange(x.shape[0]), text.argmax(dim=-1)]  
+
+        # 通过 `text_projection` 进行线性变换，得到最终的文本特征
+        text_features  = EOT @ self.text_projection  
+
+        return text_features
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
     def init_text_features(self, label_texts:list):
         """
@@ -259,7 +288,11 @@ class Clip(ModelBase):
         CLIP 前向传播。
         
         参数：
+<<<<<<< HEAD
             - image(torch.Tensor): 输入图像，形状为 (batch_size, 3, height, width)
+=======
+            - image: 图像数据 | [batch, 3, 224, 224]
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
             - return_feature (bool): 是否返回特征
         
         返回：
@@ -394,6 +427,7 @@ class Clip(ModelBase):
             for key in ["input_resolution", "context_length", "vocab_size"]:
                 if key in state_dict:
                     del state_dict[key]
+<<<<<<< HEAD
             convert_weights(model) # clip 默认使用 fp16 精度
             model.load_state_dict(state_dict)
 
@@ -405,6 +439,11 @@ class Clip(ModelBase):
             else:
                 raise NotImplementedError(f"Clip 没有实现该精度转换方法：{cfg.TRAINER.PREC}")
 
+=======
+            convert_weights(model)
+            model.load_state_dict(state_dict)
+
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
             # 返回 eval 模式下的 CLIP 模型
             return model.eval()
 
@@ -431,7 +470,11 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
     参数：
     ----------
     texts : Union[str, List[str]]
+<<<<<<< HEAD
         需要进行分词的文本，可以是 单个字符串 或 字符串列表。
+=======
+        需要进行分词的文本，可以是单个字符串或字符串列表。
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
     context_length : int
         设定的上下文长度（context length），所有 CLIP 模型都使用 77 作为默认上下文长度。
@@ -439,7 +482,11 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
     返回：
     -------
     torch.LongTensor
+<<<<<<< HEAD
         一个二维张量，包含文本的 token 结果，形状为 (num_texts, context_length)。
+=======
+        一个二维张量，包含文本的 token 结果，形状为 (文本数量，context_length)。
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
     """
     # 如果输入是单个字符串，则转换为列表，确保后续处理统一
     if isinstance(texts, str):
@@ -448,6 +495,7 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
     sot_token = _tokenizer.encoder["<|startoftext|>"]
     eot_token = _tokenizer.encoder["<|endoftext|>"]
     # 对每个文本进行编码，并添加起始和结束标记 | 文本 "Hello world" -> [sot_token, tokenized("Hello"), tokenized("world"), eot_token]
+<<<<<<< HEAD
     all_tokens = []
     for text in texts:
         text_token = _tokenizer.encode(text) # text的token列表
@@ -457,6 +505,13 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
     # 创建一个形状为 (文本数量，context_length) 的张量，初始值为 0（填充用）
     if version.parse(torch.__version__) < version.parse("1.8.0"):
         result = torch.zeros(len(all_tokens), context_length, dtype=torch.long) # shape: (num_texts, context_length)
+=======
+    all_tokens = [[sot_token] + _tokenizer.encode(text) + [eot_token] for text in texts]
+    
+    # 创建一个形状为 (文本数量，context_length) 的张量，初始值为 0（填充用）
+    if version.parse(torch.__version__) < version.parse("1.8.0"):
+        result = torch.zeros(len(all_tokens), context_length, dtype=torch.long)
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
     else:
         result = torch.zeros(len(all_tokens), context_length, dtype=torch.int)
 
@@ -472,7 +527,11 @@ def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: b
         # 将 tokens 填充到 result[i]，超出部分自动填充 0
         result[i, :len(tokens)] = torch.tensor(tokens)
 
+<<<<<<< HEAD
     return result # shape: (num_texts, context_length)
+=======
+    return result
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
 def convert_weights(model: nn.Module):
     """Convert applicable model parameters to fp16"""
@@ -706,6 +765,7 @@ class Transformer(nn.Module):
         self.layers = layers # Transformer 的层数 - 堆叠的残差注意力块（ResidualAttentionBlock）的数量
         self.resblocks = nn.Sequential(*[ResidualAttentionBlock(width, heads, attn_mask) for _ in range(layers)])
 
+<<<<<<< HEAD
     # def forward(self, x: torch.Tensor, attention_maps=None):
     #     if attention_maps is None:
     #         return self.resblocks(x)
@@ -727,6 +787,16 @@ class Transformer(nn.Module):
                 x = block(x, attention_maps)
                 level_list.append(x.clone())
             return x, level_list
+=======
+    def forward(self, x: torch.Tensor, attention_maps=None):
+        if attention_maps is None:
+            return self.resblocks(x)
+        else:
+            for block in self.resblocks:
+                x = block(x, attention_maps)
+            return x
+
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
 class VisionTransformer(nn.Module):
     def __init__(self, input_resolution: int, patch_size: int, width: int, layers: int, heads: int, output_dim: int):
@@ -745,7 +815,10 @@ class VisionTransformer(nn.Module):
         # 保存输入分辨率和输出维度
         self.input_resolution = input_resolution  # 输入图像的分辨率，例如 224×224
         self.output_dim = output_dim  
+<<<<<<< HEAD
         self.patch_size = patch_size  # 每个 patch 的大小，例如 16×16
+=======
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
         
         # **卷积层：将输入图像转换为 patch embedding**
         # 这里使用一个 2D 卷积层，类似于 ViT 直接将图像分割为 patch，并进行 embedding
@@ -796,7 +869,11 @@ class VisionTransformer(nn.Module):
 
         # **5. 进入 Transformer 编码器**
         x = x.permute(1, 0, 2)  # (batch_size, seq_len, width) -> (seq_len, batch_size, width)
+<<<<<<< HEAD
         x, _ = self.transformer(x, attention_maps)
+=======
+        x = self.transformer(x, attention_maps)
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
         x = x.permute(1, 0, 2)  # (seq_len, batch_size, width) -> (batch_size, seq_len, width)
 
         # **6. 取出 CLS token 表示整个视频序列的特征**

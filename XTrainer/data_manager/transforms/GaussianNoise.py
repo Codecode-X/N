@@ -1,5 +1,9 @@
 from data_manager.transforms import TRANSFORM_REGISTRY
+<<<<<<< HEAD
 from .base_class.TransformBase import TransformBase
+=======
+from .TransformBase import TransformBase
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 import random
 import torch
 

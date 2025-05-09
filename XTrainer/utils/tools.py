@@ -193,7 +193,11 @@ def load_yaml_config(config_path, save=False, modify_fn=None):
         cfg = CfgNode.load_cfg(f)
 
     if modify_fn is not None:
+<<<<<<< HEAD
         modify_fn(cfg)
+=======
+        cfg = modify_fn(cfg)
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
     if save:
         # 保存配置文件到输出目录

@@ -79,8 +79,14 @@ def setup_logger(output=None):
     else:
         fpath = osp.join(output, "log.txt")  # 否则，将输出路径与"log.txt"拼接
 
+<<<<<<< HEAD
     # if osp.exists(fpath):
     # 确保现有的日志文件不会被覆盖
     fpath += time.strftime("-%Y-%m-%d-%H-%M-%S")  # 在文件名后添加时间戳
+=======
+    if osp.exists(fpath):
+        # 确保现有的日志文件不会被覆盖
+        fpath += time.strftime("-%Y-%m-%d-%H-%M-%S")  # 在文件名后添加时间戳
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
     sys.stdout = Logger(fpath)  # 将标准输出重定向到 Logger 实例

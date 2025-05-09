@@ -20,10 +20,16 @@ class DataManager:
         - dataset_wrapper (DatasetWrapper): 数据集包装器。
 
     属性：
+<<<<<<< HEAD
+=======
+        - num_classes (int): 类别数量。
+        - lab2cname (dict): 类别到名称的映射。
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
         - dataset (DatasetBase): 数据集。
         - train_loader (DataLoader): 训练数据加载器。
         - val_loader (DataLoader): 验证数据加载器。
         - test_loader (DataLoader): 测试数据加载器。 
+<<<<<<< HEAD
         
         - CLS分类任务
             - num_classes (int): 类别数量。
@@ -31,6 +37,8 @@ class DataManager:
         - MCQ多选任务
             - num_choices (int): 选项数量。
         
+=======
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
     方法：
         - show_dataset_summary: 打印数据集摘要信息。
@@ -56,6 +64,7 @@ class DataManager:
         """
         # ---构建数据集对象---
         dataset = build_dataset(cfg)
+<<<<<<< HEAD
         if cfg.TASK_TYPE == "CLS":  # 分类任务
             self.num_classes = dataset.num_classes  # 类别数量
             self.lab2cname = dataset.lab2cname  # 类别到名称的映射
@@ -66,6 +75,11 @@ class DataManager:
 
         # ---构建数据增强---
         if not zero_shot and custom_tfm_train is None: # 构建训练数据增强
+=======
+
+        # ---构建数据增强---
+        if custom_tfm_train is None: # 构建训练数据增强
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
             tfm_train = build_train_transform(cfg)  # 使用配置默认的训练数据增强
         else:
             print("* 使用自定义训练数据增强")
@@ -78,6 +92,7 @@ class DataManager:
             tfm_test = custom_tfm_test  # 使用自定义的测试数据增强
 
         # ---构建数据加载器（数据集 + 采样器 + 数据增强）---
+<<<<<<< HEAD
         train_loader, val_loader, test_loader = None, None, None  # 初始化数据加载器
         if not zero_shot:
             train_sampler = build_train_sampler(cfg, dataset.train) # 构建训练采样器
@@ -103,6 +118,30 @@ class DataManager:
                     dataset_transform=dataset_transform # 数据集转换器，用于对数据集进行转换和增强
                 )
 
+=======
+        train_sampler = build_train_sampler(cfg, dataset.train) # 构建训练采样器
+        train_loader = _build_data_loader( # 根据配置信息，构建训练数据加载器 train_loader
+            cfg,
+            sampler=train_sampler,  # 训练采样器
+            data_source=dataset.train,  # 数据源
+            batch_size=cfg.DATALOADER.BATCH_SIZE_TRAIN,  # 批大小
+            tfm=tfm_train,  # 训练数据增强
+            is_train=True,  # 训练模式
+            dataset_transform=dataset_transform  # 数据集转换器，用于对数据集进行转换和增强
+        )
+        val_loader = None  
+        if dataset.val:  # 构建验证数据加载器 val_loader (如果存在验证数据)
+            val_sampler = build_test_sampler(cfg, dataset.val) # 构建验证集采样器
+            val_loader = _build_data_loader(
+                cfg,
+                sampler=val_sampler,  # 验证采样器
+                data_source=dataset.val,  # 数据源
+                batch_size=cfg.DATALOADER.BATCH_SIZE_TEST,  # 批大小
+                tfm=tfm_test,  # 验证数据增强
+                is_train=False,  # 测试模式
+                dataset_transform=dataset_transform # 数据集转换器，用于对数据集进行转换和增强
+            )
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
         test_sampler = build_test_sampler(cfg, dataset.test) # 构建测试集采样器
         test_loader = _build_data_loader( # 构建测试数据加载器 test_loader
             cfg,
@@ -113,6 +152,13 @@ class DataManager:
             is_train=False,  # 测试模式
             dataset_transform=dataset_transform # 数据集转换器，用于对数据集进行转换和增强
         )
+<<<<<<< HEAD
+=======
+
+        # ---记录属性：类别数量、类别到名称的映射---
+        self._num_classes = dataset.num_classes  # 类别数量
+        self._lab2cname = dataset.lab2cname  # 类别到名称的映射
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
         
         # ---记录对象：数据集、训练数据加载器、验证数据加载器、测试数据加载器---
         self.dataset = dataset # 数据集
@@ -123,6 +169,18 @@ class DataManager:
         if cfg.VERBOSE:  # 如果配置中启用了详细信息打印
             self.show_dataset_summary(cfg)
 
+<<<<<<< HEAD
+=======
+    @property
+    def num_classes(self):
+        """返回类别数量。"""
+        return self._num_classes
+
+    @property
+    def lab2cname(self):
+        """返回类别到名称的映射。"""
+        return self._lab2cname
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
     def show_dataset_summary(self, cfg):
         """打印数据集摘要信息。"""
@@ -131,7 +189,12 @@ class DataManager:
         # 构建摘要表格
         table = []
         table.append(["数据集", dataset_name])
+<<<<<<< HEAD
         table.append(["训练数据", f"{len(self.dataset.train):,}"])
+=======
+        table.append(["类别数量", f"{self.num_classes:,}"])
+        table.append(["有标签训练数据", f"{len(self.dataset.train):,}"])
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
         if self.dataset.val:
             table.append(["验证数据", f"{len(self.dataset.val):,}"])
         table.append(["测试数据", f"{len(self.dataset.test):,}"])
@@ -208,7 +271,10 @@ class TransformeWrapper(TorchDataset):
         self.is_train = is_train  # 是否是训练模式
         # 获取相关配置信息
         self.cfg = cfg  # 配置
+<<<<<<< HEAD
         self.task_type = cfg.TASK_TYPE # "CLS"分类；"MCQ"多选
+=======
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
         self.k_tfm = cfg.DATALOADER.K_TRANSFORMS if is_train else 1 # 增强次数 | 如果是训练模式，获取数据增强次数；测试模式下默认为 1
         self.return_img0 = cfg.DATALOADER.RETURN_IMG0  # 是否记录未增强的原始图像 | 默认为 False
 
@@ -242,6 +308,7 @@ class TransformeWrapper(TorchDataset):
         item = self.data_source[idx]  # 获取数据项
 
         # 初始化输出字典
+<<<<<<< HEAD
         if self.task_type == 'CLS':
             output = {
                 "index": idx,  # 索引
@@ -258,6 +325,14 @@ class TransformeWrapper(TorchDataset):
                 "correct_answer_type": item.correct_answer_type,  # 正确答案类型 | str
             }
         # 读取图像并转换为 tensor，存入输出字典 output
+=======
+        output = {
+            "label": item.label,  # 类别标签
+            "impath": item.impath,  # 图像路径
+            "index": idx,  # 索引
+        }
+
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
         img0 = read_image(item.impath)  # 原始图像
         # 如果提供了 transform, 则对图像进行增强；否则，返回无任何处理的原始图像
         if self.transform is not None:  

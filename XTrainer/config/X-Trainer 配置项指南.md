@@ -8,10 +8,16 @@
 
 | 配置项             | 类型 | 示例值     | 说明                                       |
 | ------------------ | ---- | ---------- | ------------------------------------------ |
+<<<<<<< HEAD
 | **cfg.TASK_TYPE**  | str  | "CLS"      | "CLS"分类；"MCQ"多选；"RETRIEVAL"检索      |
 | **cfg.VERBOSE**    | bool | True       | 启用详细日志输出（如训练进度、指标等）     |
 | **cfg.SEED**       | int  | 42         | 全局随机种子，确保实验可复现性             |
 | **cfg.USE_CUDA**   | bool | True       | 自动检测并使用可用 GPU 加速计算            |
+=======
+| **cfg.VERBOSE**    | bool | True       | 启用详细日志输出（如训练进度、指标等）     |
+| **cfg.SEED**       | int  | 42         | 全局随机种子，确保实验可复现性             |
+| **cfg.USE_CUDA**   | bool | True       | 自动检测并使用可用 GPU 加速计算              |
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 | **cfg.OUTPUT_DIR** | str  | "./output" | 输出目录（存储日志/模型/评估结果）         |
 | **cfg.RESUME**     | str  | ""         | 断点续训路径（需包含`checkpoint.pth`文件） |
 
@@ -24,7 +30,11 @@
 ### 基础配置
 | 配置项                        | 类型 | 示例          | 说明                                                         |
 | ----------------------------- | ---- | ------------- | ------------------------------------------------------------ |
+<<<<<<< HEAD
 | **cfg.TRAINER.NAME**          | str  | "TrainerClsClip" | 训练器类名（如`TrainerClip`）                                |
+=======
+| **cfg.TRAINER.NAME**          | str  | "TrainerClip" | 训练器类名（如`TrainerClip`）                                |
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 | **cfg.TRAINER.PREC**          | str  | "amp"         | 训练精度：<br>`fp32`-全精度，`fp16`-半精度，`amp`-自动混合精度（显存优化） |
 | **cfg.TRAINER.FROZEN** | bool | False         | 冻结基础网络层（仅训练分类头）                               |
 
@@ -60,18 +70,28 @@
 | **cfg.DATASET.SPLIT**       | list | [0.7, 0.1, 0.2]     | 训练/验证/测试集划分比例（总和≤1）                     |
 | **cfg.DATASET.NUM_SHOTS**   | int  | -1                  | 每类样本数：<br>`-1`-全量，`0`-零样本，`≥1`-小样本学习 |
 
+<<<<<<< HEAD
 #### CLS数据集基础配置
+=======
+#### 分类数据集基础配置
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
 | 配置项                    | 类型 | 示例                                     | 说明           |
 | ------------------------- | ---- | ---------------------------------------- | -------------- |
 | **cfg.DATASET.IMAGE_DIR** | str  | "/root/caltech-101/101_ObjectCategories" | 数据集图像目录 |
 
+<<<<<<< HEAD
 #### MCQ数据集基础配置
 
 | 配置项                      | 类型 | 示例                                | 说明           |
 | --------------------------- | ---- | ----------------------------------- | -------------- |
 | **cfg.DATASET.CSV_FILE**    | str  | COCO_val_mcq_llama3.1_rephrased.csv | 数据集标签文件 |
 | **cfg.DATASET.NUM_CHOICES** | int  | 4                                   | 选项数量       |
+=======
+#### 回归数据集基础配置
+
+*暂未实现*
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
 #### 特定数据集配置
 
@@ -96,7 +116,11 @@
 
 | 配置项                    | 类型 | 示例                | 说明               |
 | ------------------------- | ---- | ------------------- | ------------------ |
+<<<<<<< HEAD
 | **cfg.SAMPLER.TRAIN_SP** | str  | "RandomSampler"     | 训练数据采样器类名 |
+=======
+| **cfg.SAMPLER.TRAIN_SP ** | str  | "RandomSampler"     | 训练数据采样器类名 |
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 | **cfg.SAMPLER.TEST_SP**   | str  | "SequentialSampler" | 测试数据采样器类名 |
 
 ----
@@ -137,8 +161,11 @@
 | **Random2DTranslation**       |                                      |               | 缩放后随机裁剪                                               |
 |                               | `cfg.INPUT.Random2DTranslation.p`    | 0.5           | 执行概率（0=禁用，1=始终应用）                               |
 | **StandardNoAugTransform**    | -                                    | -             | 标准化的无增强图像转换管道                                   |
+<<<<<<< HEAD
 | **RandomResizedCrop**         |                                      |               |                                                              |
 |                               | `cfg.INPUT.RandomResizedCrop.scale`  | [0.08, 1.0]   | 随机裁剪的比例范围                                           |
+=======
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
 ---
 
@@ -160,10 +187,19 @@
 | **Clip** |                             |      |                 | 经典对比学习模型           |
 | ├─       | **cfg.MODEL.pretrained**    | str  | "ViT-B/16"      | Clip 的预训练模型名         |
 | └─       | **cfg.MODEL.download_root** | str  | "~/.cache/clip" | Clip 预训练权重下载保存目录 |
+<<<<<<< HEAD
 | **CoOpClip** |  |  |  |  |
 | ├─ | **cfg.MODEL.pretrained** | str | "ViT-B/16" | Clip 的预训练模型名 |
 | ├─ | **cfg.MODEL.download_root** | str | "~/.cache/clip" | Clip 预训练权重下载保存目录 |
 | ├─ | **cfg.MODEL.init_ctx** | str | "a photo of a" | promp 中的初始上下文 |
+=======
+| CoOpClip |  |  |  |  |
+| ├─ | **cfg.MODEL.pretrained** | str | "ViT-B/16" | Clip 的预训练模型名 |
+| ├─ | **cfg.MODEL.download_root** | str | "~/.cache/clip" | Clip 预训练权重下载保存目录 |
+| ├─ | **cfg.MODEL.init_ctx** | str | "a photo of a" | promp中的初始上下文 |
+|  |  |  |  |  |
+|  |  |  |  |  |
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
 ---
 
@@ -224,9 +260,15 @@
 
 | 优化器                  | 配置项                  | 类型 | 示例 | 说明                   |
 | ----------------------- | ----------------------- | ---- | ---- | ---------------------- |
+<<<<<<< HEAD
 | **EvaluatorClassification** |                         |      |      | 分类任务评估器         |
 | ├─                      | **cfg.EVALUATOR.per_class** | bool | True | 是否评估每个类别的结果 |
 | └─                      | **cfg.EVALUATOR.calc_cmat** | bool | True | 是否计算混淆矩阵       |
+=======
+| EvaluatorClassification |                         |      |      | 分类任务评估器         |
+| ├─                      | cfg.EVALUATOR.per_class | bool | True | 是否评估每个类别的结果 |
+| └─                      | cfg.EVALUATOR.calc_cmat | bool | True | 是否计算混淆矩阵       |
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
 ----
 

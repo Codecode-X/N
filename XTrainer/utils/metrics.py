@@ -1,11 +1,18 @@
 import torch
 from torch.nn import functional as F
+<<<<<<< HEAD
 import numpy as np
 
 __all__ = [
     "compute_distance_matrix",  # 计算距离矩阵的函数
     "compute_accuracy",  # 计算准确率的函数
     "compute_ci95"  # 计算 95% 置信区间的函数
+=======
+
+__all__ = [
+    "compute_distance_matrix",  # 计算距离矩阵的函数
+    "compute_accuracy"  # 计算准确率的函数
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 ]
 
 def compute_distance_matrix(input1, input2, metric):
@@ -107,6 +114,7 @@ def _cosine_distance(input1, input2):
     distmat = 1 - torch.mm(input1_normed, input2_normed.t())  # 计算余弦距离矩阵
     return distmat
 
+<<<<<<< HEAD
 def compute_ci95(results):
     """ 
     计算 95% 置信区间。
@@ -117,3 +125,5 @@ def compute_ci95(results):
         - float: 95% 置信区间。
     """
     return 1.96 * np.std(results) / np.sqrt(len(results))
+=======
+>>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
