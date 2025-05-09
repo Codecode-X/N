@@ -5,18 +5,14 @@ from torchvision.transforms import InterpolationMode
 
 @TRANSFORM_REGISTRY.register()
 class RandomResizedCrop(TransformBase):
-    """
-    随机裁剪和缩放图像
-    """
 
     def __init__(self, cfg):
         self.target_size = cfg.INPUT.SIZE
-        self.s_ = cfg.INPUT.RandomResizedCrop.scale # 随机裁剪的比例范围
-        interp_mode = getattr(InterpolationMode, cfg.INPUT.INTERPOLATION.upper(), InterpolationMode.BILINEAR) # 获取插值模式
+        self.s_ = cfg.INPUT.RandomResizedCrop.scale
+        interp_mode = getattr(InterpolationMode, cfg.INPUT.INTERPOLATION.upper(), InterpolationMode.BILINEAR)
         
-        assert isinstance(self.target_size, int), "cfg.INPUT.SIZE 必须是单个整数"
+        assert isinstance(self.target_size, int), "cfg.INPUT.SIZE must be a single integer"
         
-        # 转换方法
         self.transform = _RandomResizedCrop(self.target_size, scale=self.s_, interpolation=interp_mode)
 
     def __call__(self, img):

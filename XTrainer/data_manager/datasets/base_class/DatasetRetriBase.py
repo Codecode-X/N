@@ -8,80 +8,80 @@ from utils import check_isfile
 @DATASET_REGISTRY.register()
 class DatasetRetriBase(DatasetBase):
     """
-    Retrieval数据集类的基类。
-    继承自 DatasetBase 类。
+    Base class for retrieval datasets.
+    Inherits from the DatasetBase class.
 
-    对外访问属性 (@property) :
-        - 父类 DatasetBase 的属性:
-            - train (list): 带标签的训练数据。
-            - val (list): 验证数据（可选）。
-            - test (list): 测试数据。
-        - 当前读取：None
+    Publicly accessible attributes (@property):
+        - Attributes from the parent class DatasetBase:
+            - train (list): Labeled training data.
+            - val (list): Validation data (optional).
+            - test (list): Test data.
+        - Currently read: None
 
-    对内访问属性:
-        - 父类 DatasetBase 的属性:
-            - num_shots (int): 少样本数量。
-            - seed (int): 随机种子。
-            - p_trn (float): 训练集比例。
-            - p_val (float): 验证集比例。
-            - p_tst (float): 测试集比例。
-            - dataset_dir (str): 数据集目录。
-        - 当前读取：
-            - csv_file (str): cfg.DATASET.CSV_FILE: 标注文件路径 | 例如：/root/autodl-tmp/NegBench/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv
+    Internally accessible attributes:
+        - Attributes from the parent class DatasetBase:
+            - num_shots (int): Number of few-shot samples.
+            - seed (int): Random seed.
+            - p_trn (float): Training set proportion.
+            - p_val (float): Validation set proportion.
+            - p_tst (float): Test set proportion.
+            - dataset_dir (str): Dataset directory.
+        - Currently read:
+            - csv_file (str): cfg.DATASET.CSV_FILE: Path to the annotation file | e.g., /root/autodl-tmp/NegBench/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv
 
-    基本方法:
-        - 实现 DatasetBase 类的抽象方法/接口：
-            - read_split: 读取数据分割文件。
-            - save_split: 保存数据分割文件。
-            - generate_fewshot_dataset: 生成小样本数据集（通常用于训练集）。
+    Basic methods:
+        - Implements abstract methods/interfaces from the DatasetBase class:
+            - read_split: Reads the data split file.
+            - save_split: Saves the data split file.
+            - generate_fewshot_dataset: Generates a few-shot dataset (usually for the training set).
 
-    抽象方法/接口 (需要具体数据集子类实现):
-        - read_and_split_data: 读取数据并分割为 train, val, test 数据集 (需要根据每个Retrieval数据集的格式自定义)。
+    Abstract methods/interfaces (to be implemented by specific dataset subclasses):
+        - read_and_split_data: Reads data and splits it into train, val, and test datasets (customized for each retrieval dataset format).
     """
 
     def __init__(self, cfg):
         """ 
-        初始化数据集的基本属性
+        Initializes the basic attributes of the dataset.
 
-        参数:
-            - cfg (CfgNode): 配置。
+        Parameters:
+            - cfg (CfgNode): Configuration.
 
-        配置
-            - 当前读取：
-                - csv_path (str): cfg.DATASET.CSV_PATH: 标注文件路径 | 例如：/root/autodl-tmp/NegBench/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv
-            - 父类读取：
-                - dataset_dir (str): cfg.DATASET.DATASET_DIR: 数据集目录。| 例如：/root/autodl-tmp/NegBench/images/Retrieval
-                - num_shots (int): cfg.DATASET.NUM_SHOTS: 少样本数量 | -1 表示使用全部数据，0 表示 zero-shot，1 表示 one-shot，以此类推。
-                - seed (int): cfg.SEED: 随机种子。
-                - p_trn (float): cfg.DATASET.SPLIT[0]: 训练集比例。
-                - p_val (float): cfg.DATASET.SPLIT[1]: 验证集比例。
-                - p_tst (float): cfg.DATASET.SPLIT[2]: 测试集比例。
+        Configuration:
+            - Currently read:
+                - csv_path (str): cfg.DATASET.CSV_PATH: Path to the annotation file | e.g., /root/autodl-tmp/NegBench/images/Retrieval/COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv
+            - Read by the parent class:
+                - dataset_dir (str): cfg.DATASET.DATASET_DIR: Dataset directory. | e.g., /root/autodl-tmp/NegBench/images/Retrieval
+                - num_shots (int): cfg.DATASET.NUM_SHOTS: Number of few-shot samples | -1 means using all data, 0 means zero-shot, 1 means one-shot, and so on.
+                - seed (int): cfg.SEED: Random seed.
+                - p_trn (float): cfg.DATASET.SPLIT[0]: Training set proportion.
+                - p_val (float): cfg.DATASET.SPLIT[1]: Validation set proportion.
+                - p_tst (float): cfg.DATASET.SPLIT[2]: Test set proportion.
         
-        主要步骤：
-            1. 读取新增配置。
-            2. 调用父类 DatasetBase 构造方法：
-                1. 读取配置。
-                2. 读取数据并分割为 train, val, test 数据集。（待子类实现 get_data 和 get_fewshot_data 方法）
-                3. 如果 num_shots >= 0，则从 train 和 val 中进行少样本采样，生成少样本的 train 和 val 数据集。
+        Main steps:
+            1. Read additional configurations.
+            2. Call the constructor of the parent class DatasetBase:
+                1. Read configurations.
+                2. Read data and split it into train, val, and test datasets (subclasses need to implement the get_data and get_fewshot_data methods).
+                3. If num_shots >= 0, perform few-shot sampling from train and val to generate few-shot train and val datasets.
         """
-        # ---读取配置---
+        # ---Read configurations---
         self.csv_file = cfg.DATASET.CSV_FILE 
         self.num_choices = cfg.DATASET.NUM_CHOICES
 
-        # ---调用父类构造方法，获取 self.train, self.val, self.test 等属性---
-        super().__init__(cfg)  # 调用父类构造方法
+        # ---Call the parent class constructor to obtain self.train, self.val, self.test, etc.---
+        super().__init__(cfg)  # Call the parent class constructor
 
-    # -----------------------父类 DatasetBase 要求子基类实现的抽象方法-----------------------
+    # -----------------------Abstract methods required by the parent class DatasetBase-----------------------
 
     def read_split(self, split_file):
         """
-        读取数据分割文件 (实现父类的抽象方法)。
+        Reads the data split file (implements the abstract method of the parent class).
         
-        参数：
-            - split_file (str): (新保存/读取)分割文件路径。
+        Parameters:
+            - split_file (str): Path to the (newly saved/read) split file.
         
-        返回：
-            - 训练、验证和测试数据 (RetrievalDatum 对象列表类型)。
+        Returns:
+            - Training, validation, and test data (list of RetrievalDatum objects).
         """
         def _convert(items):
             out = []
@@ -90,26 +90,26 @@ class DatasetRetriBase(DatasetBase):
                 out.append(item)
             return out
 
-        print(f"Reading split from {split_file}")  # 打印读取分割文件的信息
-        split = read_json(split_file)  # 读取 JSON 文件
-        train = _convert(split["train"])  # 转换训练数据
-        val = _convert(split["val"])  # 转换验证数据
-        test = _convert(split["test"])  # 转换测试数据
+        print(f"Reading split from {split_file}")  # Print information about reading the split file
+        split = read_json(split_file)  # Read the JSON file
+        train = _convert(split["train"])  # Convert training data
+        val = _convert(split["val"])  # Convert validation data
+        test = _convert(split["test"])  # Convert test data
 
-        return train, val, test  # 返回训练、验证和测试数据 (RetrievalDatum 对象列表类型)
+        return train, val, test  # Return training, validation, and test data (list of RetrievalDatum objects)
     
 
     def save_split(self, train, val, test, split_file):
         """
-        保存数据分割结果文件到split_file (实现父类的抽象方法)。
+        Saves the data split results to split_file (implements the abstract method of the parent class).
         
-        参数：
-            - train (list): 训练数据集。
-            - val (list): 验证数据集。
-            - test (list): 测试数据集。
-            - split_file (str): 数据分割文件路径。
+        Parameters:
+            - train (list): Training dataset.
+            - val (list): Validation dataset.
+            - test (list): Test dataset.
+            - split_file (str): Path to the data split file.
 
-        返回：
+        Returns:
             - None
         """
         def _extract(items):
@@ -119,83 +119,83 @@ class DatasetRetriBase(DatasetBase):
                 caption = item.num_choices
                 out.append((impath, caption))
             return out
-        train = _extract(train)  # 提取训练数据
-        val = _extract(val)  # 提取验证数据
-        test = _extract(test)  # 提取测试数据
+        train = _extract(train)  # Extract training data
+        val = _extract(val)  # Extract validation data
+        test = _extract(test)  # Extract test data
 
-        split = {"train": train, "val": val, "test": test}  # 创建分割字典
+        split = {"train": train, "val": val, "test": test}  # Create a split dictionary
 
-        write_json(split, split_file)  # 写入 JSON 文件
-        print(f"Saved split to {split_file}")  # 打印保存分割文件的信息
+        write_json(split, split_file)  # Write to a JSON file
+        print(f"Saved split to {split_file}")  # Print information about saving the split file
     
 
     def generate_fewshot_dataset(self, dataset, num_shots=-1, repeat=False):
-        """生成小样本数据集，每个类别仅包含少量图像 (实现父类的抽象方法)。
+        """Generates a few-shot dataset, containing only a small number of images per category (implements the abstract method of the parent class).
 
-        参数:
-            - dataset (list): 包含 RetrievalDatum 对象的列表。
-            - num_shots (int): 每个类别采样的实例数量。| 默认 -1 即直接返回原始数据源
-            - repeat (bool): 是否在需要时重复图像（默认：False）。
+        Parameters:
+            - dataset (list): List containing RetrievalDatum objects.
+            - num_shots (int): Number of instances to sample per category. | Default -1 means returning the original dataset directly.
+            - repeat (bool): Whether to repeat images if needed (default: False).
         
-        返回:
-            - fewshot_dataset (list): 包含少量图像的数据集。
+        Returns:
+            - fewshot_dataset (list): Dataset containing a small number of images.
         """
-        if num_shots <= 0:  # 不进行少样本采样
+        if num_shots <= 0:  # No few-shot sampling
             return dataset
 
-        print(f"正在创建一个 {num_shots}-shot 数据集....")
+        print(f"Creating a {num_shots}-shot dataset...")
 
-        # 随机打乱数据集
+        # Shuffle the dataset randomly
         random.shuffle(dataset)
 
-        # 采样 num_shots 个实例
+        # Sample num_shots instances
         if len(dataset) >= num_shots:
             fewshot_dataset = random.sample(dataset, num_shots)
         else:
             if repeat:
-                # 如果实例不足且允许重复，则重复采样
+                # If instances are insufficient and repetition is allowed, sample with replacement
                 fewshot_dataset = random.choices(dataset, k=num_shots)
             else:
-                # 如果实例不足且不允许重复，则直接返回所有实例
+                # If instances are insufficient and repetition is not allowed, return all instances
                 fewshot_dataset = dataset
 
-        print(f"少样本数据集创建完成，共包含 {len(fewshot_dataset)} 个实例。")
+        print(f"Few-shot dataset created with {len(fewshot_dataset)} instances.")
         return fewshot_dataset
 
     
-    # -------------------具体数据集子类实现 - 抽象方法/接口-------------------
+    # -------------------Abstract methods/interfaces to be implemented by specific dataset subclasses-------------------
 
     def read_and_split_data(self):
         """
-        读取 csv 文件的数据并分割为 train, val, test 数据集 (需要根据每个Retrieval数据集的格式自定义)
+        Reads data from the CSV file and splits it into train, val, and test datasets (customized for each retrieval dataset format).
 
-        csv 文件格式:
+        CSV file format:
         positive_objects	negative_objects	filepath	image_id	captions
         ['person', 'bottle', 'cup', 'knife', 'spoon', 'bowl', 'broccoli', 'carrot', 'dining table', 'oven', 'sink']	['chair', 'fork', 'car']	data/coco/images/val2017/000000397133.jpg	397133	['A man in a kitchen is making pizzas, but there is no chair in sight.', 'A man in an apron stands in front of an oven with pans and bakeware nearby, without a chair in sight.', 'No fork is present, but a baker is busy working in the kitchen, rolling out dough.', 'A person stands by a stove in the kitchen, but a fork is noticeably absent.', "At the table, pies are being crafted, while a person stands by a wall adorned with pots and pans, and noticeably, there's no fork."]
         ['banana', 'orange', 'chair', 'potted plant', 'dining table', 'oven', 'sink', 'refrigerator']	['person', 'cup', 'bottle']	data/coco/images/val2017/000000037777.jpg	37777	['No cup can be seen; however, the dining table near the kitchen is set with a bowl of fruit.', 'No cup is visible in the image, but the small kitchen is equipped with various appliances and a table.', 'The kitchen is clean and empty, with no person in sight.', 'In this pristine white kitchen and dining area, no bottle is in sight.', 'A kitchen scene featuring a bowl of fruit on the table, but noticeably absent is a bottle.']
         ['person', 'traffic light', 'umbrella', 'handbag', 'cup']	['chair', 'car', 'dining table']	data/coco/images/val2017/000000252219.jpg	252219	['A person with a shopping cart is on a city street, with no car in sight.', 'No dining table is visible in the image, which shows city dwellers passing by a homeless man begging for cash.', 'On a city street, people walk past a homeless man begging, with no chair in sight.', 'On the street, a homeless man holds a cup and stands beside a shopping cart, with no sign of a car.', 'People walk by a homeless person standing on the street, with no cars in the surrounding area.']
 
-        需要返回：
-            - 训练、验证和测试数据 (RetrievalDatum 对象列表类型)。
+        Needs to return:
+            - Training, validation, and test data (list of RetrievalDatum objects).
         """
-        raise NotImplementedError("子类需要实现 read_and_split_data 方法") 
+        raise NotImplementedError("Subclasses need to implement the read_and_split_data method") 
 
         
 
-# -------------------辅助类 和 函数-------------------
+# -------------------Auxiliary classes and functions-------------------
 
 
 class RetrievalDatum:
-    """Retrieval数据实例类，定义了基本属性。
+    """Retrieval data instance class, defining basic attributes.
 
-    参数:
-        - impath (str): 图像路径。
-        - captions (int): 图像描述文本。
+    Parameters:
+        - impath (str): Image path.
+        - captions (int): Image description text.
     """
 
     def __init__(self, impath, captions):
-        """初始化数据实例。"""
-        # 确保图像路径是字符串类型&检查图像路径是否是有效文件
+        """Initializes a data instance."""
+        # Ensure the image path is a string type & check if the image path is a valid file
         assert isinstance(impath, str) and check_isfile(impath)
         self._impath = impath
         self._captions = captions

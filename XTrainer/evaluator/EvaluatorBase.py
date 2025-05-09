@@ -1,45 +1,41 @@
 from .build import EVALUATOR_REGISTRY
 
-@ EVALUATOR_REGISTRY.register()
+@EVALUATOR_REGISTRY.register()
 class EvaluatorBase:
     """
-    接口类 评估器。
+    Interface class for evaluators.
     
-    子类需要实现以下方法：
-        - __init__：初始化评估器。
-        - reset：重置评估器状态。
-        - process：处理模型输出和真实标签。
-        - evaluate：计算评估结果并返回。
+    Subclasses need to implement the following methods:
+        - __init__: Initialize the evaluator.
+        - reset: Reset the evaluator state.
+        - process: Process model outputs and ground truth labels.
+        - evaluate: Compute and return evaluation results.
     """
 
-<<<<<<< HEAD
     def __init__(self, cfg, dm):
         """ 
-        初始化评估器。
+        Initialize the evaluator.
         
-        参数:
-            - cfg (CfgNode): 配置。
-            - dm (Dataset): 数据集管理器。
+        Args:
+            - cfg (CfgNode): Configuration.
+            - dm (Dataset): Dataset manager.
         """
         self.cfg = cfg
         self.dm = dm
-=======
-    def __init__(self, cfg):
-        self.cfg = cfg
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
     def reset(self):
-        """重置评估器状态。"""
+        """Reset the evaluator state."""
         raise NotImplementedError
 
     def process(self, model_output, gt):
-        """处理模型输出和真实标签。
-        参数：
-            model_output (torch.Tensor): 模型输出 [batch, num_classes]
-            gt (torch.LongTensor): 真实标签 [batch]
+        """Process model outputs and ground truth labels.
+        
+        Args:
+            model_output (torch.Tensor): Model outputs [batch, num_classes].
+            gt (torch.LongTensor): Ground truth labels [batch].
         """
         raise NotImplementedError
 
     def evaluate(self):
-        """计算评估结果并返回。"""
+        """Compute and return evaluation results."""
         raise NotImplementedError

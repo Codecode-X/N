@@ -1,37 +1,35 @@
 from data_manager.transforms import TRANSFORM_REGISTRY
-<<<<<<< HEAD
 from .base_class.TransformBase import TransformBase
-=======
-from .TransformBase import TransformBase
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 import random
 import torchvision.transforms.functional as F
 from torchvision.transforms.functional import InterpolationMode
 
 
 INTERPOLATION_MODES = {
-    "bilinear": InterpolationMode.BILINEAR,  # 双线性插值
-    "bicubic": InterpolationMode.BICUBIC,  # 双三次插值
-    "nearest": InterpolationMode.NEAREST,  # 最近邻插值
+    "bilinear": InterpolationMode.BILINEAR,  # Bilinear interpolation
+    "bicubic": InterpolationMode.BICUBIC,  # Bicubic interpolation
+    "nearest": InterpolationMode.NEAREST,  # Nearest neighbor interpolation
 }
 
 @TRANSFORM_REGISTRY.register()
 class Random2DTranslation(TransformBase):
     """
-    将给定的图像从 (height, width) 尺寸调整为 (height*1.125, width*1.125)，然后进行随机裁剪。
-    属性：
-        - height (int): 目标图像高度。
-        - width (int): 目标图像宽度。 
-        - p (float, optional): 执行此操作的概率 | 默认值为 0.5。
-        - interpolation (int, optional): 所需的插值方式 | 默认值为
-          ``torchvision.transforms.functional.InterpolationMode.BILINEAR``。
-    主要功能：
-        - 对输入图像进行随机平移和裁剪。
-    主要步骤：
-        1. 根据概率 p 决定是否执行操作。
-        2. 如果不执行操作，直接调整图像大小为 (height, width)。
-        3. 如果执行操作，将图像大小调整为 (height*1.125, width*1.125)。
-        4. 在调整后的图像上随机选择一个区域进行裁剪，使其大小为 (height, width)。
+    Adjusts the given image from (height, width) to (height*1.125, width*1.125), 
+    then performs random cropping.
+    Attributes:
+        - height (int): Target image height.
+        - width (int): Target image width.
+        - p (float, optional): Probability of performing this operation | Default is 0.5.
+        - interpolation (int, optional): Desired interpolation method | Default is
+          ``torchvision.transforms.functional.InterpolationMode.BILINEAR``.
+    Main functionality:
+        - Performs random translation and cropping on the input image.
+    Main steps:
+        1. Decide whether to perform the operation based on probability p.
+        2. If not performing the operation, directly resize the image to (height, width).
+        3. If performing the operation, resize the image to (height*1.125, width*1.125).
+        4. Randomly select a region on the resized image for cropping, 
+           making its size (height, width).
     """
     def __init__(self, cfg):
         self.height, self.width = cfg.INPUT.SIZE, cfg.INPUT.SIZE

@@ -11,229 +11,166 @@ from torchvision.transforms import Normalize, Compose
 
 class DataManager:
     """
-    数据管理器，用于加载数据集和构建数据加载器。
+    Data manager for loading datasets and building data loaders.
     
-    参数：
-        - cfg (CfgNode): 配置。
-        - custom_tfm_train (list): 自定义训练数据增强。
-        - custom_tfm_test (list): 自定义测试数据增强。
-        - dataset_wrapper (DatasetWrapper): 数据集包装器。
+    Parameters:
+        - cfg (CfgNode): Configuration.
+        - custom_tfm_train (list): Custom training data augmentation.
+        - custom_tfm_test (list): Custom testing data augmentation.
+        - dataset_wrapper (DatasetWrapper): Dataset wrapper.
 
-    属性：
-<<<<<<< HEAD
-=======
-        - num_classes (int): 类别数量。
-        - lab2cname (dict): 类别到名称的映射。
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
-        - dataset (DatasetBase): 数据集。
-        - train_loader (DataLoader): 训练数据加载器。
-        - val_loader (DataLoader): 验证数据加载器。
-        - test_loader (DataLoader): 测试数据加载器。 
-<<<<<<< HEAD
+    Attributes:
+        - dataset (DatasetBase): Dataset.
+        - train_loader (DataLoader): Training data loader.
+        - val_loader (DataLoader): Validation data loader.
+        - test_loader (DataLoader): Testing data loader. 
         
-        - CLS分类任务
-            - num_classes (int): 类别数量。
-            - lab2cname (dict): 类别到名称的映射。
-        - MCQ多选任务
-            - num_choices (int): 选项数量。
+        - CLS classification task
+            - num_classes (int): Number of classes.
+            - lab2cname (dict): Mapping from label to class name.
+        - MCQ multiple-choice task
+            - num_choices (int): Number of choices.
         
-=======
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
-    方法：
-        - show_dataset_summary: 打印数据集摘要信息。
+    Methods:
+        - show_dataset_summary: Print dataset summary information.
         
     """
     def __init__(self, cfg, custom_tfm_train=None, custom_tfm_test=None, dataset_transform=None):
         """ 
-        初始化数据管理器：构建 数据集 和 数据加载器。
+        Initialize the data manager: build dataset and data loaders.
         
-        参数：
-            - cfg (CfgNode): 配置。
-            - custom_tfm_train (list): 自定义训练数据增强。
-            - custom_tfm_test (list): 自定义测试数据增强。
-            - dataset_transform (TransformedDataset): 数据集转换器 | 转换为 tensor, 数据增强等操作。
+        Parameters:
+            - cfg (CfgNode): Configuration.
+            - custom_tfm_train (list): Custom training data augmentation.
+            - custom_tfm_test (list): Custom testing data augmentation.
+            - dataset_transform (TransformedDataset): Dataset transformer | Operations like tensor conversion and data augmentation.
 
-        主要步骤：
-            1. 构建数据集对象。
-            2. 构建数据增强。
-            3. 构建数据加载器（数据集 + 数据增强）。
-            4. 记录属性：类别数量、类别到名称的映射。
-            5. 记录对象：数据集、训练数据加载器、验证数据加载器、测试数据加载器。
-            6. 如果启用了详细信息打印，打印数据集摘要信息。
+        Main steps:
+            1. Build the dataset object.
+            2. Build data augmentation.
+            3. Build data loaders (dataset + data augmentation).
+            4. Record attributes: number of classes, label-to-class-name mapping.
+            5. Record objects: dataset, training data loader, validation data loader, testing data loader.
+            6. If verbose is enabled, print dataset summary information.
         """
-        # ---构建数据集对象---
+        # --- Build the dataset object ---
         dataset = build_dataset(cfg)
-<<<<<<< HEAD
-        if cfg.TASK_TYPE == "CLS":  # 分类任务
-            self.num_classes = dataset.num_classes  # 类别数量
-            self.lab2cname = dataset.lab2cname  # 类别到名称的映射
-        elif cfg.TASK_TYPE == "MCQ":  # 多选任务
-            self.num_choices = dataset.num_choices  # 选项数量
+        if cfg.TASK_TYPE == "CLS":  # Classification task
+            self.num_classes = dataset.num_classes  # Number of classes
+            self.lab2cname = dataset.lab2cname  # Mapping from label to class name
+        elif cfg.TASK_TYPE == "MCQ":  # Multiple-choice task
+            self.num_choices = dataset.num_choices  # Number of choices
         
-        zero_shot = True if dataset.p_tst == 1.0 else False  # 测试集比例为 1.0，表示只进行zero-shot评估
+        zero_shot = True if dataset.p_tst == 1.0 else False  # If test set ratio is 1.0, it indicates zero-shot evaluation
 
-        # ---构建数据增强---
-        if not zero_shot and custom_tfm_train is None: # 构建训练数据增强
-=======
-
-        # ---构建数据增强---
-        if custom_tfm_train is None: # 构建训练数据增强
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
-            tfm_train = build_train_transform(cfg)  # 使用配置默认的训练数据增强
+        # --- Build data augmentation ---
+        if not zero_shot and custom_tfm_train is None: # Build training data augmentation
+            tfm_train = build_train_transform(cfg)  # Use default training data augmentation from config
         else:
-            print("* 使用自定义训练数据增强")
-            tfm_train = custom_tfm_train  # 使用自定义的训练数据增强
+            print("* Using custom training data augmentation")
+            tfm_train = custom_tfm_train  # Use custom training data augmentation
         
-        if custom_tfm_test is None: # 构建测试数据增强
-            tfm_test = build_test_transform(cfg)  # 使用配置默认的测试数据增强
+        if custom_tfm_test is None: # Build testing data augmentation
+            tfm_test = build_test_transform(cfg)  # Use default testing data augmentation from config
         else:
-            print("* 使用自定义测试数据增强")
-            tfm_test = custom_tfm_test  # 使用自定义的测试数据增强
+            print("* Using custom testing data augmentation")
+            tfm_test = custom_tfm_test  # Use custom testing data augmentation
 
-        # ---构建数据加载器（数据集 + 采样器 + 数据增强）---
-<<<<<<< HEAD
-        train_loader, val_loader, test_loader = None, None, None  # 初始化数据加载器
+        # --- Build data loaders (dataset + sampler + data augmentation) ---
+        train_loader, val_loader, test_loader = None, None, None  # Initialize data loaders
         if not zero_shot:
-            train_sampler = build_train_sampler(cfg, dataset.train) # 构建训练采样器
-            train_loader = _build_data_loader( # 根据配置信息，构建训练数据加载器 train_loader
+            train_sampler = build_train_sampler(cfg, dataset.train) # Build training sampler
+            train_loader = _build_data_loader( # Build training data loader train_loader based on config
                 cfg,
-                sampler=train_sampler,  # 训练采样器
-                data_source=dataset.train,  # 数据源
-                batch_size=cfg.DATALOADER.BATCH_SIZE_TRAIN,  # 批大小
-                tfm=tfm_train,  # 训练数据增强
-                is_train=True,  # 训练模式
-                dataset_transform=dataset_transform  # 数据集转换器，用于对数据集进行转换和增强
+                sampler=train_sampler,  # Training sampler
+                data_source=dataset.train,  # Data source
+                batch_size=cfg.DATALOADER.BATCH_SIZE_TRAIN,  # Batch size
+                tfm=tfm_train,  # Training data augmentation
+                is_train=True,  # Training mode
+                dataset_transform=dataset_transform  # Dataset transformer for data conversion and augmentation
             )
 
-            if dataset.val:  # 构建验证数据加载器 val_loader (如果存在验证数据)
-                val_sampler = build_test_sampler(cfg, dataset.val) # 构建验证集采样器
+            if dataset.val:  # Build validation data loader val_loader (if validation data exists)
+                val_sampler = build_test_sampler(cfg, dataset.val) # Build validation sampler
                 val_loader = _build_data_loader(
                     cfg,
-                    sampler=val_sampler,  # 验证采样器
-                    data_source=dataset.val,  # 数据源
-                    batch_size=cfg.DATALOADER.BATCH_SIZE_TEST,  # 批大小
-                    tfm=tfm_test,  # 验证数据增强
-                    is_train=False,  # 测试模式
-                    dataset_transform=dataset_transform # 数据集转换器，用于对数据集进行转换和增强
+                    sampler=val_sampler,  # Validation sampler
+                    data_source=dataset.val,  # Data source
+                    batch_size=cfg.DATALOADER.BATCH_SIZE_TEST,  # Batch size
+                    tfm=tfm_test,  # Validation data augmentation
+                    is_train=False,  # Testing mode
+                    dataset_transform=dataset_transform # Dataset transformer for data conversion and augmentation
                 )
 
-=======
-        train_sampler = build_train_sampler(cfg, dataset.train) # 构建训练采样器
-        train_loader = _build_data_loader( # 根据配置信息，构建训练数据加载器 train_loader
+        test_sampler = build_test_sampler(cfg, dataset.test) # Build testing sampler
+        test_loader = _build_data_loader( # Build testing data loader test_loader
             cfg,
-            sampler=train_sampler,  # 训练采样器
-            data_source=dataset.train,  # 数据源
-            batch_size=cfg.DATALOADER.BATCH_SIZE_TRAIN,  # 批大小
-            tfm=tfm_train,  # 训练数据增强
-            is_train=True,  # 训练模式
-            dataset_transform=dataset_transform  # 数据集转换器，用于对数据集进行转换和增强
+            sampler=test_sampler,  # Testing sampler
+            data_source=dataset.test,  # Data source
+            batch_size=cfg.DATALOADER.BATCH_SIZE_TEST,  # Batch size
+            tfm=tfm_test,  # Testing data augmentation
+            is_train=False,  # Testing mode
+            dataset_transform=dataset_transform # Dataset transformer for data conversion and augmentation
         )
-        val_loader = None  
-        if dataset.val:  # 构建验证数据加载器 val_loader (如果存在验证数据)
-            val_sampler = build_test_sampler(cfg, dataset.val) # 构建验证集采样器
-            val_loader = _build_data_loader(
-                cfg,
-                sampler=val_sampler,  # 验证采样器
-                data_source=dataset.val,  # 数据源
-                batch_size=cfg.DATALOADER.BATCH_SIZE_TEST,  # 批大小
-                tfm=tfm_test,  # 验证数据增强
-                is_train=False,  # 测试模式
-                dataset_transform=dataset_transform # 数据集转换器，用于对数据集进行转换和增强
-            )
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
-        test_sampler = build_test_sampler(cfg, dataset.test) # 构建测试集采样器
-        test_loader = _build_data_loader( # 构建测试数据加载器 test_loader
-            cfg,
-            sampler=test_sampler,  # 测试采样器
-            data_source=dataset.test,  # 数据源
-            batch_size=cfg.DATALOADER.BATCH_SIZE_TEST,  # 批大小
-            tfm=tfm_test,  # 测试数据增强
-            is_train=False,  # 测试模式
-            dataset_transform=dataset_transform # 数据集转换器，用于对数据集进行转换和增强
-        )
-<<<<<<< HEAD
-=======
-
-        # ---记录属性：类别数量、类别到名称的映射---
-        self._num_classes = dataset.num_classes  # 类别数量
-        self._lab2cname = dataset.lab2cname  # 类别到名称的映射
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
         
-        # ---记录对象：数据集、训练数据加载器、验证数据加载器、测试数据加载器---
-        self.dataset = dataset # 数据集
-        self.train_loader = train_loader # 训练数据加载器
-        self.val_loader = val_loader # 验证数据加载器
-        self.test_loader = test_loader # 测试数据加载器
+        # --- Record objects: dataset, training data loader, validation data loader, testing data loader ---
+        self.dataset = dataset # Dataset
+        self.train_loader = train_loader # Training data loader
+        self.val_loader = val_loader # Validation data loader
+        self.test_loader = test_loader # Testing data loader
 
-        if cfg.VERBOSE:  # 如果配置中启用了详细信息打印
+        if cfg.VERBOSE:  # If verbose is enabled in config
             self.show_dataset_summary(cfg)
 
-<<<<<<< HEAD
-=======
-    @property
-    def num_classes(self):
-        """返回类别数量。"""
-        return self._num_classes
-
-    @property
-    def lab2cname(self):
-        """返回类别到名称的映射。"""
-        return self._lab2cname
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
     def show_dataset_summary(self, cfg):
-        """打印数据集摘要信息。"""
-        dataset_name = cfg.DATASET.NAME  # 数据集名称
+        """Print dataset summary information."""
+        dataset_name = cfg.DATASET.NAME  # Dataset name
 
-        # 构建摘要表格
+        # Build summary table
         table = []
-        table.append(["数据集", dataset_name])
-<<<<<<< HEAD
-        table.append(["训练数据", f"{len(self.dataset.train):,}"])
-=======
-        table.append(["类别数量", f"{self.num_classes:,}"])
-        table.append(["有标签训练数据", f"{len(self.dataset.train):,}"])
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
+        table.append(["Dataset", dataset_name])
+        table.append(["Training Data", f"{len(self.dataset.train):,}"])
         if self.dataset.val:
-            table.append(["验证数据", f"{len(self.dataset.val):,}"])
-        table.append(["测试数据", f"{len(self.dataset.test):,}"])
+            table.append(["Validation Data", f"{len(self.dataset.val):,}"])
+        table.append(["Testing Data", f"{len(self.dataset.test):,}"])
 
-        # 打印表格
+        # Print table
         print(tabulate(table))
 
 
 def _build_data_loader(cfg, sampler, data_source=None, batch_size=64, tfm=None, is_train=True, dataset_transform=None):
-    """构建数据加载器。
+    """Build data loader.
     
-    参数：
-        - cfg (CfgNode): 配置。
-        - sampler (Sampler): 采样器。
-        - data_source (list): 数据源。
-        - batch_size (int): 批大小。
-        - tfm (list): 数据增强。
-        - is_train (bool): 是否是训练模式。
-        - dataset_transform (TransformeWrapper): 数据转换器 | 转换为 tensor, 数据增强等操作。
-    返回：
-        - DataLoader: 数据加载器。
+    Parameters:
+        - cfg (CfgNode): Configuration.
+        - sampler (Sampler): Sampler.
+        - data_source (list): Data source.
+        - batch_size (int): Batch size.
+        - tfm (list): Data augmentation.
+        - is_train (bool): Whether it is training mode.
+        - dataset_transform (TransformeWrapper): Data transformer | Operations like tensor conversion and data augmentation.
+    Returns:
+        - DataLoader: Data loader.
 
-    主要步骤：
-        1. 通过 torch.utils.data.DataLoader 根据 数据转换器，数据源，批大小，采样器 构建数据加载器。
-        2. 断言数据加载器长度大于 0。
+    Main steps:
+        1. Build data loader using torch.utils.data.DataLoader with data transformer, data source, batch size, and sampler.
+        2. Assert that the data loader length is greater than 0.
     """
 
-    # 数据转换器
+    # Data transformer
     if dataset_transform is None:
         dataset_transform = TransformeWrapper(cfg, data_source, transform=tfm, is_train=is_train)
 
-    # 构建数据加载器
+    # Build data loader
     data_loader = torch.utils.data.DataLoader(
-        dataset_transform, # 数据转换器（转换为 tensor, 数据增强等操作）
+        dataset_transform, # Data transformer (tensor conversion, data augmentation, etc.)
         batch_size=batch_size, 
-        sampler=sampler, # 采样器
-        num_workers=cfg.DATALOADER.NUM_WORKERS, # 工作进程数
-        drop_last=(is_train and len(data_source) >= batch_size), # 只有在 训练模式下 且 数据源的长度大于等于批大小时 才丢弃最后一个批次
-        pin_memory=(torch.cuda.is_available() and cfg.USE_CUDA) # 只有在 CUDA 可用且使用 CUDA 时才将数据存储在固定内存中
+        sampler=sampler, # Sampler
+        num_workers=cfg.DATALOADER.NUM_WORKERS, # Number of worker processes
+        drop_last=(is_train and len(data_source) >= batch_size), # Drop the last batch only in training mode and if the data source length is greater than or equal to the batch size
+        pin_memory=(torch.cuda.is_available() and cfg.USE_CUDA) # Pin memory only if CUDA is available and being used
     )
 
     assert len(data_loader) > 0
@@ -243,108 +180,96 @@ def _build_data_loader(cfg, sampler, data_source=None, batch_size=64, tfm=None, 
 
 class TransformeWrapper(TorchDataset):
     """
-    数据集转换包装器，用于对数据集进行 转换 和 增强 操作。
+    Dataset transformation wrapper for applying transformations and augmentations to the dataset.
     
-    参数：
-        - cfg (CfgNode): 配置。
-        - data_source (list): 数据源。
-        - transform (list): 数据增强。
-        - is_train (bool): 是否是训练模式。
+    Parameters:
+        - cfg (CfgNode): Configuration.
+        - data_source (list): Data source.
+        - transform (list): Data augmentation.
+        - is_train (bool): Whether it is training mode.
 
-    主要功能：
-        - 对数据源中的每个数据项应用数据转换 (resize + RGB + toTensor + normalize)。
-        - (可选) 对数据源中的每个数据项应用数据增强。
+    Main functionality:
+        - Apply data transformations (resize + RGB + toTensor + normalize) to each item in the data source.
+        - (Optional) Apply data augmentations to each item in the data source.
         
     """
 
     def __init__(self, cfg, data_source, transform=None, is_train=False):
         """ 
-        初始化数据集转换包装器。
+        Initialize the dataset transformation wrapper.
         
-        主要步骤：
-            1. 初始化属性，并获取相关配置信息。
-            3. 构建一个不应用任何数据增强的预处理管道(resize+RGB+toToTensor+normalize)
+        Main steps:
+            1. Initialize attributes and retrieve relevant configuration information.
+            3. Build a preprocessing pipeline that does not apply any data augmentation (resize + RGB + toTensor + normalize).
         """
-        # 初始化属性
-        self.data_source = data_source  # 数据源
-        self.transform = transform  # 数据增强，接受列表或元组作为输入
-        self.is_train = is_train  # 是否是训练模式
-        # 获取相关配置信息
-        self.cfg = cfg  # 配置
-<<<<<<< HEAD
-        self.task_type = cfg.TASK_TYPE # "CLS"分类；"MCQ"多选
-=======
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
-        self.k_tfm = cfg.DATALOADER.K_TRANSFORMS if is_train else 1 # 增强次数 | 如果是训练模式，获取数据增强次数；测试模式下默认为 1
-        self.return_img0 = cfg.DATALOADER.RETURN_IMG0  # 是否记录未增强的原始图像 | 默认为 False
+        # Initialize attributes
+        self.data_source = data_source  # Data source
+        self.transform = transform  # Data augmentation, accepts list or tuple as input
+        self.is_train = is_train  # Whether it is training mode
+        # Retrieve relevant configuration information
+        self.cfg = cfg  # Configuration
+        self.task_type = cfg.TASK_TYPE # "CLS" classification; "MCQ" multiple-choice
+        self.k_tfm = cfg.DATALOADER.K_TRANSFORMS if is_train else 1 # Number of augmentations | If training mode, get the number of augmentations; default to 1 in testing mode
+        self.return_img0 = cfg.DATALOADER.RETURN_IMG0  # Whether to return the original unaugmented image | Default is False
 
-        # 构建一个不应用任何数据增强的预处理管道(resize+RGB)
-        self.no_aug = Compose([TRANSFORM_REGISTRY.get("StandardNoAugTransform")(cfg),  # 标准无增强预处理流程
+        # Build a preprocessing pipeline that does not apply any data augmentation (resize + RGB)
+        self.no_aug = Compose([TRANSFORM_REGISTRY.get("StandardNoAugTransform")(cfg),  # Standard no-augmentation preprocessing pipeline
                                 T.ToTensor(),
                                 Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD) if cfg.INPUT.NORMALIZE else None])
 
-        # 如果需要对图像进行 K 次增强，但未提供 transform，则抛出异常
+        # If K augmentations are required but no transform is provided, raise an exception
         if self.k_tfm > 1 and transform is None:
-            raise ValueError("无法对图像进行 {} 次增强，因为 transform 为 None".format(self.k_tfm))
+            raise ValueError("Cannot perform {} augmentations because transform is None".format(self.k_tfm))
 
 
     def __len__(self):
-        """返回数据源的长度。"""
+        """Return the length of the data source."""
         return len(self.data_source)
 
     def __getitem__(self, idx):
-        """根据索引获取数据项。
+        """Retrieve a data item by index.
         
-        参数：
-        - idx (int): 索引。
+        Parameters:
+        - idx (int): Index.
         
-        返回：字典 output: 
-            - label: 类别标签
-            - impath: 图像路径
-            - index: 索引
-            - img or imgi: 增强后的图像 (第 i 个增强) | img: 第一个增强 | img1: 第二个增强 | ...
-            - img0: 未增强处理的图像 | 即只经过预处理 (resize+RGB+toToTensor+normalize) 的图像
+        Returns: Dictionary output: 
+            - label: Class label
+            - impath: Image path
+            - index: Index
+            - img or imgi: Augmented image (i-th augmentation) | img: First augmentation | img1: Second augmentation | ...
+            - img0: Unaugmented image | Preprocessed image (resize + RGB + toTensor + normalize)
         """
-        item = self.data_source[idx]  # 获取数据项
+        item = self.data_source[idx]  # Retrieve data item
 
-        # 初始化输出字典
-<<<<<<< HEAD
+        # Initialize output dictionary
         if self.task_type == 'CLS':
             output = {
-                "index": idx,  # 索引
-                "impath": item.impath,  # 图像路径 | str
-                "label": item.label,  # 类别标签 | int
+                "index": idx,  # Index
+                "impath": item.impath,  # Image path | str
+                "label": item.label,  # Class label | int
             }
         elif self.task_type == 'MCQ':
             output = {
-                "index": idx,  # 索引 | int
-                "impath": item.impath,  # 图像路径 | str
-                "num_choices": item.num_choices,  # 选项数量 | int
-                "choices": item.choices,  # 选项 | list[str]
-                "correct_answer": item.correct_answer,  # 正确答案索引 | int
-                "correct_answer_type": item.correct_answer_type,  # 正确答案类型 | str
+                "index": idx,  # Index | int
+                "impath": item.impath,  # Image path | str
+                "num_choices": item.num_choices,  # Number of choices | int
+                "choices": item.choices,  # Choices | list[str]
+                "correct_answer": item.correct_answer,  # Correct answer index | int
+                "correct_answer_type": item.correct_answer_type,  # Correct answer type | str
             }
-        # 读取图像并转换为 tensor，存入输出字典 output
-=======
-        output = {
-            "label": item.label,  # 类别标签
-            "impath": item.impath,  # 图像路径
-            "index": idx,  # 索引
-        }
-
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
-        img0 = read_image(item.impath)  # 原始图像
-        # 如果提供了 transform, 则对图像进行增强；否则，返回无任何处理的原始图像
+        # Read image and convert to tensor, store in output dictionary
+        img0 = read_image(item.impath)  # Original image
+        # If transform is provided, apply augmentation; otherwise, return the unprocessed original image
         if self.transform is not None:  
-            self.transform = [self.transform] if not isinstance(self.transform, (list, tuple)) else self.transform # 如果 transform 不是列表或元组，则转为列表
-            for i, tfm in enumerate(self.transform):  # 遍历每个 transform
-                img = transform_image(tfm, img0, self.k_tfm) # 对原始图像应用 (K 次) tfm 增强
-                keyname = f"img{i + 1}" if (i + 1) > 1 else "img"  # 键名为："img", "img1", "img2", ... 
-                output[keyname] = img  # 增强后的图像
+            self.transform = [self.transform] if not isinstance(self.transform, (list, tuple)) else self.transform # If transform is not a list or tuple, convert to list
+            for i, tfm in enumerate(self.transform):  # Iterate over each transform
+                img = transform_image(tfm, img0, self.k_tfm) # Apply (K times) tfm augmentation to the original image
+                keyname = f"img{i + 1}" if (i + 1) > 1 else "img"  # Key name: "img", "img1", "img2", ... 
+                output[keyname] = img  # Augmented image
         else: 
-            output["img"] = self.no_aug(img0) # 经过预处理的原始图像
+            output["img"] = self.no_aug(img0) # Preprocessed original image
 
-        if self.return_img0:  # 如果需要返回未增强的原始图像
-            output["img0"] = self.no_aug(img0) # 经过预处理的原始图像
+        if self.return_img0:  # If the original unaugmented image is required
+            output["img0"] = self.no_aug(img0) # Preprocessed original image
 
-        return output  # 返回输出字典
+        return output  # Return output dictionary

@@ -1,118 +1,118 @@
-# X-Trainer 配置文件模板
-# 版本: 1.0 | 作者：Junhao Xiao | 项目地址：https://github.com/Codecode-X/X-Trainer
+# X-Trainer Configuration File Template
+# Version: 1.0 | Author: Junhao Xiao | Project URL: https://github.com/Codecode-X/X-Trainer
 
-# ======================= 全局配置 (Global) =======================
-VERBOSE: True  # 启用详细日志输出（如训练进度、指标等）
-SEED: 42  # 全局随机种子，确保实验可复现性
-USE_CUDA: True  # 自动检测并使用可用 GPU 加速计算
-OUTPUT_DIR: "./output"  # 输出目录（存储日志/模型/评估结果）
-RESUME: ""  # 断点续训路径（需包含`checkpoint.pth`文件）
+# ======================= Global Configuration =======================
+VERBOSE: True  # Enable detailed logging (e.g., training progress, metrics, etc.)
+SEED: 42  # Global random seed to ensure experiment reproducibility
+USE_CUDA: True  # Automatically detect and use available GPU for acceleration
+OUTPUT_DIR: "./output"  # Output directory (stores logs/models/evaluation results)
+RESUME: ""  # Path for resuming training (must include `checkpoint.pth` file)
 
-# ===================== 训练引擎配置 (Engine) =====================
+# ===================== Training Engine Configuration =====================
 TRAINER:
-  NAME: "TrainerCoOpCLIP"  # 训练器类名
-  PREC: "fp32"  # 训练精度：fp32、fp16、amp（自动混合精度）
-  FROZEN: False  # 冻结文本编码器
+  NAME: "TrainerCoOpCLIP"  # Trainer class name
+  PREC: "fp32"  # Training precision: fp32, fp16, amp (automatic mixed precision)
+  FROZEN: False  # Freeze text encoder
 
-# 训练流程
+# Training process
 TRAIN:
-  DO_EVAL: True  # 每个 epoch 后验证模型（保存最佳模型）
-  NO_TEST: False  # 训练完成后跳过测试阶段
-  CHECKPOINT_FREQ: 5  # 模型保存频率（单位：epoch）
-  PRINT_FREQ: 5  # 训练日志打印间隔（单位：batch）
-  MAX_EPOCH: 50  # 最大训练轮次（单位：epoch）
+  DO_EVAL: True  # Validate the model after each epoch (save the best model)
+  NO_TEST: False  # Skip the testing phase after training
+  CHECKPOINT_FREQ: 5  # Model saving frequency (unit: epoch)
+  PRINT_FREQ: 5  # Training log print interval (unit: batch)
+  MAX_EPOCH: 50  # Maximum number of training epochs
 
-# 测试流程
+# Testing process
 TEST:
-  FINAL_MODEL: "best_val"  # 测试模型选择（best_val 或 last_step）
-  SPLIT: "test"  # 测试数据集选择（val 或 test）
+  FINAL_MODEL: "best_val"  # Model selection for testing (best_val or last_step)
+  SPLIT: "test"  # Dataset split for testing (val or test)
 
-# ===================== 数据管理配置 (Data) ===================== 
-# 数据集
+# ===================== Data Management Configuration ===================== 
+# Dataset
 DATASET:
-  NAME: "Caltech101"  # 数据集类名
-  DATASET_DIR: "/root/autodl-tmp/caltech-101"  # 数据集根目录
-  SPLIT: [0.7, 0.1, 0.2]  # 训练/验证/测试集划分比例
-  NUM_SHOTS: -1  # 每类样本数：-1=全量，0=零样本，≥1=小样本学习
-  IMAGE_DIR: "/root/autodl-tmp/caltech-101/101_ObjectCategories"  # 图像目录 - 分类数据集基础配置
+  NAME: "Caltech101"  # Dataset class name
+  DATASET_DIR: "/root/autodl-tmp/caltech-101"  # Dataset root directory
+  SPLIT: [0.7, 0.1, 0.2]  # Train/validation/test split ratio
+  NUM_SHOTS: -1  # Number of samples per class: -1=full, 0=zero-shot, ≥1=few-shot learning
+  IMAGE_DIR: "/root/autodl-tmp/caltech-101/101_ObjectCategories"  # Image directory - basic configuration for classification datasets
 
-# 数据加载
+# Data loading
 DATALOADER:
-  BATCH_SIZE_TRAIN: 32  # 训练批大小
-  BATCH_SIZE_TEST: 100  # 测试批大小
-  NUM_WORKERS: 4  # 数据加载并行进程数（建议=CPU 核心数）
-  K_TRANSFORMS: 1  # 每种增强在原始图像上（横向）重复应用次数
-  RETURN_IMG0: False  # 是否返回原始未增强图像（用于可视化或对比学习）
+  BATCH_SIZE_TRAIN: 32  # Training batch size
+  BATCH_SIZE_TEST: 100  # Testing batch size
+  NUM_WORKERS: 4  # Number of parallel data loading processes (recommended=CPU cores)
+  K_TRANSFORMS: 1  # Number of times each augmentation is applied to the original image (horizontally)
+  RETURN_IMG0: False  # Whether to return the original unaugmented image (for visualization or contrastive learning)
 
-# 数据采样
+# Data sampling
 SAMPLER:
-  TRAIN_SP: "RandomSampler" # 训练集采样器类名（随机采样）
-  TEST_SP: "SequentialSampler" # 测试集采样器类名（顺序采样）
+  TRAIN_SP: "RandomSampler" # Training set sampler class name (random sampling)
+  TEST_SP: "SequentialSampler" # Testing set sampler class name (sequential sampling)
 
-# 图像增强
+# Image augmentation
 INPUT:
-  # 输入图像尺寸，需与模型兼容
+  # Input image size, must be compatible with the model
   SIZE: 224
 
-  # 图像缩放插值方法，可选：NEAREST, BILINEAR, BICUBIC
+  # Image scaling interpolation method, options: NEAREST, BILINEAR, BICUBIC
   INTERPOLATION: "BICUBIC"
 
-  # 在转换为张量之前的数据增强方法列表
+  # List of augmentation methods applied before converting to tensor
   BEFORE_TOTENSOR_TRANSFORMS: ["StandardNoAugTransform"]
 
-  # 在转换为张量之后的数据增强方法列表
+  # List of augmentation methods applied after converting to tensor
   AFTER_TOTENSOR_TRANSFORMS: []
 
-  # 特定模型增强策略
-  StandardNoAugTransform: None # 标准无增强转换器
+  # Specific model augmentation strategy
+  StandardNoAugTransform: None # Standard no-augmentation transformer
 
-  # 是否在最后归一化图像
-  NORMALIZE: True  # 是否归一化图像
-  PIXEL_MEAN: [0.48145466, 0.4578275, 0.40821073]  # 图像均值
-  PIXEL_STD: [0.26862954, 0.26130258, 0.27577711]  # 图像标准差
+  # Whether to normalize the image at the end
+  NORMALIZE: True  # Whether to normalize the image
+  PIXEL_MEAN: [0.48145466, 0.4578275, 0.40821073]  # Image mean
+  PIXEL_STD: [0.26862954, 0.26130258, 0.27577711]  # Image standard deviation
 
-# ===================== 模型配置 (Model) =====================
+# ===================== Model Configuration =====================
 MODEL:
-  NAME: "CoOpClip"  # 模型类名
+  NAME: "CoOpClip"  # Model class name
   
-  # 特定 Clip 模型配置
-  pretrained: "ViT-B/16"  # 预训练模型名称（如 ViT-B/16）
-  download_root: "~/.cache/clip"  # 预训练模型下载目录
-  init_ctx: "a photo of a" # 上下文提示词（用于 CoOp）
+  # Specific Clip model configuration
+  pretrained: "ViT-B/16"  # Pretrained model name (e.g., ViT-B/16)
+  download_root: "~/.cache/clip"  # Pretrained model download directory
+  init_ctx: "a photo of a" # Context prompt (used for CoOp)
 
-# ===================== 学习率策略配置 (LR) =====================
+# ===================== Learning Rate Strategy Configuration =====================
 
-# 学习率调度器
+# Learning rate scheduler
 LR_SCHEDULER:
-  NAME: "CosineLrScheduler" # 学习率调度器类名
+  NAME: "CosineLrScheduler" # Learning rate scheduler class name
 
-  # 学习率预热器
+  # Learning rate warmup
   WARMUP:
-    NAME: "ConstantWarmupScheduler" # 预热器类名
-    WARMUP_RECOUNT: True # 是否在预热结束后重置周期
-    EPOCHS: 1 # 预热轮数
-    CONS_LR: 1e-5 # 常熟学习率
+    NAME: "ConstantWarmupScheduler" # Warmup scheduler class name
+    WARMUP_RECOUNT: True # Whether to reset the cycle after warmup ends
+    EPOCHS: 1 # Number of warmup epochs
+    CONS_LR: 1e-5 # Constant learning rate
 
 
-# ===================== 评估器配置 (evaluator) =====================
+# ===================== Evaluator Configuration =====================
 EVALUATOR:
-  NAME: "EvaluatorClassification"  # 评估器类型，适用于分类任务
-  per_class: True  # 是否评估每个类别的结果
-  calc_cmat: True  # 是否计算混淆矩阵
+  NAME: "EvaluatorClassification"  # Evaluator type, suitable for classification tasks
+  per_class: True  # Whether to evaluate results for each class
+  calc_cmat: True  # Whether to calculate the confusion matrix
 
 
 
-# ===================== 优化器配置 (Optimizer) =====================
+# ===================== Optimizer Configuration =====================
 OPTIMIZER:
-  NAME: "SGD"  # 优化器类名
-  LR: 0.002  # 学习率
+  NAME: "SGD"  # Optimizer class name
+  LR: 0.002  # Learning rate
 
-  # 特定于 SGD 优化器的参数
-  momentum: 0.9  # 动量
-  weight_decay: 0.0005  # 权重衰减（L2 正则化）
-  dampening: 0.0  # 阻尼
-  nesterov: False  # 是否使用 Nesterov 动量
+  # Parameters specific to the SGD optimizer
+  momentum: 0.9  # Momentum
+  weight_decay: 0.0005  # Weight decay (L2 regularization)
+  dampening: 0.0  # Damping
+  nesterov: False  # Whether to use Nesterov momentum
 
 
-# ===================== 使用说明 ========================
-# 完整配置文档参考：https://github.com/Codecode-X/X-Trainer/wiki
+# ===================== Instructions ========================
+# Complete configuration documentation: https://github.com/Codecode-X/X-Trainer/wiki

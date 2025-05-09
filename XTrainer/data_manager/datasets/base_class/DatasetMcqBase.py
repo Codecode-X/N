@@ -8,83 +8,82 @@ from utils import check_isfile
 @DATASET_REGISTRY.register()
 class DatasetMcqBase(DatasetBase):
     """
-    MCQ数据集类的基类。
-    继承自 DatasetBase 类。
+    Base class for MCQ datasets.
+    Inherits from the DatasetBase class.
 
-    对外访问属性 (@property) :
-        - 父类 DatasetBase 的属性:
-            - train (list): 带标签的训练数据。
-            - val (list): 验证数据（可选）。
-            - test (list): 测试数据。
-        - 当前读取：None
+    Public attributes (@property):
+        - Attributes from the parent class DatasetBase:
+            - train (list): Labeled training data.
+            - val (list): Validation data (optional).
+            - test (list): Test data.
+        - Current read: None
 
-    对内访问属性:
-        - 父类 DatasetBase 的属性:
-            - num_shots (int): 少样本数量。
-            - seed (int): 随机种子。
-            - p_trn (float): 训练集比例。
-            - p_val (float): 验证集比例。
-            - p_tst (float): 测试集比例。
-            - dataset_dir (str): 数据集目录。
-        - 当前读取：
-            - csv_file (str): cfg.DATASET.CSV_FILE: 标注文件路径 | 例如：/root/autodl-tmp/NegBench/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv
-            - num_choices (int): cfg.DATASET.NUM_CHOICES: 答案选项数量。 例如：4
+    Internal attributes:
+        - Attributes from the parent class DatasetBase:
+            - num_shots (int): Few-shot sample count.
+            - seed (int): Random seed.
+            - p_trn (float): Training set ratio.
+            - p_val (float): Validation set ratio.
+            - p_tst (float): Test set ratio.
+            - dataset_dir (str): Dataset directory.
+        - Current read:
+            - csv_file (str): cfg.DATASET.CSV_FILE: Annotation file path | e.g., /root/autodl-tmp/NegBench/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv
+            - num_choices (int): cfg.DATASET.NUM_CHOICES: Number of answer options. e.g., 4
 
-    基本方法:
-        - 实现 DatasetBase 类的抽象方法/接口：
-            - read_split: 读取数据分割文件。
-            - save_split: 保存数据分割文件。
-            - generate_fewshot_dataset: 生成小样本数据集（通常用于训练集）。
+    Basic methods:
+        - Implements abstract methods/interfaces from DatasetBase:
+            - read_split: Reads data split files.
+            - save_split: Saves data split files.
+            - generate_fewshot_dataset: Generates few-shot datasets (usually for training sets).
 
-    抽象方法/接口 (需要具体数据集子类实现):
-        - read_and_split_data: 读取数据并分割为 train, val, test 数据集 (需要根据每个MCQ数据集的格式自定义)。
-    
+    Abstract methods/interfaces (to be implemented by specific dataset subclasses):
+        - read_and_split_data: Reads data and splits it into train, val, and test datasets (customized for each MCQ dataset format).
     """
 
     def __init__(self, cfg):
         """ 
-        初始化数据集的基本属性
+        Initializes the basic attributes of the dataset.
 
-        参数:
-            - cfg (CfgNode): 配置。
+        Parameters:
+            - cfg (CfgNode): Configuration.
 
-        配置
-            - 当前读取：
-                - csv_path (str): cfg.DATASET.CSV_PATH: 标注文件路径 | 例如：/root/autodl-tmp/NegBench/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv
-                - num_choices (int): cfg.DATASET.NUM_CHOICES: 答案选项数量。 例如：4
-            - 父类读取：
-                - dataset_dir (str): cfg.DATASET.DATASET_DIR: 数据集目录。| 例如：/root/autodl-tmp/NegBench/images/MCQ
-                - num_shots (int): cfg.DATASET.NUM_SHOTS: 少样本数量 | -1 表示使用全部数据，0 表示 zero-shot，1 表示 one-shot，以此类推。
-                - seed (int): cfg.SEED: 随机种子。
-                - p_trn (float): cfg.DATASET.SPLIT[0]: 训练集比例。
-                - p_val (float): cfg.DATASET.SPLIT[1]: 验证集比例。
-                - p_tst (float): cfg.DATASET.SPLIT[2]: 测试集比例。
+        Configuration:
+            - Current read:
+                - csv_path (str): cfg.DATASET.CSV_PATH: Annotation file path | e.g., /root/autodl-tmp/NegBench/images/MCQ/COCO_val_mcq_llama3.1_rephrased.csv
+                - num_choices (int): cfg.DATASET.NUM_CHOICES: Number of answer options. e.g., 4
+            - Parent class read:
+                - dataset_dir (str): cfg.DATASET.DATASET_DIR: Dataset directory. | e.g., /root/autodl-tmp/NegBench/images/MCQ
+                - num_shots (int): cfg.DATASET.NUM_SHOTS: Few-shot sample count | -1 means use all data, 0 means zero-shot, 1 means one-shot, and so on.
+                - seed (int): cfg.SEED: Random seed.
+                - p_trn (float): cfg.DATASET.SPLIT[0]: Training set ratio.
+                - p_val (float): cfg.DATASET.SPLIT[1]: Validation set ratio.
+                - p_tst (float): cfg.DATASET.SPLIT[2]: Test set ratio.
         
-        主要步骤：
-            1. 读取新增配置。
-            2. 调用父类 DatasetBase 构造方法：
-                1. 读取配置。
-                2. 读取数据并分割为 train, val, test 数据集。（待子类实现 get_data 和 get_fewshot_data 方法）
-                3. 如果 num_shots >= 0，则从 train 和 val 中进行少样本采样，生成少样本的 train 和 val 数据集。
+        Main steps:
+            1. Read additional configurations.
+            2. Call the parent class DatasetBase constructor:
+                1. Read configurations.
+                2. Read data and split it into train, val, and test datasets. (Subclasses need to implement get_data and get_fewshot_data methods)
+                3. If num_shots >= 0, perform few-shot sampling from train and val to generate few-shot train and val datasets.
         """
-        # ---读取配置---
+        # ---Read configurations---
         self.csv_file = cfg.DATASET.CSV_FILE 
         self.num_choices = cfg.DATASET.NUM_CHOICES
 
-        # ---调用父类构造方法，获取 self.train, self.val, self.test 等属性---
-        super().__init__(cfg)  # 调用父类构造方法
+        # ---Call the parent class constructor to get self.train, self.val, self.test, etc.---
+        super().__init__(cfg)  # Call the parent class constructor
 
-    # -----------------------父类 DatasetBase 要求子基类实现的抽象方法-----------------------
+    # -----------------------Abstract methods required by the parent class DatasetBase-----------------------
 
     def read_split(self, split_file):
         """
-        读取数据分割文件 (实现父类的抽象方法)。
+        Reads data split files (implements the abstract method from the parent class).
         
-        参数：
-            - split_file (str): (新保存/读取)分割文件路径。
+        Parameters:
+            - split_file (str): Path to the split file (newly saved/read).
         
-        返回：
-            - 训练、验证和测试数据 (MCQDatum 对象列表类型)。
+        Returns:
+            - Training, validation, and test data (list of MCQDatum objects).
         """
         def _convert(items):
             out = []
@@ -93,26 +92,26 @@ class DatasetMcqBase(DatasetBase):
                 out.append(item)
             return out
 
-        print(f"Reading split from {split_file}")  # 打印读取分割文件的信息
-        split = read_json(split_file)  # 读取 JSON 文件
-        train = _convert(split["train"])  # 转换训练数据
-        val = _convert(split["val"])  # 转换验证数据
-        test = _convert(split["test"])  # 转换测试数据
+        print(f"Reading split from {split_file}")  # Print information about reading the split file
+        split = read_json(split_file)  # Read the JSON file
+        train = _convert(split["train"])  # Convert training data
+        val = _convert(split["val"])  # Convert validation data
+        test = _convert(split["test"])  # Convert test data
 
-        return train, val, test  # 返回训练、验证和测试数据 (MCQDatum 对象列表类型)
+        return train, val, test  # Return training, validation, and test data (list of MCQDatum objects)
     
 
     def save_split(self, train, val, test, split_file):
         """
-        保存数据分割文件 (实现父类的抽象方法)。
+        Saves data split files (implements the abstract method from the parent class).
         
-        参数：
-            - train (list): 训练数据集。
-            - val (list): 验证数据集。
-            - test (list): 测试数据集。
-            - split_file (str): 数据分割文件路径。
+        Parameters:
+            - train (list): Training dataset.
+            - val (list): Validation dataset.
+            - test (list): Test dataset.
+            - split_file (str): Path to the split file.
 
-        返回：
+        Returns:
             - None
         """
         def _extract(items):
@@ -125,33 +124,33 @@ class DatasetMcqBase(DatasetBase):
                 correct_answer_type = item.correct_answer_type
                 out.append((impath, num_choices, choices, correct_answer, correct_answer_type))
             return out
-        train = _extract(train)  # 提取训练数据
-        val = _extract(val)  # 提取验证数据
-        test = _extract(test)  # 提取测试数据
+        train = _extract(train)  # Extract training data
+        val = _extract(val)  # Extract validation data
+        test = _extract(test)  # Extract test data
 
-        split = {"train": train, "val": val, "test": test}  # 创建分割字典
+        split = {"train": train, "val": val, "test": test}  # Create a split dictionary
 
-        write_json(split, split_file)  # 写入 JSON 文件
-        print(f"Saved split to {split_file}")  # 打印保存分割文件的信息
+        write_json(split, split_file)  # Write to a JSON file
+        print(f"Saved split to {split_file}")  # Print information about saving the split file
     
 
     def generate_fewshot_dataset(self, dataset, num_shots=-1, repeat=False):
-        """生成小样本数据集，每个类别仅包含少量图像 (实现父类的抽象方法)。
+        """Generates a few-shot dataset, containing only a few images per category (implements the abstract method from the parent class).
 
-        参数:
-            - dataset (list): 包含 MCQDatum 对象的列表。
-            - num_shots (int): 每个类别采样的实例数量。| 默认 -1 即直接返回原始数据源
-            - repeat (bool): 是否在需要时重复图像（默认：False）。
+        Parameters:
+            - dataset (list): List of MCQDatum objects.
+            - num_shots (int): Number of instances to sample per category. | Default -1 means directly return the original dataset.
+            - repeat (bool): Whether to repeat images if needed (default: False).
         
-        返回:
-            - fewshot_dataset (list): 包含少量图像的数据集。
+        Returns:
+            - fewshot_dataset (list): Dataset containing a few images.
         """
-        if num_shots <= 0: # 不进行少样本采样
+        if num_shots <= 0: # No few-shot sampling
             super().generate_fewshot_dataset(dataset, num_shots, repeat)
 
-        print(f"正在创建一个 {num_shots}-shot 数据集....")
+        print(f"Creating a {num_shots}-shot dataset....")
 
-        # 按照 correct_answer_type 分组
+        # Group by correct_answer_type
         grouped_data = defaultdict(list)
         for item in dataset:
             grouped_data[item.correct_answer_type].append(item)
@@ -160,51 +159,51 @@ class DatasetMcqBase(DatasetBase):
         for correct_answer_type, items in grouped_data.items():
             if len(items) <= num_shots:
                 if repeat:
-                    # 如果样本不足且允许重复，则重复采样
+                    # If samples are insufficient and repetition is allowed, repeat sampling
                     fewshot_dataset.extend(
-                        items * (num_shots // len(items)) +  # items 需要被完整重复的次数
-                        items[:num_shots % len(items)]  # 不能整除的剩余部分
+                        items * (num_shots // len(items)) +  # Items need to be fully repeated this many times
+                        items[:num_shots % len(items)]  # Remaining part that cannot be evenly divided
                     )
                 else:
-                    fewshot_dataset.extend(items)  # 不足时直接使用全部样本
+                    fewshot_dataset.extend(items)  # Use all samples if insufficient
             else:
-                # 随机采样 num_shots 个样本
+                # Randomly sample num_shots samples
                 fewshot_dataset.extend(random.sample(items, num_shots))
 
-        print(f"少样本数据集创建完成，共包含 {len(fewshot_dataset)} 个样本。")
+        print(f"Few-shot dataset created, containing {len(fewshot_dataset)} samples.")
         return fewshot_dataset
 
     
-    # -------------------具体数据集子类实现 - 抽象方法/接口-------------------
+    # -------------------Specific dataset subclass implementation - Abstract methods/interfaces-------------------
 
     def read_and_split_data(self):
         """
-        读取 csv 文件的数据并分割为 train, val, test 数据集 (需要根据每个MCQ数据集的格式自定义)
+        Reads data from the CSV file and splits it into train, val, and test datasets (customized for each MCQ dataset format).
 
-        需要返回：
-            - 训练、验证和测试数据 (MCQDatum 对象列表类型)。
+        Needs to return:
+            - Training, validation, and test data (list of MCQDatum objects).
         """
-        raise NotImplementedError("子类需要实现 read_and_split_data 方法") 
+        raise NotImplementedError("Subclasses need to implement the read_and_split_data method") 
 
         
 
-# -------------------辅助类 和 函数-------------------
+# -------------------Helper classes and functions-------------------
 
 
 class MCQDatum:
-    """MCQ数据实例类，定义了基本属性。
+    """MCQ data instance class, defining basic attributes.
 
-    参数:
-        - impath (str): 图像路径。
-        - num_choices (int): 答案选项数量。
-        - choices (list<str>): 答案选项文本列表。
-        - correct_answer (int): 正确答案索引。
-        - correct_answer_template (str): 正确答案模板类型。(negation, hybrid, positive)
+    Parameters:
+        - impath (str): Image path.
+        - num_choices (int): Number of answer options.
+        - choices (list<str>): List of answer option texts.
+        - correct_answer (int): Index of the correct answer.
+        - correct_answer_template (str): Type of the correct answer template (negation, hybrid, positive).
     """
 
     def __init__(self, impath, num_choices, choices, correct_answer, correct_answer_type):
-        """初始化数据实例。"""
-        # 确保图像路径是字符串类型&检查图像路径是否是有效文件
+        """Initializes a data instance."""
+        # Ensure the image path is a string type & check if the image path is a valid file
         assert isinstance(impath, str) and check_isfile(impath)
         self._impath = impath
         self._num_choices = num_choices

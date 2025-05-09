@@ -1,31 +1,29 @@
 from data_manager.transforms import TRANSFORM_REGISTRY
-<<<<<<< HEAD
 from .base_class.TransformBase import TransformBase
-=======
-from .TransformBase import TransformBase
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 import random
 import torch
 
 @TRANSFORM_REGISTRY.register()
 class GaussianNoise(TransformBase):
     """
-    对输入图像添加高斯噪声。
+    Add Gaussian noise to the input image.
     
-    属性
-        - mean (float): 高斯噪声的均值 | 默认值为 0。
-        - std (float): 高斯噪声的标准差 | 默认值为 0.15。
-        - p (float): 应用高斯噪声的概率 | 默认值为 0.5。
-    主要功能：
-        - 对输入图像添加高斯噪声。
-    主要步骤：
-        1. 根据概率 p 决定是否添加高斯噪声。
-        2. 如果添加，则生成与图像大小相同的高斯噪声。
-        3. 将生成的高斯噪声添加到输入图像上。
+    Attributes:
+        - mean (float): Mean of the Gaussian noise | Default is 0.
+        - std (float): Standard deviation of the Gaussian noise | Default is 0.15.
+        - p (float): Probability of applying Gaussian noise | Default is 0.5.
+    
+    Main functionality:
+        - Add Gaussian noise to the input image.
+    
+    Main steps:
+        1. Decide whether to add Gaussian noise based on probability p.
+        2. If adding, generate Gaussian noise with the same size as the image.
+        3. Add the generated Gaussian noise to the input image.
     """
     def __init__(self, cfg):
         self.mean = cfg.INPUT.GaussianNoise.mean \
-            if hasattr(cfg.INPUT.GaussianNoise, 'mea') else 0
+            if hasattr(cfg.INPUT.GaussianNoise, 'mean') else 0
         self.std = cfg.INPUT.GaussianNoise.std \
             if hasattr(cfg.INPUT.GaussianNoise, 'std') else 0.15
         self.p = cfg.INPUT.GaussianNoise.p \

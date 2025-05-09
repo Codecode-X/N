@@ -8,42 +8,42 @@ from .EvaluatorBase import EvaluatorBase
 
 @EVALUATOR_REGISTRY.register()
 class EvaluatorClassification(EvaluatorBase):
-    """分类任务的评估器。"""
+    """Evaluator for classification tasks."""
 
     def __init__(self, cfg, lab2cname=None, **kwargs):
-        """ 初始化分类评估器。
-        参数:
-            cfg (CfgNode): 配置。
-            lab2cname (dict): 标签到类名的映射。
+        """Initialize the classification evaluator.
+        Args:
+            cfg (CfgNode): Configuration.
+            lab2cname (dict): Mapping from label to class name.
         
-        属性:
-            lab2cname (dict): 标签到类名的映射。
-            correct (int): 正确预测的数量。
-            total (int): 总数量。
-            y_true (list): 真实标签。
-            y_pred (list): 预测标签。
-            per_class (bool): 是否评估每个类别的结果。
-            per_class_res (dict): 每个类别的结果。
-            calc_cmat (bool): 是否计算混淆矩阵。
+        Attributes:
+            lab2cname (dict): Mapping from label to class name.
+            correct (int): Number of correct predictions.
+            total (int): Total number of samples.
+            y_true (list): Ground truth labels.
+            y_pred (list): Predicted labels.
+            per_class (bool): Whether to evaluate results per class.
+            per_class_res (dict): Results per class.
+            calc_cmat (bool): Whether to calculate the confusion matrix.
         """
         super().__init__(cfg)
-        self.lab2cname = lab2cname # 标签到类名的映射
-        self.correct = 0 # 正确预测的数量
-        self.total = 0 # 总数量
+        self.lab2cname = lab2cname  # Mapping from label to class name
+        self.correct = 0  # Number of correct predictions
+        self.total = 0  # Total number of samples
         
-        self.y_true = [] # 真实标签
-        self.y_pred = [] # 预测标签
+        self.y_true = []  # Ground truth labels
+        self.y_pred = []  # Predicted labels
 
-        self.per_class = cfg.EVALUATOR.per_class # 是否评估每个类别的结果
-        self.per_class_res = None # 每个类别的结果
-        if self.per_class: # 是否评估每个类别的结果
+        self.per_class = cfg.EVALUATOR.per_class  # Whether to evaluate results per class
+        self.per_class_res = None  # Results per class
+        if self.per_class:  # If evaluating per class results
             assert lab2cname is not None
-            self.per_class_res = defaultdict(list) # 用于记录每个类别的结果的字典
+            self.per_class_res = defaultdict(list)  # Dictionary to record results per class
         
-        self.calc_cmat = cfg.EVALUATOR.calc_cmat # 是否计算混淆矩阵
+        self.calc_cmat = cfg.EVALUATOR.calc_cmat  # Whether to calculate the confusion matrix
 
     def reset(self):
-        """(实现父类的方法) 重置评估器状态。"""
+        """(Override parent method) Reset the evaluator state."""
         self.correct = 0
         self.total = 0
         self.y_true = []
@@ -52,42 +52,42 @@ class EvaluatorClassification(EvaluatorBase):
             self.per_class_res = defaultdict(list)
 
     def process(self, model_output, gt):
-        """(实现父类的方法) 处理模型输出和真实标签。
-        参数：
-            model_output (torch.Tensor): 模型输出 [batch, num_classes]
-            gt (torch.LongTensor): 真实标签 [batch]
+        """(Override parent method) Process model output and ground truth labels.
+        Args:
+            model_output (torch.Tensor): Model output [batch, num_classes]
+            gt (torch.LongTensor): Ground truth labels [batch]
         """
-        pred = model_output.max(1)[1]  # 获取每个样本的预测类别
-        matches = pred.eq(gt).float()  # 计算预测是否正确
-        self.correct += int(matches.sum().item())  # 累加正确预测的数量
-        self.total += gt.shape[0]  # 累加总样本数量
+        pred = model_output.max(1)[1]  # Get the predicted class for each sample
+        matches = pred.eq(gt).float()  # Check if predictions are correct
+        self.correct += int(matches.sum().item())  # Accumulate the number of correct predictions
+        self.total += gt.shape[0]  # Accumulate the total number of samples
 
-        self.y_true.extend(gt.data.cpu().numpy().tolist())  # 记录真实标签
-        self.y_pred.extend(pred.data.cpu().numpy().tolist())  # 记录预测标签
+        self.y_true.extend(gt.data.cpu().numpy().tolist())  # Record ground truth labels
+        self.y_pred.extend(pred.data.cpu().numpy().tolist())  # Record predicted labels
 
-        if self.per_class_res is not None:  # 如果需要记录每个类别的结果
-            for i, label in enumerate(gt):  # 遍历每个样本
-                label = label.item()  # 获取标签值
-                matches_i = int(matches[i].item())  # 获取该样本的匹配结果
-                self.per_class_res[label].append(matches_i)  # 记录该类别的匹配结果
+        if self.per_class_res is not None:  # If per class results are needed
+            for i, label in enumerate(gt):  # Iterate through each sample
+                label = label.item()  # Get the label value
+                matches_i = int(matches[i].item())  # Get the match result for this sample
+                self.per_class_res[label].append(matches_i)  # Record the match result for this class
 
     def evaluate(self):
-        """(实现父类的方法) 计算评估结果并返回。"""
-        results = OrderedDict()  # 用于存储评估结果的有序字典
+        """(Override parent method) Compute and return evaluation results."""
+        results = OrderedDict()  # Ordered dictionary to store evaluation results
         
-        # 整体的评估结果
-        acc = 100.0 * self.correct / self.total  # 计算准确率
-        err = 100.0 - acc  # 计算错误率
-        macro_f1 = 100.0 * f1_score( # 计算宏平均 F1 分数
+        # Overall evaluation results
+        acc = 100.0 * self.correct / self.total  # Calculate accuracy
+        err = 100.0 - acc  # Calculate error rate
+        macro_f1 = 100.0 * f1_score(  # Calculate macro-average F1 score
             self.y_true,
             self.y_pred,
             average="macro",
             labels=np.unique(self.y_true)
         )  
-        results["accuracy"] = acc  # 存储准确率
-        results["error_rate"] = err  # 存储错误率
-        results["macro_f1"] = macro_f1  # 存储宏平均 F1 分数
-        print( # 打印评估结果
+        results["accuracy"] = acc  # Store accuracy
+        results["error_rate"] = err  # Store error rate
+        results["macro_f1"] = macro_f1  # Store macro-average F1 score
+        print(  # Print evaluation results
             "=> result\n"
             f"* total: {self.total:,}\n"
             f"* correct: {self.correct:,}\n"
@@ -96,34 +96,34 @@ class EvaluatorClassification(EvaluatorBase):
             f"* macro_f1: {macro_f1:.1f}%"
         )  
         
-        # 每个类别的结果
+        # Per-class results
         if self.per_class_res is not None: 
-            labels = list(self.per_class_res.keys())  # 获取所有类别标签
-            labels.sort()  # 对标签进行排序
+            labels = list(self.per_class_res.keys())  # Get all class labels
+            labels.sort()  # Sort the labels
             print("=> per-class result")
-            accs = []  # 用于存储每个类别的准确率
+            accs = []  # List to store accuracy for each class
             for label in labels:
-                classname = self.lab2cname[label]  # 获取类别名称
-                res = self.per_class_res[label]  # 获取该类别的匹配结果
-                correct = sum(res)  # 计算该类别的正确预测数量
-                total = len(res)  # 计算该类别的总样本数量
-                acc = 100.0 * correct / total  # 计算该类别的准确率
-                accs.append(acc)  # 将准确率添加到列表中
-                print( # 打印该类别的评估结果
+                classname = self.lab2cname[label]  # Get class name
+                res = self.per_class_res[label]  # Get match results for this class
+                correct = sum(res)  # Calculate the number of correct predictions for this class
+                total = len(res)  # Calculate the total number of samples for this class
+                acc = 100.0 * correct / total  # Calculate accuracy for this class
+                accs.append(acc)  # Add accuracy to the list
+                print(  # Print evaluation results for this class
                     f"* class: {label} ({classname})\t"
                     f"total: {total:,}\t"
                     f"correct: {correct:,}\t"
                     f"acc: {acc:.1f}%"
                 )  
-            mean_acc = np.mean(accs)  # 计算平均准确率
+            mean_acc = np.mean(accs)  # Calculate mean accuracy
             print(f"* average: {mean_acc:.1f}%")
-            results["perclass_accuracy"] = mean_acc  # 存储每个类别的平均准确率
+            results["perclass_accuracy"] = mean_acc  # Store mean accuracy for all classes
 
-        # 混淆矩阵结果
+        # Confusion matrix results
         if self.calc_cmat:
-            cmat = confusion_matrix(self.y_true, self.y_pred, normalize="true")  # 计算混淆矩阵
-            save_path = osp.join(self.cfg.OUTPUT_DIR, "cmat.pt")  # 混淆矩阵保存路径
-            torch.save(cmat, save_path)  # 保存混淆矩阵
-            print(f"Confusion matrix is saved to {save_path}")  # 打印混淆矩阵保存路径
+            cmat = confusion_matrix(self.y_true, self.y_pred, normalize="true")  # Calculate confusion matrix
+            save_path = osp.join(self.cfg.OUTPUT_DIR, "cmat.pt")  # Path to save the confusion matrix
+            torch.save(cmat, save_path)  # Save the confusion matrix
+            print(f"Confusion matrix is saved to {save_path}")  # Print the save path for the confusion matrix
 
-        return results  # 返回评估结果
+        return results  # Return evaluation results

@@ -15,112 +15,105 @@ from tqdm import tqdm
 
 @TRAINER_REGISTRY.register()
 class TrainerMcqCoOp(TrainerMcqBase):
-    """CoOp 处理 MCQ 任务的 Trainer 类。"""
+    """Trainer class for handling MCQ tasks with CoOp."""
 
     def init_model(self, cfg):
         """
-        (实现父类的方法) 初始化模型。
-        -> 只训练 Prompt生成器 示例
+        (Override parent method) Initialize the model.
+        -> Only train the Prompt Generator as an example.
 
-        参数：
-            cfg (CfgNode): 配置。
+        Args:
+            cfg (CfgNode): Configuration.
 
-        类包含的属性：
-            - CoOp_model (nn.Module): CoOp 模型。
-            - pptLearner (PromptLearner): 提示学习器。
-            - optim (Optimizer): 优化器。
-            - sched (LRScheduler): 学习率调度器。
+        Class Attributes:
+            - CoOp_model (nn.Module): CoOp model.
+            - pptLearner (PromptLearner): Prompt learner.
+            - optim (Optimizer): Optimizer.
+            - sched (LRScheduler): Learning rate scheduler.
 
-        返回：
-            - model (nn.Module): 模型。
-            - optim (Optimizer): 优化器。
-            - sched (LRScheduler): 学习率调度器。
+        Returns:
+            - model (nn.Module): Model.
+            - optim (Optimizer): Optimizer.
+            - sched (LRScheduler): Learning rate scheduler.
 
-        主要步骤：
-        1. 构建模型
-        2. 冻结 CLIP 的文本编码器和图像编码器，只训练 CoOp 的 PromptLearner
-        3. 将模型移动到设备
-        4. 将模型调整为精度混合训练 (如果配置了精度混合训练)
-        5. 多 GPU 并行训练情况，则将模型部署到多个 GPU 上 (如果有多个 GPU)
-        6. 构建优化器和调度器，只优化 CLIP 的 PromptLearner，并注册
-        7. 返回模型、优化器和调度器
+        Main Steps:
+        1. Build the model.
+        2. Freeze the text and image encoders of CLIP, only train the PromptLearner of CoOp.
+        3. Move the model to the device.
+        4. Adjust the model for mixed precision training (if configured).
+        5. Deploy the model to multiple GPUs for parallel training (if multiple GPUs are available).
+        6. Build the optimizer and scheduler, only optimize the PromptLearner of CLIP, and register them.
+        7. Return the model, optimizer, and scheduler.
         """
-        # 构建模型
-        assert cfg.MODEL.NAME == "CoOp", f"TrainerClsCoOp 只支持 CoOp 模型，但 cfg.MODEL.NAME = {cfg.MODEL.NAME}"
-        self.CoOp_model = build_model(cfg) # 构建模型 (此处 CLIP 模型提供了预训练模型的载入)
-        print("模型参数数量：", count_num_param(self.CoOp_model))
+        # Build the model
+        assert cfg.MODEL.NAME == "CoOp", f"TrainerClsCoOp only supports CoOp model, but cfg.MODEL.NAME = {cfg.MODEL.NAME}"
+        self.CoOp_model = build_model(cfg)  # Build the model (CLIP model with pre-trained weights)
+        print("Number of model parameters:", count_num_param(self.CoOp_model))
 
-        # 冻结模型某些层 -> 示例：冻结 CLIP 的文本编码器和图像编码器，只训练 CoOp 的 PromptLearner
+        # Freeze certain layers -> Example: Freeze the text and image encoders of CLIP, only train the PromptLearner of CoOp
         if cfg.TRAINER.FROZEN:
             for name, param in self.CoOp_model.named_parameters():
                 if "prompt_learner" not in name:
                     param.requires_grad = False
 
-        # 将模型移动到设备
+        # Move the model to the device
         self.CoOp_model.to(self.device)
 
-        # 初始化提示学习器，并注册到CoOp_model中，用于学习提示信息
-        self.pptLearner = PromptLearner(cfg, self.CoOp_model, self.num_choices) # 提示学习器
+        # Initialize the PromptLearner and register it to CoOp_model for learning prompt information
+        self.pptLearner = PromptLearner(cfg, self.CoOp_model, self.num_choices)  # Prompt learner
 
-        # 多 GPU 并行训练情况，则将模型部署到多个 GPU 上 (如果有多个 GPU)
+        # Deploy the model to multiple GPUs for parallel training (if multiple GPUs are available)
         device_count = torch.cuda.device_count()
         if device_count > 1:
             print(f"Multiple GPUs detected (n_gpus={device_count}), use all of them!")
             self.CoOp_model = nn.DataParallel(self.CoOp_model)
 
-        # 构建 PromptLearner 并注册 -> 示例：优化器只优化 CLIP 的 PromptLearner
+        # Build the PromptLearner and register -> Example: Optimizer only optimizes the PromptLearner of CLIP
         promptLearner = self.CoOp_model.pptLearner
         self.optim = build_optimizer(promptLearner, cfg)
         self.sched = build_lr_scheduler(cfg, self.optim)
         self.register_model("CLIP_promptLearner", promptLearner, self.optim, self.sched)
 
-        # 给 promptLearner 载入 提示学习器 的预训练权重 (如果配置了 预训练权重) - 请仅使用相同数据集的预训练权重，否则没有意义
+        # Load pre-trained weights for the PromptLearner (if configured) - Only use pre-trained weights from the same dataset
         if hasattr(cfg.MODEL, "INIT_WEIGHTS_PATH") and cfg.MODEL.INIT_WEIGHTS_PATH: 
             pretarined_path = cfg.MODEL.INIT_WEIGHTS_PATH
-            print(f"载入预训练权重：{pretarined_path}")
-            self.load_model(directory=pretarined_path)  # 加载最佳模型
-
-        # 打印参数
-        # for name, param in self.CoOp_model.named_parameters():
-        #     if param.data.dim() >= 1:
-        #         print(f"{name} \n{param.data[:5]}")
-        #     else:
-        #         print(f"{name} \n{param.data}")
+            print(f"Loading pre-trained weights: {pretarined_path}")
+            self.load_model(directory=pretarined_path)  # Load the best model
 
         return self.CoOp_model, self.optim, self.sched
     
     def forward_backward(self, batch): 
         """
-        (实现父类的方法) 前向传播和反向传播。
+        (Override parent method) Forward and backward propagation.
         """
-        image, num_choices, choices, correct_answer, correct_answer_type = self.parse_batch_train(batch)  # 解析训练批次数据，获取图像和标签
-        choices = list(zip(*choices))  # 将 (num_choices=4, batchsize=n) 转换为 (batch_size=n, num_choices=4) 格式
+        image, num_choices, choices, correct_answer, correct_answer_type = self.parse_batch_train(batch)  # Parse training batch data
+        choices = list(zip(*choices))  # Convert (num_choices=4, batchsize=n) to (batch_size=n, num_choices=4)
         
-        prec = self.cfg.TRAINER.PREC  # 配置的精度 # 默认 fp16
-        if prec != "fp16": Warning.warn(f"TrainerClsCoOp 只支持 fp16 精度，但 cfg.TRAINER.PREC = {prec}，此处仍使用 fp16 精度以匹配Clip")
+        prec = self.cfg.TRAINER.PREC  # Precision configuration (default: fp16)
+        if prec != "fp16": Warning.warn(f"TrainerClsCoOp only supports fp16 precision, but cfg.TRAINER.PREC = {prec}. Using fp16 precision to match CLIP.")
         
-        # 批量初始化提示学习器
+        # Batch initialize the PromptLearner
         self.CoOp_model.batch_init_prompt_learner(choices)
         
-        # 准备标签
+        # Prepare labels
         labels = torch.tensor(correct_answer, dtype=torch.long, device=self.device)
         
-        # 批量前向计算
-        logits = self.CoOp_model(image)  # 输入整个batch [B, C, H, W]
+        # Batch forward computation
+        logits = self.CoOp_model(image)  # Input the entire batch [B, C, H, W]
         
-        # 计算损失
+        # Compute loss
         loss = F.cross_entropy(logits, labels)
         
-        # 反向传播
+        # Backward propagation
         self.model_backward_and_update(loss)
         
-        # 计算准确率
+        # Compute accuracy
         acc = compute_accuracy(logits, labels)[0].item()
         
-        # 日志记录
+        # Log results
         loss_summary = {"loss": loss.item(), "acc": acc}
         
-        # 学习率更新
+        # Update learning rate
         if (self.batch_idx + 1) == self.num_batches:
             self.update_lr()
         
@@ -129,44 +122,44 @@ class TrainerMcqCoOp(TrainerMcqBase):
     @torch.no_grad()
     def test(self, split=None):
         """
-        适配批量处理的测试方法
+        Adapted batch processing test method.
         
-        主要改进点：
-        1. 批量初始化提示学习器
-        2. 支持动态选项数量
-        3. 兼容不同批大小的维度处理
+        Main improvements:
+        1. Batch initialize the PromptLearner.
+        2. Support dynamic number of choices.
+        3. Handle dimensions for different batch sizes.
         """
-        # --------初始化设置--------
+        # --------Initialization--------
         self.set_model_mode("eval")
         self.evaluator.reset()
         
-        # --------确定测试集--------
+        # --------Determine test set--------
         split = split or self.cfg.TEST.SPLIT
         data_loader = self.val_loader if split == "val" else self.test_loader
-        print(f"在 *{split}* 集上测试")
+        print(f"Testing on *{split}* set")
 
-        # --------批量测试流程--------
+        # --------Batch testing process--------
         for batch_idx, batch in enumerate(tqdm(data_loader)):
-            # 解析批次数据（适配新维度）
+            # Parse batch data (adapt to new dimensions)
             image, num_choices, choices, correct_answer, correct_answer_type = self.parse_batch_test(batch)
             
-            # 转换choices格式为 [batch_size, num_choices]
+            # Convert choices format to [batch_size, num_choices]
             batch_choices = [list(per_sample) for per_sample in zip(*choices)] if isinstance(choices[0], (list, tuple)) else choices
             
-            # 批量初始化提示学习器
+            # Batch initialize the PromptLearner
             self.CoOp_model.batch_init_prompt_learner(batch_choices)
             
-            # 模型推理 [batch_size, num_choices]
-            logits = self.CoOp_model(image) # [batch_size, num_choices]=[100, 4]
+            # Model inference [batch_size, num_choices]
+            logits = self.CoOp_model(image)  # [batch_size, num_choices]=[100, 4]
             
-            # 评估器处理（需支持批量统计）
+            # Evaluator processing (support batch statistics)
             self.evaluator.process(
-                logits=logits, # [batch_size]=[100, 4]
-                correct_answer=correct_answer, # [batch_size]=[100]
+                logits=logits,  # [batch_size]=[100, 4]
+                correct_answer=correct_answer,  # [batch_size]=[100]
                 correct_answer_type=correct_answer_type
             )
 
-        # --------结果分析与记录--------
+        # --------Result analysis and logging--------
         results = self.evaluator.evaluate()
         for metric, value in results.items():
             self.write_scalar(f"{split}/{metric}", value, self.epoch)
@@ -175,51 +168,50 @@ class TrainerMcqCoOp(TrainerMcqBase):
 
     def load_model(self, directory, epoch=None):
         """
-        重写父类方法-工具方法：将 dictionary 中的模型文件载入到模型中。
+        Override parent method - Utility method: Load model files from a dictionary into the model.
         
-        解决权重文件中预训练模型的num_classes和当前模型的num_classes不匹配的问题: 裁剪 token_prefix 和 token_suffix。
+        Solve the issue of mismatched num_classes between pre-trained weights and the current model: Trim token_prefix and token_suffix.
         
-        参数：
-            * directory: 模型目录
-            * epoch: epoch | 为None 时，加载最佳模型
+        Args:
+            * directory: Model directory.
+            * epoch: Epoch | If None, load the best model.
         
-        返回：
-            * epoch: 训练轮数
+        Returns:
+            * epoch: Training epoch.
 
-        加载内容：
-            * 模型状态字典
-            * epoch
-            * 验证结果
+        Load contents:
+            * Model state dictionary.
+            * Epoch.
+            * Validation results.
         """
-        assert directory is not None, "load_model()的参数directory模型目录为None"
+        assert directory is not None, "load_model() parameter 'directory' cannot be None."
 
-        names = self.get_model_names()  # 获取所有模型名称
+        names = self.get_model_names()  # Get all model names.
 
         if epoch is not None:
-            print(f"TrainerMcqCoOp.load_model 正在加载指定 epoch {epoch} 的模型...")
-            model_file = "model.pth.tar-" + str(epoch) # 如果指定 epoch，加载指定 epoch 的模型
+            print(f"TrainerMcqCoOp.load_model is loading the model for specified epoch {epoch}...")
+            model_file = "model.pth.tar-" + str(epoch)  # Load the model for the specified epoch.
         else:
-            print("TrainerMcqCoOp.load_model 正在加载最佳模型 model-best.pth.tar...")
-            model_file = "model-best.pth.tar" # 默认情况下，加载最佳模型
+            print("TrainerMcqCoOp.load_model is loading the best model model-best.pth.tar...")
+            model_file = "model-best.pth.tar"  # By default, load the best model.
 
-        # 遍历所有模型名称，加载模型
+        # Iterate through all model names and load the model.
         for name in names: 
-            model_path = osp.join(directory, name, model_file) # 模型路径
+            model_path = osp.join(directory, name, model_file)  # Model path.
 
-            if not osp.exists(model_path): # 如果模型路径不存在，抛出异常
-                raise FileNotFoundError(f"没有找到模型文件 在 {model_path}!")
+            if not osp.exists(model_path):  # If the model path does not exist, raise an exception.
+                raise FileNotFoundError(f"Model file not found at {model_path}!")
 
-            checkpoint = load_checkpoint(model_path) # 加载检查点
-            state_dict = checkpoint["state_dict"] # 获取状态字典
-            epoch = checkpoint["epoch"] # 获取 epoch
+            checkpoint = load_checkpoint(model_path)  # Load checkpoint.
+            state_dict = checkpoint["state_dict"]  # Get state dictionary.
+            epoch = checkpoint["epoch"]  # Get epoch.
 
             try:
-                self._models[name].load_state_dict(state_dict) # 加载模型状态字典
+                self._models[name].load_state_dict(state_dict)  # Load model state dictionary.
             except RuntimeError as e:
                 if "size mismatch" in str(e):
-                    print(f"Warning: {e}. 预训练模型和当前模型的num_classes不匹配，请不要使用其他数据集的预训练权重！")
+                    print(f"Warning: {e}. Pre-trained model and current model num_classes mismatch. Do not use pre-trained weights from other datasets!")
                 else:
                     raise e
         
-        return epoch # 返回训练轮数
-            
+        return epoch  # Return training epoch.

@@ -4,7 +4,7 @@ SAMPLER_REGISTRY = Registry("SAMPLER")
 
 
 def build_train_sampler(cfg, data_source):
-    """ 根据配置中的训练采样器名称 (cfg.SAMPLER.TRAIN_SP ) 构建相应的 训练采样器。"""
+    """ Build the corresponding training sampler according to the name of the training sampler in the configuration (cfg.SAMPLER.TRAIN_SP). """
     avai_samplers = SAMPLER_REGISTRY.registered_names()
     check_availability(cfg.SAMPLER.TRAIN_SP , avai_samplers)
     if cfg.VERBOSE:
@@ -13,7 +13,7 @@ def build_train_sampler(cfg, data_source):
 
 
 def build_test_sampler(cfg, data_source):
-    """ 根据配置中的测试采样器名称 (cfg.SAMPLER.TEST_SP) 构建相应的 测试采样器。"""
+    """ Build the corresponding test sampler according to the name of the test sampler in the configuration (cfg.SAMPLER.TEST_SP). """
     avai_samplers = SAMPLER_REGISTRY.registered_names()
     check_availability(cfg.SAMPLER.TEST_SP, avai_samplers)
     if cfg.VERBOSE:

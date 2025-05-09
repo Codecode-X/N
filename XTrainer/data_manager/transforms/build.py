@@ -8,74 +8,74 @@ TRANSFORM_REGISTRY = Registry("TRANSFORM")
 
 def build_train_transform(cfg):
     """
-    构建训练数据增强。
-    主要步骤：
-    1. 检查配置中的数据增强方法是否存在/合法
-    2. 遍历配置选择的数据增强方法，添加到数据增强列表中，并 Compose
-        - 确保图像大小匹配模型输入大小，如果后续没有裁剪操作，则使用 Resize
-        - 遍历配置选择的ToTensor前的数据增强方法，添加到数据增强列表中
-        - 添加 ToTensor() 转换
-        - 遍历配置选择的ToTensor后的数据增强方法，添加到数据增强列表中
-        - 添加标准化(可选)
-    3. 返回数据增强列表
+    Build training data augmentation.
+    Main steps:
+    1. Check whether the data augmentation methods in the configuration exist/are valid
+    2. Iterate through the selected data augmentation methods in the configuration, add them to the augmentation list, and Compose
+        - Ensure the image size matches the model input size; if there is no cropping operation later, use Resize
+        - Iterate through the data augmentation methods selected before ToTensor in the configuration, add them to the augmentation list
+        - Add ToTensor() transformation
+        - Iterate through the data augmentation methods selected after ToTensor in the configuration, add them to the augmentation list
+        - Add normalization (optional)
+    3. Return the augmentation list
     
-    注意：有的增强需要配置参数，可通过自定义增强类（在类中通过读取 cfg 获取）
+    Note: Some augmentations require configuration parameters, which can be achieved through custom augmentation classes (by reading cfg in the class)
     """
-    print("构建训练数据增强.....")
-    # ---检查配置中的数据增强方法是否存在/合法---
+    print("Building training data augmentation.....")
+    
     avai_transforms = TRANSFORM_REGISTRY.registered_names()
-    before_choices = cfg.INPUT.BEFORE_TOTENSOR_TRANSFORMS # 在转换为张量之前的数据增强方法
-    after_choices = cfg.INPUT.AFTER_TOTENSOR_TRANSFORMS # 在转换为张量之后的数据增强方法
+    before_choices = cfg.INPUT.BEFORE_TOTENSOR_TRANSFORMS 
+    after_choices = cfg.INPUT.AFTER_TOTENSOR_TRANSFORMS 
     _check_cfg(before_choices, avai_transforms)
     _check_cfg(after_choices, avai_transforms)
 
-    # ---遍历配置选择的数据增强方法，添加到数据增强列表中，并 Compose---
-    tfm_train = [] # 数据增强列表
+    
+    tfm_train = [] 
 
-    # 遍历配置选择的数据增强方法，添加到数据增强列表中
+    
     for choice in before_choices:
-        if cfg.VERBOSE: print(f"ToTensor 前训练数据增强：{choice}")
+        if cfg.VERBOSE: print(f"Training data augmentation before ToTensor: {choice}")
         tfm_train.append(TRANSFORM_REGISTRY.get(choice)(cfg)) 
     tfm_train.append(ToTensor())
     for choice in after_choices:
-        if cfg.VERBOSE: print(f"ToTensor 后训练数据增强：{choice}")
+        if cfg.VERBOSE: print(f"Training data augmentation after ToTensor: {choice}")
         tfm_train.append(TRANSFORM_REGISTRY.get(choice)(cfg))
-    # 添加标准化(可选)
+    
     if cfg.INPUT.NORMALIZE:
         tfm_train.append(Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD))
 
     tfm_train = Compose(tfm_train)
     
-    # ---返回数据增强列表--- 
+    
     return tfm_train
 
 
 def build_test_transform(cfg):
     """
-    构建测试数据增强。
+    Build testing data augmentation.
 
-    主要步骤：
-    1. 检查配置信息
-    2. 构建测试数据增强列表
-        - 采用无增强的标准图像预处理(resize + RGB)
-        - 添加 ToTensor() 转换
-        - 添加标准化(可选)
-    3. 返回测试数据增强列表
+    Main steps:
+    1. Check configuration information
+    2. Build the testing data augmentation list
+        - Use standard image preprocessing without augmentation (resize + RGB)
+        - Add ToTensor() transformation
+        - Add normalization (optional)
+    3. Return the testing data augmentation list
     """
-    print("构建测试数据增强.....")
+    print("Building testing data augmentation.....")
     
-    # ---测试增强采用无增强的标准图像预处理(resize + RGB)---   
-    standardNoAugTransform = TRANSFORM_REGISTRY.get("StandardNoAugTransform")(cfg) # 标准无增强预处理流程
-    tfm_test = [standardNoAugTransform, ToTensor()] # 添加 ToTensor() 转换
+    
+    standardNoAugTransform = TRANSFORM_REGISTRY.get("StandardNoAugTransform")(cfg) 
+    tfm_test = [standardNoAugTransform, ToTensor()] 
     if cfg.INPUT.NORMALIZE:
-        tfm_test.append(Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD)) # 添加标准化(可选)
+        tfm_test.append(Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD)) 
     tfm_test = Compose(tfm_test)
 
-    if cfg.VERBOSE:  # 打印日志
-        print(f"测试数据增强：")
-        print("  - 标准标准图像预处理转换: resize + RGB + toTensor + normalize")
+    if cfg.VERBOSE:  
+        print(f"Testing data augmentation:")
+        print("  - Standard image preprocessing transformation: resize + RGB + toTensor + normalize")
 
-    # ---返回测试数据增强列表---
+    
     return tfm_test
 
 
@@ -83,4 +83,4 @@ def _check_cfg(choices, avai_transforms):
     if len(choices) == 0:
         return True
     for choice in choices:
-        assert choice in avai_transforms, f"增强方法<{format(choice)}>不在可用的数据增强方法{avai_transforms}中"
+        assert choice in avai_transforms, f"Augmentation method <{format(choice)}> is not in the available augmentation methods {avai_transforms}"

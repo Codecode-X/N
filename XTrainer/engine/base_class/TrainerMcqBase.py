@@ -5,113 +5,112 @@ import torch
 @TRAINER_REGISTRY.register()
 class TrainerMcqBase(TrainerBase):
     """
-    分类任务迭代训练器的基类。
+    Base class for iterative trainers for classification tasks.
     
-    包含的方法：
+    Contains methods:
 
-    -------工具方法-------
-    父类 TrainerMcqBase:
-        * init_writer: 初始化 TensorBoard。
-        * close_writer: 关闭 TensorBoard。
-        * write_scalar: 写入标量值到 TensorBoard。
+    -------Utility Methods-------
+    Parent class TrainerMcqBase:
+        * init_writer: Initialize TensorBoard.
+        * close_writer: Close TensorBoard.
+        * write_scalar: Write scalar values to TensorBoard.
 
-        * register_model: 注册模型、优化器和学习率调度器。
-        * get_model_names: 获取所有已注册的模型名称。
+        * register_model: Register model, optimizer, and learning rate scheduler.
+        * get_model_names: Get all registered model names.
 
-        * save_model: 保存模型，包括模型状态、epoch、优化器状态、学习率调度器状态、验证结果。
-        * load_model: 加载模型，包括模型状态、epoch、验证结果。
-        * resume_model_if_exist: 如果存在检查点，则恢复模型，包括模型状态、优化器状态、学习率调度器状态。
+        * save_model: Save model, including model state, epoch, optimizer state, learning rate scheduler state, and validation results.
+        * load_model: Load model, including model state, epoch, and validation results.
+        * resume_model_if_exist: Resume model if a checkpoint exists, including model state, optimizer state, and learning rate scheduler state.
 
-        * set_model_mode: 设置模型的模式 (train/eval)。
+        * set_model_mode: Set the mode of the model (train/eval).
 
-        * model_backward_and_update: 模型反向传播和更新，包括清零梯度、反向传播、更新模型参数。
-        * update_lr: 调用学习率调度器的 step() 方法，更新 names 模型列表中的模型的学习率。
-        * get_current_lr: 获取当前学习率。 
+        * model_backward_and_update: Perform model backpropagation and update, including zeroing gradients, backpropagation, and updating model parameters.
+        * update_lr: Call the step() method of the learning rate scheduler to update the learning rate of models in the names list.
+        * get_current_lr: Get the current learning rate.
 
-        * train: 通用训练循环，但里面包含的子方法 (before_train、after_train、before_epoch、
-                after_epoch、run_epoch(必实现)) 需由子类实现。
+        * train: General training loop, but the sub-methods inside (before_train, after_train, before_epoch, after_epoch, run_epoch (must be implemented)) need to be implemented by subclasses.
     
-    当前 TrainerBase:
+    Current TrainerBase:
         * None
     
-    -------子类可重写的方法（可选）-------
-    父类 TrainerMcqBase:
-        * check_cfg: 检查配置中的某些变量是否正确设置。 (未实现)
+    -------Methods that can be overridden by subclasses (optional)-------
+    Parent class TrainerMcqBase:
+        * check_cfg: Check whether certain variables in the configuration are set correctly. (Not implemented)
 
-        * before_train: 训练前的操作。
-        * after_train: 训练后的操作。
-        * before_epoch: 每个 epoch 前的操作。 (未实现) 
-        * after_epoch: 每个 epoch 后的操作。
-        * run_epoch: 执行每个 epoch 的训练。
-        * model_inference: 模型推理。
+        * before_train: Operations before training.
+        * after_train: Operations after training.
+        * before_epoch: Operations before each epoch. (Not implemented) 
+        * after_epoch: Operations after each epoch.
+        * run_epoch: Execute training for each epoch.
+        * model_inference: Model inference.
     
-    当前 TrainerBase:
-        * parse_batch_train 解析分类任务训练批次。(实现父类的方法)
-        * parse_batch_test 解析测试任务训练批次。(实现父类的方法)
+    Current TrainerBase:
+        * parse_batch_train: Parse training batches for classification tasks. (Implements parent class method)
+        * parse_batch_test: Parse testing batches for classification tasks. (Implements parent class method)
 
-    -------需要子类重写实现的方法（必选）-------
-    父类 TrainerMcqBase:
-        * init_model: 初始化模型，如冻结模型的某些层，加载预训练权重等。 (未实现 - 冻结模型某些层)
-        * forward_backward: 前向传播和反向传播。
+    -------Methods that must be implemented by subclasses (mandatory)-------
+    Parent class TrainerMcqBase:
+        * init_model: Initialize the model, such as freezing certain layers or loading pre-trained weights. (Not implemented - Freeze certain layers)
+        * forward_backward: Forward and backward propagation.
     
-    当前 TrainerBase:
-        * test: 测试方法。
+    Current TrainerBase:
+        * test: Testing method.
     """
 
     def __init__(self, cfg):
-        # 读取额外配置
+        # Read additional configuration
         self.num_choices = int(cfg.DATASET.NUM_CHOICES)
 
-        # 调用父类构造方法
+        # Call parent class constructor
         super().__init__(cfg)  
 
     def parse_batch_train(self, batch):
         """
-        (实现父类的方法) 解析分类任务训练批次。 
-        此处直接从 batch 字典中获取输入图像、类别标签和域标签。
+        (Implements parent class method) Parse training batches for classification tasks. 
+        Directly retrieves input images, class labels, and domain labels from the batch dictionary.
 
-        参数：
-            - batch (dict): 批次数据字典，包含：
-                - 输入图像、答案选项数量、答案选项、正确答案索引、正确答案类型。
+        Parameters:
+            - batch (dict): Batch data dictionary, containing:
+                - Input images, number of answer options, answer options, correct answer index, correct answer type.
                 
-        返回：
-            - input (Tensor): 输入图像 | [batch, 3, 224, 224]。
-            - num_choices (Tensor): 答案选项数量 | [batch]。
-            - choices (list<list<str>>): 所有答案选项文本 | (batch, num_choices)。
-            - correct_answer (Tensor): 正确答案选项的索引 | [batch]。
-            - correct_answer_type (list<str>): 正确答案选项的类型 | (batch)。 
+        Returns:
+            - input (Tensor): Input images | [batch, 3, 224, 224].
+            - num_choices (Tensor): Number of answer options | [batch].
+            - choices (list<list<str>>): All answer option texts | (batch, num_choices).
+            - correct_answer (Tensor): Index of the correct answer option | [batch].
+            - correct_answer_type (list<str>): Type of the correct answer option | (batch). 
         """
-        input = batch["img"].to(self.device)  # 获取一个批次的图像 | [batch, 3, 224, 224]
-        num_choices = batch["num_choices"].to(self.device) # 获取答案选项数量 | [batch]
-        correct_answer = batch["correct_answer"].to(self.device) # 获取正确答案选项的索引 | [batch]
+        input = batch["img"].to(self.device)  # Retrieve a batch of images | [batch, 3, 224, 224]
+        num_choices = batch["num_choices"].to(self.device) # Retrieve the number of answer options | [batch]
+        correct_answer = batch["correct_answer"].to(self.device) # Retrieve the index of the correct answer option | [batch]
         
-        choices = batch["choices"] # 获取所有答案选项文本 | (batch, num_choices) | DataLoader 不会自动转换字符串
-        correct_answer_type = batch["correct_answer_type"] # 获取正确答案选项的类型 | (batch)
+        choices = batch["choices"] # Retrieve all answer option texts | (batch, num_choices) | DataLoader does not automatically convert strings
+        correct_answer_type = batch["correct_answer_type"] # Retrieve the type of the correct answer option | (batch)
         
         return input, num_choices, choices, correct_answer, correct_answer_type
 
     def parse_batch_test(self, batch):
         """
-        (实现父类的方法) 解析分类任务测试批次。
-        返回解析得到的batch字典中的数据，例如分类问题的输入图像和类别标签。
+        (Implements parent class method) Parse testing batches for classification tasks.
+        Returns parsed data from the batch dictionary, such as input images and class labels for classification problems.
         
-        参数：
-            - batch (dict): 批次数据字典，包含输入图像和标签。
-                - 输入图像、答案选项数量、答案选项、正确答案索引、正确答案类型。
+        Parameters:
+            - batch (dict): Batch data dictionary, containing input images and labels.
+                - Input images, number of answer options, answer options, correct answer index, correct answer type.
 
-        返回：
-            - input (Tensor): 输入图像 | [batch, 3, 224, 224]。
-            - num_choices (Tensor): 答案选项数量 | [batch]。
-            - choices (list<list<str>>): 所有答案选项文本 | (batch, num_choices)。
-            - correct_answer (Tensor): 正确答案选项的索引 | [batch]。
-            - correct_answer_type (list<str>): 正确答案选项的类型 | (batch)。 
+        Returns:
+            - input (Tensor): Input images | [batch, 3, 224, 224].
+            - num_choices (Tensor): Number of answer options | [batch].
+            - choices (list<list<str>>): All answer option texts | (batch, num_choices).
+            - correct_answer (Tensor): Index of the correct answer option | [batch].
+            - correct_answer_type (list<str>): Type of the correct answer option | (batch). 
         """
-        input = batch["img"].to(self.device)  # 获取一个批次的图像 | [batch, 3, 224, 224]
-        num_choices = batch["num_choices"].to(self.device) # 获取答案选项数量 | [batch]
-        correct_answer = batch["correct_answer"].to(self.device) # 获取正确答案选项的索引 | [batch]
+        input = batch["img"].to(self.device)  # Retrieve a batch of images | [batch, 3, 224, 224]
+        num_choices = batch["num_choices"].to(self.device) # Retrieve the number of answer options | [batch]
+        correct_answer = batch["correct_answer"].to(self.device) # Retrieve the index of the correct answer option | [batch]
         
-        correct_answer_type = batch["correct_answer_type"] # 获取正确答案选项的类型 | (batch)
-        choices = batch["choices"]# 获取所有答案选项文本 | (batch, num_choices) | DataLoader 不会自动转换字符串
+        correct_answer_type = batch["correct_answer_type"] # Retrieve the type of the correct answer option | (batch)
+        choices = batch["choices"]# Retrieve all answer option texts | (batch, num_choices) | DataLoader does not automatically convert strings
         
         return input, num_choices, choices, correct_answer, correct_answer_type
 
@@ -120,18 +119,17 @@ class TrainerMcqBase(TrainerBase):
     @torch.no_grad()
     def test(self, split=None):
         """
-        测试。 (需要子基类根据任务特点重写)
+        Testing. (Subclasses need to override this method based on task characteristics)
 
-        主要包括：
-        * 设置模型模式为 eval, 重置评估器
-        * 确定测试集 (val or test, 默认为测试集)
-        * 开始测试
-            - 遍历数据加载器
-            - 解析测试批次，获取输入和GT
-            - 模型推理
-            - 评估器评估模型输出和GT
-        * 使用 evaluator 对结果进行评估，并将结果记录在 tensorboard
-        * 返回结果 (此处为 accuracy)
+        Main steps include:
+        * Set model mode to eval, reset evaluator
+        * Determine the test set (val or test, default is test set)
+        * Start testing
+            - Iterate through the data loader
+            - Parse test batches to retrieve inputs and ground truth (GT)
+            - Perform model inference
+            - Use the evaluator to evaluate model outputs and GT
+        * Evaluate results using the evaluator and log results in TensorBoard
+        * Return results (e.g., accuracy)
         """
-        raise NotImplementedError("TrainerMcqBase中test()方法需要子基类根据模型特点实现")
-        
+        raise NotImplementedError("The test() method in TrainerMcqBase needs to be implemented by subclasses based on model characteristics")

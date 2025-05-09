@@ -6,135 +6,134 @@ from tqdm import tqdm
 @TRAINER_REGISTRY.register()
 class TrainerClsBase(TrainerBase):
     """
-    分类任务迭代训练器的基类。
+    Base class for iterative trainers for classification tasks.
     
-    包含的方法：
+    Contains methods:
 
-    -------工具方法-------
-    父类 TrainerClsBase:
-        * init_writer: 初始化 TensorBoard。
-        * close_writer: 关闭 TensorBoard。
-        * write_scalar: 写入标量值到 TensorBoard。
+    -------Utility Methods-------
+    Parent class TrainerClsBase:
+        * init_writer: Initialize TensorBoard.
+        * close_writer: Close TensorBoard.
+        * write_scalar: Write scalar values to TensorBoard.
 
-        * register_model: 注册模型、优化器和学习率调度器。
-        * get_model_names: 获取所有已注册的模型名称。
+        * register_model: Register models, optimizers, and learning rate schedulers.
+        * get_model_names: Get the names of all registered models.
 
-        * save_model: 保存模型，包括模型状态、epoch、优化器状态、学习率调度器状态、验证结果。
-        * load_model: 加载模型，包括模型状态、epoch、验证结果。
-        * resume_model_if_exist: 如果存在检查点，则恢复模型，包括模型状态、优化器状态、学习率调度器状态。
+        * save_model: Save the model, including model state, epoch, optimizer state, learning rate scheduler state, and validation results.
+        * load_model: Load the model, including model state, epoch, and validation results.
+        * resume_model_if_exist: Resume the model if a checkpoint exists, including model state, optimizer state, and learning rate scheduler state.
 
-        * set_model_mode: 设置模型的模式 (train/eval)。
+        * set_model_mode: Set the mode of the model (train/eval).
 
-        * model_backward_and_update: 模型反向传播和更新，包括清零梯度、反向传播、更新模型参数。
-        * update_lr: 调用学习率调度器的 step() 方法，更新 names 模型列表中的模型的学习率。
-        * get_current_lr: 获取当前学习率。 
+        * model_backward_and_update: Perform model backpropagation and update, including zeroing gradients, backpropagation, and updating model parameters.
+        * update_lr: Call the step() method of the learning rate scheduler to update the learning rate of models in the names list.
+        * get_current_lr: Get the current learning rate.
 
-        * train: 通用训练循环，但里面包含的子方法 (before_train、after_train、before_epoch、
-                after_epoch、run_epoch(必实现)) 需由子类实现。
+        * train: General training loop, but the sub-methods inside (before_train, after_train, before_epoch, after_epoch, run_epoch (must be implemented)) need to be implemented by subclasses.
     
-    当前 TrainerBase:
+    Current TrainerBase:
         * None
     
-    -------子类可重写的方法（可选）-------
-    父类 TrainerClsBase:
-        * check_cfg: 检查配置中的某些变量是否正确设置。 (未实现)
+    -------Methods that can be overridden by subclasses (optional)-------
+    Parent class TrainerClsBase:
+        * check_cfg: Check whether certain variables in the configuration are set correctly. (Not implemented)
 
-        * before_train: 训练前的操作。
-        * after_train: 训练后的操作。
-        * before_epoch: 每个 epoch 前的操作。 (未实现) 
-        * after_epoch: 每个 epoch 后的操作。
-        * run_epoch: 执行每个 epoch 的训练。
-        * test: 测试方法。 (未实现) 
-        * model_inference: 模型推理。
+        * before_train: Operations before training.
+        * after_train: Operations after training.
+        * before_epoch: Operations before each epoch. (Not implemented) 
+        * after_epoch: Operations after each epoch.
+        * run_epoch: Execute training for each epoch.
+        * test: Testing method. (Not implemented) 
+        * model_inference: Model inference.
     
-    当前 TrainerBase:
-        * parse_batch_train 解析分类任务训练批次。(实现父类的方法)
-        * parse_batch_test 解析测试任务训练批次。(实现父类的方法)
-        * test: 测试方法。(实现父类的方法)
+    Current TrainerBase:
+        * parse_batch_train: Parse training batches for classification tasks. (Implements parent class method)
+        * parse_batch_test: Parse testing batches for classification tasks. (Implements parent class method)
+        * test: Testing method. (Implements parent class method)
 
-    -------需要子类重写的方法（必选）-------
-    父类 TrainerClsBase:
-        * init_model: 初始化模型，如冻结模型的某些层，加载预训练权重等。 (未实现 - 冻结模型某些层)
-        * forward_backward: 前向传播和反向传播。
+    -------Methods that must be overridden by subclasses (mandatory)-------
+    Parent class TrainerClsBase:
+        * init_model: Initialize the model, such as freezing certain layers of the model, loading pre-trained weights, etc. (Not implemented - Freezing certain layers of the model)
+        * forward_backward: Forward and backward propagation.
     
-    当前 TrainerBase:
+    Current TrainerBase:
         * None
     """
 
     def parse_batch_train(self, batch):
         """
-        (实现父类的方法) 解析分类任务训练批次。 
-        此处直接从 batch 字典中获取输入图像、类别标签和域标签。
+        (Implements parent class method) Parse training batches for classification tasks. 
+        Directly retrieves input images, class labels, and domain labels from the batch dictionary.
 
-        参数：
-            - batch (dict): 批次数据字典，包含输入图像和标签。
+        Parameters:
+            - batch (dict): Batch data dictionary containing input images and labels.
 
-        返回：
-            - input (Tensor): 输入图像。
-            - label (Tensor): 类别标签。
+        Returns:
+            - input (Tensor): Input images.
+            - label (Tensor): Class labels.
         """
-        input = batch["img"].to(self.device)  # 获取图像
-        label = batch["label"].to(self.device)  # 获取标签 | shape: [batch, 1]
-        return input, label  # 返回图像、标签
+        input = batch["img"].to(self.device)  # Retrieve images
+        label = batch["label"].to(self.device)  # Retrieve labels | shape: [batch, 1]
+        return input, label  # Return images and labels
 
 
     def parse_batch_test(self, batch):
         """
-        (实现父类的方法) 解析分类任务测试批次。
-        返回解析得到的batch字典中的数据，例如分类问题的输入图像和类别标签。
+        (Implements parent class method) Parse testing batches for classification tasks.
+        Returns data parsed from the batch dictionary, such as input images and class labels for classification problems.
         
-        参数：
-            - batch (dict): 批次数据字典，包含输入图像和标签。
+        Parameters:
+            - batch (dict): Batch data dictionary containing input images and labels.
 
-        返回：
-            - input (Tensor): 输入图像。
-            - label (Tensor): 类别标签。
+        Returns:
+            - input (Tensor): Input images.
+            - label (Tensor): Class labels.
         """
-        input = batch["img"].to(self.device)  # 获取图像
-        label = batch["label"].to(self.device)  # 获取标签
-        return input, label  # 返回图像、标签
+        input = batch["img"].to(self.device)  # Retrieve images
+        label = batch["label"].to(self.device)  # Retrieve labels
+        return input, label  # Return images and labels
     
 
     @torch.no_grad()
     def test(self, split=None):
         """
-        测试。 (子类可重写)
+        Testing. (Subclasses can override)
 
-        主要包括：
-        * 设置模型模式为 eval, 重置评估器
-        * 确定测试集 (val or test, 默认为测试集)
-        * 开始测试
-            - 遍历数据加载器
-            - 解析测试批次，获取输入和标签 - self.parse_batch_test(batch)
-            - 模型推理 - self.model_inference(input)
-            - 评估器评估模型输出和标签 - self.evaluator.process(output, label)
-        * 使用 evaluator 对结果进行评估，并将结果记录在 tensorboard
-        * 返回结果 (此处为 accuracy)
+        Main steps include:
+        * Set model mode to eval, reset evaluator
+        * Determine the test set (val or test, default is test set)
+        * Start testing
+            - Iterate through the data loader
+            - Parse testing batches to get inputs and labels - self.parse_batch_test(batch)
+            - Perform model inference - self.model_inference(input)
+            - Evaluator evaluates model outputs and labels - self.evaluator.process(output, label)
+        * Use evaluator to evaluate results and record them in TensorBoard
+        * Return results (here, accuracy)
         """
         
         self.set_model_mode("eval")
-        self.evaluator.reset() # 重置评估器
+        self.evaluator.reset() # Reset evaluator
 
-        # 确定测试集（val or test，默认为测试集）
-        if split is None: # 如果 split 为 None，则使用配置中的测试集
+        # Determine the test set (val or test, default is test set)
+        if split is None: # If split is None, use the test set from the configuration
             split = self.cfg.TEST.SPLIT 
         if split == "val" and self.val_loader is not None: 
             data_loader = self.val_loader
         else:
             split = "test"
             data_loader = self.test_loader
-        print(f"在 *{split}* 集上测试")
+        print(f"Testing on the *{split}* set")
 
-        # 开始测试
-        for batch_idx, batch in enumerate(tqdm(data_loader)): # 遍历数据加载器
-            input, label = self.parse_batch_test(batch) # 解析测试批次，获取输入和标签
-            output = self.model_inference(input) # 模型推理
-            self.evaluator.process(output, label) # 评估器评估模型输出和标签
+        # Start testing
+        for batch_idx, batch in enumerate(tqdm(data_loader)): # Iterate through the data loader
+            input, label = self.parse_batch_test(batch) # Parse testing batches to get inputs and labels
+            output = self.model_inference(input) # Perform model inference
+            self.evaluator.process(output, label) # Evaluator evaluates model outputs and labels
 
-        # 使用 evaluator 对结果进行评估，并将结果记录在 tensorboard
+        # Use evaluator to evaluate results and record them in TensorBoard
         results = self.evaluator.evaluate() 
         for k, v in results.items(): 
             tag = f"{split}/{k}"
             self.write_scalar(tag, v, self.epoch)
 
-        return list(results.values())[0] # 返回第一个值：accuracy
+        return list(results.values())[0] # Return the first value: accuracy

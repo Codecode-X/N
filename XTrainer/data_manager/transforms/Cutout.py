@@ -1,28 +1,24 @@
 from data_manager.transforms import TRANSFORM_REGISTRY
-<<<<<<< HEAD
 from .base_class.TransformBase import TransformBase
-=======
-from .TransformBase import TransformBase
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 import numpy as np
 import torch
 
 @TRANSFORM_REGISTRY.register()
 class Cutout(TransformBase):
     """    
-    随机从图像中遮盖一个或多个补丁。
+    Randomly masks one or more patches from the image.
 
-    属性：
-        - n_holes (int, optional): 每张图像中要遮盖的补丁数量 | 默认值为 1。
-        - length (int, optional): 每个方形补丁的边长（以像素为单位） | 默认值为 16。
-    主要功能：
-        - 对输入图像应用随机遮盖补丁。
-    主要步骤：
-        1. 获取图像的高度和宽度。
-        2. 创建一个与图像大小相同的掩码，初始值为 1。
-        3. 随机选择补丁的中心位置，并计算补丁的边界。
-        4. 将掩码中对应补丁位置的值设为 0。
-        5. 将掩码扩展到与图像相同的维度，并与图像相乘。
+    Attributes:
+        - n_holes (int, optional): Number of patches to mask per image | Default is 1.
+        - length (int, optional): Side length of each square patch (in pixels) | Default is 16.
+    Main functionality:
+        - Applies random masking patches to the input image.
+    Main steps:
+        1. Get the height and width of the image.
+        2. Create a mask of the same size as the image, initialized to 1.
+        3. Randomly select the center position of the patch and calculate the patch boundaries.
+        4. Set the values of the mask corresponding to the patch location to 0.
+        5. Expand the mask to the same dimensions as the image and multiply it with the image.
     """
     def __init__(self, cfg):
         self.n_holes = cfg.INPUT.Cutout.n_holes \

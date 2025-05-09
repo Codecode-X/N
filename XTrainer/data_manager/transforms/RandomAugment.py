@@ -1,9 +1,5 @@
 from data_manager.transforms import TRANSFORM_REGISTRY
-<<<<<<< HEAD
 from .base_class.TransformBase import TransformBase
-=======
-from .TransformBase import TransformBase
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 """
 Source: https://github.com/DeepVoltaire/AutoAugment
 """
@@ -21,18 +17,19 @@ __all__ = ["RandomIntensityAugment", "ProbabilisticAugment"]
 @TRANSFORM_REGISTRY.register()
 class RandomIntensityAugment(TransformBase):
     """
-    从预定义的增强操作列表中随机选择数量 n 的操作，并且随机选择其强度。    
-    属性：
-        - n (int): 操作数量 | 默认值：2
-        - m (int): 操作强度 | 默认值：10
+    Randomly selects n operations from a predefined list of augmentation operations and randomly selects their intensity.
+    
+    Attributes:
+        - n (int): Number of operations | Default: 2
+        - m (int): Operation intensity | Default: 10
         
-    主要功能：
-        - 对输入图像应用随机数据增强。
+    Main functionality:
+        - Applies random data augmentation to the input image.
         
-    主要步骤：
-        1. 从 randaugment_list 操作列表中随机选择 n 个操作。
-        2. 对每个操作，从其强度范围中随机选择一个强度值。
-        3. 对输入图像应用所选的操作。
+    Main steps:
+        1. Randomly selects n operations from the randaugment_list.
+        2. Randomly selects an intensity value for each operation from its intensity range.
+        3. Applies the selected operations to the input image.
     """
     def __init__(self, cfg):
         self.n = cfg.INPUT.RandomIntensityAugment.n \
@@ -72,19 +69,19 @@ class RandomIntensityAugment(TransformBase):
 @TRANSFORM_REGISTRY.register()
 class ProbabilisticAugment(TransformBase):
     """
-    从预定义的增强操作列表中随机选择数量 n 的操作，每个操作以概率 p 应用。
+    Randomly selects n operations from a predefined list of augmentation operations, each applied with probability p.
 
-    属性：
-        - n (int): 操作数量 | 默认值：2
-        - p (float): 操作概率 | 默认值：0.6
+    Attributes:
+        - n (int): Number of operations | Default: 2
+        - p (float): Operation probability | Default: 0.6
 
-    主要功能：
-        - 对输入图像应用随机数据增强。
+    Main functionality:
+        - Applies random data augmentation to the input image.
     
-    主要步骤：
-        1. 从 randaugment_list2 操作列表中随机选择 n 个操作。
-        2. 对每个操作，以概率 p 应用该操作。
-        3. 对输入图像应用所选的操作。
+    Main steps:
+        1. Randomly selects n operations from the randaugment_list2.
+        2. Applies each operation with probability p.
+        3. Applies the selected operations to the input image.
     """
 
     def __init__(self, cfg):
@@ -124,7 +121,7 @@ class ProbabilisticAugment(TransformBase):
         return img
     
 
-# ----------辅助函数----------
+# ----------Helper Functions----------
 def ShearX(img, v):
     assert -0.3 <= v <= 0.3
     if random.random() > 0.5:
@@ -280,7 +277,3 @@ def SamplePairing(imgs):
 
 def Identity(img, v):
     return img
-
-
-
-
