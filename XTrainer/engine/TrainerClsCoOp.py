@@ -1,4 +1,4 @@
-from .TrainerClsClip import TrainerClsClip
+from .base_class.TrainerClsBase import TrainerClsClip
 from model import build_model
 from utils import count_num_param, load_checkpoint
 import torch

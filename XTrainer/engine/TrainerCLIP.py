@@ -1,4 +1,4 @@
-from .TrainerBase import TrainerBase
+from .base_class.TrainerClsBase import TrainerBase
 from model import build_model
 from utils import count_num_param
 from torch.cuda.amp import GradScaler

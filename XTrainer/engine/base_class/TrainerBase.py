@@ -17,7 +17,7 @@ from model import build_model
 from utils import (count_num_param, mkdir_if_missing, load_pretrained_weights)
 from evaluator import build_evaluator
 from utils import (MetricMeter, AverageMeter)
-from .build import TRAINER_REGISTRY
+from ..build import TRAINER_REGISTRY
 
 @TRAINER_REGISTRY.register()
 class TrainerBase:
