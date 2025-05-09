@@ -16,9 +16,9 @@ from tqdm import tqdm
 
 class NegationDetector(nn.Module):
     """
-    轻量级否定分类器
-    输入: CLIP文本特征 [batch_size, embed_dim]
-    输出: 二分类概率 [batch_size, 1]
+    Lightweight negation classifier
+    Input: CLIP text features [batch_size, embed_dim]
+    Output: Binary classification probabilities [batch_size, 1]
     """
     def __init__(self, embed_dim=512, hidden_dim=256):
         super().__init__()
@@ -32,10 +32,10 @@ class NegationDetector(nn.Module):
         
     def forward(self, h):
         """
-        参数:
-            - h: CLIP文本特征 [batch_size, embed_dim]
-        返回:
-            - logits: 二分类概率 [batch_size, 1] | 1: 否定样本, 0: 肯定样本
+        Args:
+            - h: CLIP text features [batch_size, embed_dim]
+        Returns:
+            - logits: Binary classification probabilities [batch_size, 1] | 1: negative sample, 0: positive sample
         """
         return torch.sigmoid(self.classifier(h))
     
@@ -43,7 +43,7 @@ class NegationDetector(nn.Module):
     def load_model(cfg):
         model = NegationDetector()
         if 'model_path' in cfg.keys() and cfg['model_path'] is not None:
-            print(f"正在加载 NegationDetector 模型权重: {cfg['model_path']}")
+            print(f"Loading NegationDetector model weights: {cfg['model_path']}")
             model.load_state_dict(torch.load(cfg['model_path'], weights_only=True))
         model = model.to(cfg['device'])
         model.eval()
@@ -52,13 +52,13 @@ class NegationDetector(nn.Module):
 class NegationDataset(Dataset):
     def __init__(self, csv_path, batch_size=64, device='cuda'):
         """
-        csv_path: 包含'positive'和'negative'两列的CSV文件
+        csv_path: CSV file containing 'positive' and 'negative' columns
         """
         
-        # 创建缓存文件路径
+        # Create cache file path
         cache_path = os.path.basename(csv_path).split('.')[0] + "_features_cache.pt"
         
-        # 检查缓存是否存在
+        # Check if cache exists
         if os.path.exists(cache_path): 
             print(f"Loading features from cache: {cache_path}")
             cached_data = torch.load(cache_path, weights_only=False)
@@ -66,37 +66,37 @@ class NegationDataset(Dataset):
             self.labels = cached_data['labels']
         else:
             try:
-                df = pd.read_csv(csv_path, encoding='utf-8', engine='python', on_bad_lines=lambda line: print(f"跳过行: {line}"))
+                df = pd.read_csv(csv_path, encoding='utf-8', engine='python', on_bad_lines=lambda line: print(f"Skipping line: {line}"))
             except UnicodeDecodeError:
-                df = pd.read_csv(csv_path, encoding='gbk', engine='python', on_bad_lines=lambda line: print(f"跳过行: {line}"))
+                df = pd.read_csv(csv_path, encoding='gbk', engine='python', on_bad_lines=lambda line: print(f"Skipping line: {line}"))
             self.texts = []
             self.labels = []
             
-            # 处理肯定样本
+            # Process positive samples
             positive_texts = df['positive'].dropna().tolist()
             self.texts.extend(positive_texts)
-            self.labels.extend([0] * len(positive_texts))  # 0: 肯定样本
+            self.labels.extend([0] * len(positive_texts))  # 0: positive sample
 
-            # 处理否定样本
+            # Process negative samples
             negative_texts = df['negative'].dropna().tolist()
             self.texts.extend(negative_texts)
-            self.labels.extend([1] * len(negative_texts))  # 1: 否定样本
+            self.labels.extend([1] * len(negative_texts))  # 1: negative sample
             
             print(f"Extracting features and creating cache: {cache_path}...")
             
-            # 分批次处理特征提取
+            # Batch processing for feature extraction
             self.features = []
             with torch.no_grad():
                 for i in tqdm(range(0, len(self.texts), batch_size), desc="Processing data"):
                     batch_texts = self.texts[i:i + batch_size]
-                    # 提取当前批次的特征
+                    # Extract features for the current batch
                     batch_features = extract_all_sentence_features(batch_texts)
                     self.features.append(torch.from_numpy(batch_features))
 
-            # 合并所有批次的特征
+            # Combine features from all batches
             self.features = torch.cat(self.features, dim=0)
 
-            # 保存到缓存
+            # Save to cache
             print(f"Saving features to cache: {cache_path}")
             torch.save({'features': self.features, 'labels': torch.tensor(self.labels, dtype=torch.long)}, cache_path)
     
@@ -107,26 +107,26 @@ class NegationDataset(Dataset):
         return self.features[idx].float(), self.labels[idx].clone().detach().float()
 
 def train_detector(csv_path, save_path="best_NegDet.pth", epochs=20, lr=1e-4):
-    # 初始化
+    # Initialization
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     detector = NegationDetector().to(device)
     dataset = NegationDataset(csv_path, batch_size=64, device=device)
     save_path = os.path.join(current_dir, save_path)
     
-    # 划分训练验证集
+    # Split into training and validation sets
     train_data, val_data = train_test_split(dataset, test_size=0.2, stratify=dataset.labels)
     train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
     val_loader = DataLoader(val_data, batch_size=128)
     
-    # 优化器
+    # Optimizer
     optimizer = torch.optim.AdamW(detector.parameters(), lr=lr, weight_decay=1e-5)
-    # 余弦退火学习率调度器
+    # Cosine annealing learning rate scheduler
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
     criterion = nn.BCELoss()
     
-    # 训练循环
+    # Training loop
     best_acc = 0.0
-    best_recall = 0.0  # 保存最佳召回率
+    best_recall = 0.0  # Save the best recall
     best_epoch = 0
     for epoch in range(epochs):
         detector.train()
@@ -139,13 +139,13 @@ def train_detector(csv_path, save_path="best_NegDet.pth", epochs=20, lr=1e-4):
             loss = criterion(outputs, labels)
             loss.backward()
             
-            # 梯度裁剪
+            # Gradient clipping
             torch.nn.utils.clip_grad_norm_(detector.parameters(), 1.0)
             optimizer.step()
             
             total_loss += loss.item() * features.size(0)
         
-        # 验证
+        # Validation
         detector.eval()
         correct = 0
         total = 0
@@ -158,11 +158,11 @@ def train_detector(csv_path, save_path="best_NegDet.pth", epochs=20, lr=1e-4):
                 preds = (outputs > 0.5).float().cpu()
                 correct += (preds == labels.cpu()).sum().item()
                 total += labels.size(0)
-                # 计算召回率
-                true_positives += ((preds == 1) & (labels == 1)).sum().item() # 预测为1且标签为1的样本数
-                false_negatives += ((preds == 0) & (labels == 1)).sum().item() # 预测为0但标签为1的样本数
+                # Calculate recall
+                true_positives += ((preds == 1) & (labels == 1)).sum().item() # Predicted as 1 and label is 1
+                false_negatives += ((preds == 0) & (labels == 1)).sum().item() # Predicted as 0 but label is 1
         
-        # acc
+        # Accuracy
         val_acc = correct / total
         val_recall = true_positives / (true_positives + false_negatives)
         
@@ -181,11 +181,11 @@ def train_detector(csv_path, save_path="best_NegDet.pth", epochs=20, lr=1e-4):
 
 def predict_negation(detector, texts):
     """
-    参数:
-        - detector: 训练好的模型
-        - texts: 待检测文本列表
-    返回:
-        - preds: 否定检测结果列表
+    Args:
+        - detector: Trained model
+        - texts: List of texts to detect negation
+    Returns:
+        - preds: List of negation detection results
     """
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     detector.eval()
@@ -201,12 +201,6 @@ def predict_negation(detector, texts):
     return logits, preds
 
 if __name__ == "__main__":
-    # 训练
-    # csv_path = "/root/NP-CLIP/NegBench/data/PN.csv"  # 替换为你的CSV文件路径
-    # detector = train_detector(csv_path, epochs=100, lr=1e-3)
-    # torch.save(detector.state_dict(), os.path.join(current_dir, "last_NegDet.pth"))
-    
-    # 测试
     detector = NegationDetector.load_model({
         'model_path': '/root/NP-CLIP/XTrainer/exp/exp5_glasses/weights/best_NegDet_9404_9212.pth', 
         'device': 'cuda'})

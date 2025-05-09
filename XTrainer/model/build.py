@@ -4,50 +4,41 @@ MODEL_REGISTRY = Registry("MODEL")
 
 
 def build_model(cfg):
-    """根据配置中的模型名称 (cfg.MODEL.NAME) 构建相应的评估器。
-    参数：
-        - cfg (CfgNode): 配置。
-    
-    返回：
-        - 实例化后的模型对象。
-    
-    主要步骤：
-    1. 检查模型是否被注册。
-    2. 实例化模型。
-    3. 调用模型的自己的 build_model() 方法。
-<<<<<<< HEAD
-    4. 返回实例化后的模型对，转移到设备，并默认设置为评估模式。
-=======
-    4. 返回实例化后的模型对象。
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
     """
-    model_name = cfg.MODEL.NAME # 获取模型名称
-    avai_models = MODEL_REGISTRY.registered_names() # 获取所有已经注册的模型
-    check_availability(model_name, avai_models) # 检查对应名称的模型是否存在
-    if cfg.VERBOSE: # 是否输出信息
+    Build the corresponding model based on the model name in the configuration (cfg.MODEL.NAME).
+    
+    Args:
+        - cfg (CfgNode): Configuration.
+    
+    Returns:
+        - Instantiated model object.
+    
+    Main steps:
+    1. Check if the model is registered.
+    2. Instantiate the model.
+    3. Call the model's own build_model() method if necessary.
+    4. Return the instantiated model, move it to the device, and set it to evaluation mode by default.
+    """
+    model_name = cfg.MODEL.NAME  # Get the model name
+    avai_models = MODEL_REGISTRY.registered_names()  # Get all registered models
+    check_availability(model_name, avai_models)  # Check if the model with the given name exists
+    if cfg.VERBOSE:  # Whether to output information
         print("Loading model: {}".format(model_name))
 
-    # 实例化模型
+    # Instantiate the model
     try:
-        print("正在调用模型构造方法构造模型....")
-        model = MODEL_REGISTRY.get(model_name)(cfg) # 直接调用模型构造方法
+        print("Calling the model constructor to build the model...")
+        model = MODEL_REGISTRY.get(model_name)(cfg)  # Directly call the model constructor
     except TypeError as e:
-<<<<<<< HEAD
-=======
-        raise e
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
-        print("直接调用模型构造方法失败，尝试使用模型的 build_model 方法....")
-        model_class = MODEL_REGISTRY.get(model_name) # 获取模型类
+        print("Direct call to the model constructor failed, trying the model's build_model method...")
+        model_class = MODEL_REGISTRY.get(model_name)  # Get the model class
         if hasattr(model_class, "build_model") and callable(model_class.build_model):
-            model = model_class.build_model(cfg) # 调用模型类的静态方法 build_model 构造自己
+            model = model_class.build_model(cfg)  # Call the model class's static method build_model to construct itself
         else:
-            print("该模型没有 build_model 方法")
+            print("The model does not have a build_model method")
             raise e
-<<<<<<< HEAD
-    # 转移到设备 并 设置模型为评估模式
+    # Move to device and set the model to evaluation mode
     device = 'cuda' if cfg.USE_CUDA else 'cpu'
     model.to(device).eval()
     
-=======
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
     return model

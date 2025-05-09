@@ -18,24 +18,24 @@ from six.moves import urllib
 from yacs.config import CfgNode
 
 __all__ = [
-    "mkdir_if_missing",  # 如果缺少目录则创建
-    "check_isfile",  # 检查是否是文件
-    "read_json",  # 读取 JSON 文件
-    "write_json",  # 写入 JSON 文件
-    "set_random_seed",  # 设置随机种子
-    "download_url",  # 从 URL 下载文件
-    "read_image",  # 读取图像
-    "collect_env_info",  # 收集环境信息
-    "listdir_nohidden",  # 列出非隐藏项
-    "get_most_similar_str_to_a_from_b",  # 获取最相似的字符串
-    "check_availability",  # 检查可用性
-    "tolist_if_not",  # 转换为列表
-    "load_yaml_config",  # 加载配置文件
+    "mkdir_if_missing",  # Create directory if missing
+    "check_isfile",  # Check if the path is a file
+    "read_json",  # Read JSON file
+    "write_json",  # Write JSON file
+    "set_random_seed",  # Set random seed
+    "download_url",  # Download file from URL
+    "read_image",  # Read image
+    "collect_env_info",  # Collect environment information
+    "listdir_nohidden",  # List non-hidden items
+    "get_most_similar_str_to_a_from_b",  # Get the most similar string
+    "check_availability",  # Check availability
+    "tolist_if_not",  # Convert to list
+    "load_yaml_config",  # Load YAML configuration
 ]
 
 
 def mkdir_if_missing(dirname):
-    """如果缺少目录则创建。"""
+    """Create directory if missing."""
     if not osp.exists(dirname):
         try:
             os.makedirs(dirname)
@@ -45,52 +45,52 @@ def mkdir_if_missing(dirname):
 
 
 def check_isfile(fpath):
-    """检查给定路径是否是文件。
-    参数:
-        fpath (str): 文件路径。
-    返回:
+    """Check if the given path is a file.
+    Args:
+        fpath (str): File path.
+    Returns:
        bool
     """
     isfile = osp.isfile(fpath)
     if not isfile:
-        warnings.warn('在 "{}" 处未找到文件'.format(fpath))
+        warnings.warn('File not found at "{}"'.format(fpath))
     return isfile
 
 
 def read_json(fpath):
-    """从路径读取 JSON 文件。"""
+    """Read JSON file from path."""
     with open(fpath, "r") as f:
         obj = json.load(f)
     return obj
 
 
 def write_json(obj, fpath):
-    """写入 JSON 文件。"""
+    """Write JSON file."""
     mkdir_if_missing(osp.dirname(fpath))
     with open(fpath, "w") as f:
         json.dump(obj, f, indent=4, separators=(",", ": "))
 
 
 def set_random_seed(seed):
-    """设置随机种子。"""
-    random.seed(seed) # 为 python 设置种子
-    np.random.seed(seed) # 为 numpy 设置种子
-    torch.manual_seed(seed) # 为 CPU 设置种子
-    torch.cuda.manual_seed_all(seed) # 为所有 GPU 设置种子
+    """Set random seed."""
+    random.seed(seed)  # Set seed for Python
+    np.random.seed(seed)  # Set seed for NumPy
+    torch.manual_seed(seed)  # Set seed for CPU
+    torch.cuda.manual_seed_all(seed)  # Set seed for all GPUs
 
 
 def download_url(url, dst):
-    """从 URL 下载文件到目标路径。
+    """Download file from URL to destination path.
 
-    参数:
-        url (str): 下载文件的 URL。
-        dst (str): 目标路径。
+    Args:
+        url (str): URL of the file to download.
+        dst (str): Destination path.
     """
     print('* url="{}"'.format(url))
     print('* destination="{}"'.format(dst))
 
     def _reporthook(count, block_size, total_size):
-        """ 回调函数：用于下载进度报告。"""
+        """ Callback function: used for download progress reporting."""
         global start_time
         if count == 0:
             start_time = time.time()
@@ -100,29 +100,29 @@ def download_url(url, dst):
         speed = int(progress_size / (1024 * duration))
         percent = int(count * block_size * 100 / total_size)
         sys.stdout.write(
-            "\r...%d%%, %d MB, %d KB/s, %d 秒已过" %
+            "\r...%d%%, %d MB, %d KB/s, %d seconds elapsed" %
             (percent, progress_size / (1024 * 1024), speed, duration)
         )
         sys.stdout.flush()
 
-    urllib.request.urlretrieve(url, dst, _reporthook) # 下载文件
+    urllib.request.urlretrieve(url, dst, _reporthook)  # Download file
     sys.stdout.write("\n")
 
 
 def read_image(path):
-    """使用 ``PIL.Image`` 从路径读取图像。并转换为 RGB 模式。
-    参数:
-        path (str): 图像路径。
-    返回:
-        PIL 图像
+    """Read image from path using ``PIL.Image`` and convert to RGB mode.
+    Args:
+        path (str): Image path.
+    Returns:
+        PIL Image
     """
     return Image.open(path).convert("RGB")
 
 
 def collect_env_info():
-    """返回环境信息字符串。
-    包括 PyTorch 和 Pillow 的版本信息"""
-    # 代码来源：github.com/facebookresearch/maskrcnn-benchmark
+    """Return environment information string.
+    Includes PyTorch and Pillow version information."""
+    # Code source: github.com/facebookresearch/maskrcnn-benchmark
     from torch.utils.collect_env import get_pretty_env_info
 
     env_str = get_pretty_env_info()
@@ -131,46 +131,46 @@ def collect_env_info():
 
 
 def listdir_nohidden(path, sort=False):
-    """列出目录中的 非隐藏文件。
-    参数:
-         path (str): 目录路径。
-         sort (bool): 是否排序。
+    """List non-hidden files in a directory.
+    Args:
+         path (str): Directory path.
+         sort (bool): Whether to sort the items.
     """
-    items = [f for f in os.listdir(path) if not f.startswith(".")] # 列出非隐藏项
+    items = [f for f in os.listdir(path) if not f.startswith(".")]  # List non-hidden items
     if sort:
         items.sort()
     return items
 
 
 def get_most_similar_str_to_a_from_b(a, b):
-    """返回 b 中与 a 最相似的字符串。
-    参数:
-        a (str): 探测字符串。
-        b (list): 候选字符串列表。
+    """Return the most similar string to `a` from list `b`.
+    Args:
+        a (str): Target string.
+        b (list): List of candidate strings.
     """
-    highest_sim = 0 # 最高相似度
-    chosen = None # 选择的字符串
+    highest_sim = 0  # Highest similarity
+    chosen = None  # Chosen string
     for candidate in b:
-        sim = SequenceMatcher(None, a, candidate).ratio() # 计算相似度
+        sim = SequenceMatcher(None, a, candidate).ratio()  # Compute similarity
         if sim >= highest_sim:
             highest_sim = sim
             chosen = candidate 
-    return chosen # 返回最相似的字符串
+    return chosen  # Return the most similar string
 
 
 def check_availability(requested, available):
-    """检查元素是否在列表中可用。
-    参数:
-        requested (str): 探测字符串。
-        available (list): 可用字符串列表。
+    """Check if an element is available in the list.
+    Args:
+        requested (str): Target string.
+        available (list): List of available strings.
     """
-    if requested not in available: # 如果请求的字符串不在可用列表中
+    if requested not in available:  # If the requested string is not in the available list
         psb_ans = get_most_similar_str_to_a_from_b(requested, available)
-        raise ValueError(f"请求的字符串应属于 [{available}], 但得到 [{requested}], (你是想请求 [{psb_ans}] 吗？)")
+        raise ValueError(f"The requested string should be one of [{available}], but got [{requested}], (Did you mean [{psb_ans}]?)")
 
 
 def tolist_if_not(x):
-    """转换为列表。"""
+    """Convert to list."""
     if not isinstance(x, list):
         x = [x]
     return x
@@ -179,33 +179,29 @@ def tolist_if_not(x):
 
 def load_yaml_config(config_path, save=False, modify_fn=None):
     """
-    加载 yaml 配置文件到 CfgNode 对象，并冻结配置。
+    Load YAML configuration file into a CfgNode object and freeze the configuration.
     
-    参数:
-        - config_path (str): 配置文件路径。
-        - save (bool, optional): 是否保存配置文件到输出目录。
-        - modify_fn (callable, optional): 可选的修改函数，用于修改配置对象。
+    Args:
+        - config_path (str): Path to the configuration file.
+        - save (bool, optional): Whether to save the configuration file to the output directory.
+        - modify_fn (callable, optional): Optional modification function to modify the configuration object.
     
-    返回:
-        - cfg (CfgNode): 配置对象。"
+    Returns:
+        - cfg (CfgNode): Configuration object.
     """   
     with open(config_path, 'r', encoding='utf-8') as f:
         cfg = CfgNode.load_cfg(f)
 
     if modify_fn is not None:
-<<<<<<< HEAD
         modify_fn(cfg)
-=======
-        cfg = modify_fn(cfg)
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
     if save:
-        # 保存配置文件到输出目录
+        # Save configuration file to output directory
         mkdir_if_missing(cfg.OUTPUT_DIR)
         save_path = osp.join(cfg.OUTPUT_DIR, 'config.yaml')
         with open(save_path, 'w', encoding='utf-8') as f:
-            f.write(cfg.dump())  # 直接写入字符串
+            f.write(cfg.dump())  # Write directly as string
 
-    # 冻结配置，防止修改   
+    # Freeze configuration to prevent modification   
     cfg.freeze()
     return cfg

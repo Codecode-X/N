@@ -14,36 +14,36 @@ from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normal
 from .tools import mkdir_if_missing
 
 __all__ = [
-    "save_checkpoint", # 保存检查点
-    "load_checkpoint", # 加载检查点 
-    "resume_from_checkpoint", # 从检查点恢复训练
-    "open_all_layers", # 打开模型中的所有层进行训练
-    "open_specified_layers", # 打开模型中指定的层进行训练
-    "count_num_param", # 计算模型中的参数数量
-    "load_pretrained_weights", # 加载预训练权重到模型
-    "init_network_weights", # 初始化网络权重
-    "transform_image", # 对图像应用 K 次 tfm 增强 并返回结果
-    "standard_image_transform" # 图像预处理转换管道
-    "patch_jit_model" # 修正 JIT 模型的设备和 dtype 信息
+    "save_checkpoint", # Save checkpoint
+    "load_checkpoint", # Load checkpoint
+    "resume_from_checkpoint", # Resume training from checkpoint
+    "open_all_layers", # Open all layers of the model for training
+    "open_specified_layers", # Open specified layers of the model for training
+    "count_num_param", # Count the number of parameters in the model
+    "load_pretrained_weights", # Load pretrained weights into the model
+    "init_network_weights", # Initialize network weights
+    "transform_image", # Apply K times tfm augmentation to an image and return the results
+    "standard_image_transform", # Image preprocessing transformation pipeline
+    "patch_jit_model" # Fix device and dtype information for JIT models
 ]
 
 def save_checkpoint(state, save_dir, is_best=False,
                     remove_module_from_keys=True, model_name="" ):
-    r"""保存检查点。
+    r"""Save checkpoint.
 
-    参数:
-        state (dict): 字典，包含模型状态。
-        save_dir (str): 保存检查点的目录。
-        is_best (bool, optional): 如果为True，这个检查点会被复制并命名为
-            ``model-best.pth.tar``。默认值为False。
-        remove_module_from_keys (bool, optional): 是否从层名称中移除"module."。
-            默认值为True。
-        model_name (str, optional): 保存的模型名称。
+    Args:
+        state (dict): Dictionary containing model state.
+        save_dir (str): Directory to save the checkpoint.
+        is_best (bool, optional): If True, this checkpoint will be copied and named
+            ``model-best.pth.tar``. Default is False.
+        remove_module_from_keys (bool, optional): Whether to remove "module." from layer names.
+            Default is True.
+        model_name (str, optional): Name of the saved model.
     """
-    mkdir_if_missing(save_dir) # 创建保存目录
+    mkdir_if_missing(save_dir) # Create save directory
 
     if remove_module_from_keys:
-        # 从 state_dict 的键中移除'module.'
+        # Remove 'module.' from state_dict keys
         state_dict = state["state_dict"]
         new_state_dict = OrderedDict()
         for k, v in state_dict.items():
@@ -52,15 +52,15 @@ def save_checkpoint(state, save_dir, is_best=False,
             new_state_dict[k] = v
         state["state_dict"] = new_state_dict
 
-    # 保存模型
+    # Save model
     epoch = state["epoch"]
     if not model_name:
         model_name = "model.pth.tar-" + str(epoch)
     fpath = osp.join(save_dir, model_name)
     torch.save(state, fpath)
-    print(f"检查点已保存到 {fpath}")
+    print(f"Checkpoint saved to {fpath}")
 
-    # 保存当前模型名称
+    # Save current model name
     checkpoint_file = osp.join(save_dir, "checkpoint")
     checkpoint = open(checkpoint_file, "w+")
     checkpoint.write("{}\n".format(osp.basename(fpath)))
@@ -69,29 +69,29 @@ def save_checkpoint(state, save_dir, is_best=False,
     if is_best:
         best_fpath = osp.join(osp.dirname(fpath), "model-best.pth.tar")
         shutil.copy(fpath, best_fpath)
-        print('最佳检查点已保存到 "{}"'.format(best_fpath))
+        print('Best checkpoint saved to "{}"'.format(best_fpath))
 
 def load_checkpoint(fpath):
-    r"""加载检查点。
+    r"""Load checkpoint.
 
-    可以很好地处理``UnicodeDecodeError``，这意味着
-    python2保存的文件可以从python3读取。
+    Handles ``UnicodeDecodeError`` gracefully, meaning files saved in python2
+    can be read from python3.
 
-    参数:
-        fpath (str): 检查点路径。
+    Args:
+        fpath (str): Path to the checkpoint.
 
-    返回:
+    Returns:
         dict
 
-    示例::
+    Example::
         >>> fpath = 'log/my_model/model.pth.tar-10'
         >>> checkpoint = load_checkpoint(fpath)
     """
     if fpath is None:
-        raise ValueError("文件路径为 None")
+        raise ValueError("File path is None")
 
     if not osp.exists(fpath):
-        raise FileNotFoundError('文件未找到 "{}"'.format(fpath))
+        raise FileNotFoundError('File not found "{}"'.format(fpath))
 
     map_location = None if torch.cuda.is_available() else "cpu"
 
@@ -106,26 +106,26 @@ def load_checkpoint(fpath):
         )
 
     except Exception:
-        print('无法从 "{}" 加载检查点'.format(fpath))
+        print('Unable to load checkpoint from "{}"'.format(fpath))
         raise
 
     return checkpoint
 
 def resume_from_checkpoint(fdir, model, optimizer=None, scheduler=None):
-    r"""从检查点恢复训练。
+    r"""Resume training from checkpoint.
 
-    这将加载 (1) 模型权重 和 (2) 优化器的``state_dict``（如果``optimizer``不为None）。
+    This loads (1) model weights and (2) optimizer's ``state_dict`` (if ``optimizer`` is not None).
 
-    参数:
-        fdir (str): 保存模型的目录。
-        model (nn.Module): 模型。
-        optimizer (Optimizer, optional): 优化器。
-        scheduler (Scheduler, optional): 调度器。
+    Args:
+        fdir (str): Directory where the model is saved.
+        model (nn.Module): Model.
+        optimizer (Optimizer, optional): Optimizer.
+        scheduler (Scheduler, optional): Scheduler.
 
-    返回:
-        int: start_epoch。
+    Returns:
+        int: start_epoch.
 
-    示例::
+    Example::
         >>> fdir = 'log/my_model'
         >>> start_epoch = resume_from_checkpoint(fdir, model, optimizer, scheduler)
     """
@@ -133,28 +133,28 @@ def resume_from_checkpoint(fdir, model, optimizer=None, scheduler=None):
         model_name = checkpoint.readlines()[0].strip("\n")
         fpath = osp.join(fdir, model_name)
 
-    print('从 "{}" 加载检查点'.format(fpath))
+    print('Loading checkpoint from "{}"'.format(fpath))
     checkpoint = load_checkpoint(fpath)
     model.load_state_dict(checkpoint["state_dict"])
-    print("已加载模型权重")
+    print("Model weights loaded")
 
     if optimizer is not None and "optimizer" in checkpoint.keys():
         optimizer.load_state_dict(checkpoint["optimizer"])
-        print("已加载优化器")
+        print("Optimizer loaded")
 
     if scheduler is not None and "scheduler" in checkpoint.keys():
         scheduler.load_state_dict(checkpoint["scheduler"])
-        print("已加载调度器")
+        print("Scheduler loaded")
 
     start_epoch = checkpoint["epoch"]
-    print("上一个 epoch: {}".format(start_epoch))
+    print("Previous epoch: {}".format(start_epoch))
 
     return start_epoch
 
 def open_all_layers(model):
-    r"""打开模型中的所有层进行训练。
+    r"""Open all layers of the model for training.
 
-    示例::
+    Example::
         >>> open_all_layers(model)
     """
     model.train()
@@ -162,49 +162,49 @@ def open_all_layers(model):
         p.requires_grad = True
 
 def open_specified_layers(model, open_layers):
-    r"""打开模型中指定的层进行训练，同时保持其他层冻结。
+    r"""Open specified layers of the model for training, while keeping other layers frozen.
 
-    参数:
-        model (nn.Module): 神经网络模型。
-        open_layers (str or list): 打开训练的层。
+    Args:
+        model (nn.Module): Neural network model.
+        open_layers (str or list): Layers to open for training.
 
-    示例::
-        >>> # 只有model.classifier会被更新。
+    Example::
+        >>> # Only model.classifier will be updated.
         >>> open_layers = 'classifier'
         >>> open_specified_layers(model, open_layers)
-        >>> # 只有model.fc和model.classifier会被更新。
+        >>> # Only model.fc and model.classifier will be updated.
         >>> open_layers = ['fc', 'classifier']
         >>> open_specified_layers(model, open_layers)
     """
-    if isinstance(model, nn.DataParallel): # 如果模型是 nn.DataParallel
-        model = model.module # 获取模型
+    if isinstance(model, nn.DataParallel): # If the model is nn.DataParallel
+        model = model.module # Get the model
 
     if isinstance(open_layers, str):
         open_layers = [open_layers]
 
-    # 检查是否存在指定的层
+    # Check if specified layers exist
     for layer in open_layers:
-        assert hasattr(model, layer), f"{layer} 不是一个属性"
+        assert hasattr(model, layer), f"{layer} is not an attribute"
 
-    # 遍历模型的的所有子模块
+    # Iterate through all submodules of the model
     for name, module in model.named_children(): 
-        if name in open_layers: # 打开模型中指定的层进行训练
+        if name in open_layers: # Open specified layers for training
             module.train() 
             for p in module.parameters():
                 p.requires_grad = True
-        else: # 其他层冻结
+        else: # Freeze other layers
             module.eval()
             for p in module.parameters():
                 p.requires_grad = False
 
 def count_num_param(model=None, params=None):
-    r"""计算模型中的参数数量。
+    r"""Count the number of parameters in the model.
 
-    参数:
-        model (nn.Module): 神经网络模型。
-        params: 神经网络模型的参数。
+    Args:
+        model (nn.Module): Neural network model.
+        params: Parameters of the neural network model.
 
-    示例::
+    Example::
         >>> model_size = count_num_param(model)
     """
     if model is not None:
@@ -219,20 +219,20 @@ def count_num_param(model=None, params=None):
                 s += p.numel()
         return s
 
-    raise ValueError("model 和 params 必须至少提供一个。")
+    raise ValueError("Either model or params must be provided.")
 
 def load_pretrained_weights(model, weight_path):
-    r"""加载预训练权重到模型。
+    r"""Load pretrained weights into the model.
 
-    特性::
-        - 不兼容的层（名称或大小不匹配）将被忽略。
-        - 可以自动处理包含"module."的键。
+    Features::
+        - Incompatible layers (name or size mismatch) will be ignored.
+        - Automatically handles keys containing "module.".
 
-    参数:
-        model (nn.Module): 神经网络模型。
-        weight_path (str): 预训练权重的路径。
+    Args:
+        model (nn.Module): Neural network model.
+        weight_path (str): Path to the pretrained weights.
 
-    示例::
+    Example::
         >>> weight_path = 'log/my_model/model-best.pth.tar'
         >>> load_pretrained_weights(model, weight_path)
     """
@@ -242,46 +242,46 @@ def load_pretrained_weights(model, weight_path):
     else:
         state_dict = checkpoint
 
-    model_dict = model.state_dict() # 获取模型当前的 state_dict
-    new_state_dict = OrderedDict() # 存储匹配的层的预训练权重的 state_dict
-    matched_layers, discarded_layers = [], [] # 匹配的层，丢弃的层
+    model_dict = model.state_dict() # Get the current state_dict of the model
+    new_state_dict = OrderedDict() # Store the state_dict of matched layers with pretrained weights
+    matched_layers, discarded_layers = [], [] # Matched layers, discarded layers
 
-    # 遍历预训练权重的 state_dict，记录匹配和不匹配的层
+    # Iterate through the state_dict of pretrained weights, record matched and unmatched layers
     for k, v in state_dict.items():
         if k.startswith("module."):
-            k = k[7:]  # 丢弃 module.
+            k = k[7:]  # Discard module.
 
-        if k in model_dict and model_dict[k].size() == v.size(): # 如果匹配（键名和大小匹配）
-            new_state_dict[k] = v # 存储匹配的层的预训练权重
-            matched_layers.append(k) # 记录匹配的层
-        else: # 如果不匹配
-            discarded_layers.append(k) # 记录丢弃的层
+        if k in model_dict and model_dict[k].size() == v.size(): # If matched (key name and size match)
+            new_state_dict[k] = v # Store the pretrained weights of matched layers
+            matched_layers.append(k) # Record matched layers
+        else: # If unmatched
+            discarded_layers.append(k) # Record discarded layers
      
-    # 更新模型的 state_dict
-    model_dict.update(new_state_dict) # 将匹配的层的预训练权重更新到模型的 state_dict
+    # Update the state_dict of the model
+    model_dict.update(new_state_dict) # Update the state_dict of the model with pretrained weights of matched layers
     model.load_state_dict(model_dict)
 
-    if len(matched_layers) == 0: # 如果完全没有匹配的层
+    if len(matched_layers) == 0: # If no layers matched
         warnings.warn(
-            f"无法加载 {weight_path} (请手动检查键名)"
+            f"Unable to load {weight_path} (please manually check key names)"
         )
-    else: # 打印没有匹配的层
-        print(f"成功从 {weight_path} 加载预训练权重")
+    else: # Print unmatched layers
+        print(f"Successfully loaded pretrained weights from {weight_path}")
         if len(discarded_layers) > 0:
             print(
-                f"由于键名或大小不匹配而丢弃的层：{discarded_layers}"
+                f"Layers discarded due to key name or size mismatch: {discarded_layers}"
             )
 
 def init_network_weights(model, init_type="normal", gain=0.02):
-    """初始化网络权重。
-    参数:
-        model (nn.Module): 神经网络模型。
-        init_type (str): 初始化类型。可选值包括：
-            - normal: 标准正态分布
-            - xavier: Xavier 初始化
-            - kaiming: Kaiming 初始化
-            - orthogonal: 正交初始化
-        gain (float): 缩放因子。
+    """Initialize network weights.
+    Args:
+        model (nn.Module): Neural network model.
+        init_type (str): Initialization type. Options include:
+            - normal: Standard normal distribution
+            - xavier: Xavier initialization
+            - kaiming: Kaiming initialization
+            - orthogonal: Orthogonal initialization
+        gain (float): Scaling factor.
     """
     def _init_func(m):
         classname = m.__class__.__name__
@@ -316,44 +316,44 @@ def init_network_weights(model, init_type="normal", gain=0.02):
 
 def transform_image(tfm_func, img0, K=1):
     """
-    对图像应用 K 次 tfm 增强 并返回得到的 K 个不同的增强结果（注意不是叠加 K 次）。
+    Apply K times tfm augmentation to an image and return the K different augmented results (not stacked K times).
 
-    参数：
-    - tfm_func (callable): transform 函数。
-    - img0 (PIL.Image): 原始图像。
-    - K (int): 增强次数，生成 K 个增强结果。
+    Args:
+    - tfm_func (callable): Transform function.
+    - img0 (PIL.Image): Original image.
+    - K (int): Number of augmentations, generating K augmented results.
 
-    返回：
-    - 增强后的单个图像 (如果只有一个增强结果) img_list[0] || 增强后的图像列表 img_list
+    Returns:
+    - Augmented single image (if only one augmentation result) img_list[0] || List of augmented images img_list
     """
-    img_list = []  # 初始化图像列表
+    img_list = []  # Initialize image list
 
-    for k in range(K):  # 进行 K 次重复增强
-        tfm_img = tfm_func(img0) # 对原始图像应用 transform
+    for k in range(K):  # Perform K repeated augmentations
+        tfm_img = tfm_func(img0) # Apply transform to the original image
         img_list.append(tfm_img)
 
-    # 如果进行了多次增强，则返回增强后的图像列表；否则，返回增强后的单个图像
+    # If multiple augmentations were performed, return the list of augmented images; otherwise, return a single augmented image
     return img_list[0] if len(img_list) == 1 else img_list  
 
 
 def standard_image_transform(input_size, interp_mode):
     """
-    标准图像预处理转换管道。
+    Standard image preprocessing transformation pipeline.
     
-    参数:
-        - input_size (int): 输入图像的大小。
-        - interp_mode (str): 插值模式 | 可选值包括: NEAREST, BILINEAR, BICUBIC
-    返回:
-        - Compose: 组合的图像转换。
+    Args:
+        - input_size (int): Size of the input image.
+        - interp_mode (str): Interpolation mode | Options include: NEAREST, BILINEAR, BICUBIC
+    Returns:
+        - Compose: Composed image transformation.
 
-    主要步骤：
-        - 保持图像的宽高比，调整图像大小到 input_size，并使用指定的插值模式
-        - 中心裁剪(CenterCrop)图像到 input_size*input_size
-        - 转换为 RGB 图像
+    Main steps:
+        - Maintain the aspect ratio of the image, resize the image to input_size, and use the specified interpolation mode
+        - Center crop the image to input_size*input_size
+        - Convert to RGB image
     """
-    assert isinstance(input_size, int), "input_size 必须是整数"
+    assert isinstance(input_size, int), "input_size must be an integer"
     
-    interp_mode = getattr(InterpolationMode, interp_mode.upper(), InterpolationMode.BILINEAR) # 获取插值模式
+    interp_mode = getattr(InterpolationMode, interp_mode.upper(), InterpolationMode.BILINEAR) # Get interpolation mode
     
     def _image_to_rgb(image):
         return image.convert("RGB")
@@ -367,34 +367,34 @@ def standard_image_transform(input_size, interp_mode):
 
 def patch_jit_model(model, device="cuda"):
     """
-    修正 JIT 模型的设备和 dtype 信息。
-    该函数用于修正 JIT 模型的设备和数据类型信息，以确保模型在指定设备上运行。
+    Fix device and dtype information for JIT models.
+    This function fixes the device and data type information of a JIT model to ensure the model runs on the specified device.
     
-    主要步骤：
-        1. 生成目标设备的节点。
-        2. 遍历模型的计算图，修正设备信息。
-        3. 如果目标设备是 CPU，则修正数据类型为 float32。
-        4. 返回修正后的模型。
+    Main steps:
+        1. Generate a node for the target device.
+        2. Traverse the computation graph of the model and fix device information.
+        3. If the target device is CPU, fix the data type to float32.
+        4. Return the fixed model.
     
-    参数:
-        - model (torch.jit.ScriptModule): 经过 torch.jit.trace 或 torch.jit.script 编译的模型
-        - device (str): 目标设备 ("cuda" 或 "cpu")
+    Args:
+        - model (torch.jit.ScriptModule): Model compiled with torch.jit.trace or torch.jit.script
+        - device (str): Target device ("cuda" or "cpu")
     
-    返回:
-        - torch.jit.ScriptModule: 设备和 dtype 修正后的 JIT 模型
+    Returns:
+        - torch.jit.ScriptModule: JIT model with fixed device and dtype
     """
     
-    # ----生成目标设备的节点----
+    # ----Generate a node for the target device----
     device_holder = torch.jit.trace(lambda: torch.ones([]).to(torch.device(device)), example_inputs=[])
     device_node = [n for n in device_holder.graph.findAllNodes("prim::Constant") if "Device" in repr(n)][-1]
 
     def _node_get(node: torch._C.Node, key: str):
-        """获取 JIT 计算图中的属性值"""
+        """Get attribute value from a JIT computation graph node"""
         sel = node.kindOf(key)
         return getattr(node, sel)(key)
 
     def patch_device(module):
-        """修正 JIT 计算图中的设备信息"""
+        """Fix device information in the JIT computation graph"""
         graphs = []
         try:
             graphs = [module.graph] if hasattr(module, "graph") else []
@@ -402,32 +402,32 @@ def patch_jit_model(model, device="cuda"):
             graphs = []
 
         if hasattr(module, "forward1"):
-            graphs.append(module.forward1.graph)  # 处理 forward1 变体
+            graphs.append(module.forward1.graph)  # Handle forward1 variant
 
         for graph in graphs:
             for node in graph.findAllNodes("prim::Constant"):
                 if "value" in node.attributeNames() and str(_node_get(node, "value")).startswith("cuda"):
                     node.copyAttributes(device_node)
 
-    # ----对模型及其子模块应用设备修正----
+    # ----Apply device fix to the model and its submodules----
     model.apply(patch_device)
     
-    # × 只适用于clip，修改为下面 "递归遍历 JIT 模型的所有子模块"
+    # × Only applicable to clip, replaced with below "Recursively traverse all submodules of the JIT model"
     # patch_device(model.encode_image)
     # patch_device(model.encode_text)
     
-    # √ 递归遍历 JIT 模型的所有子模块
+    # √ Recursively traverse all submodules of the JIT model
     for name, submodule in model.named_modules():
         patch_device(submodule)
 
-    # ----如果是 CPU，需要修正 dtype 为 float32----
+    # ----If CPU, fix dtype to float32----
     if str(device) == "cpu":
         float_holder = torch.jit.trace(lambda: torch.ones([]).float(), example_inputs=[])
         float_input = list(float_holder.graph.findNode("aten::to").inputs())[1]
         float_node = float_input.node()
 
         def patch_float(module):
-            """修正 JIT 计算图中的 dtype（仅限 CPU）"""
+            """Fix dtype in the JIT computation graph (CPU only)"""
             try:
                 graphs = [module.graph] if hasattr(module, "graph") else []
             except RuntimeError:
@@ -439,15 +439,15 @@ def patch_jit_model(model, device="cuda"):
             for graph in graphs:
                 for node in graph.findAllNodes("aten::to"):
                     inputs = list(node.inputs())
-                    for i in [1, 2]:  # dtype 可能是 aten::to() 的第二个或第三个参数
-                        if _node_get(inputs[i].node(), "value") == 5:  # 5 代表 float32
+                    for i in [1, 2]:  # dtype may be the second or third parameter of aten::to()
+                        if _node_get(inputs[i].node(), "value") == 5:  # 5 represents float32
                             inputs[i].node().copyAttributes(float_node)
 
         model.apply(patch_float)
         patch_float(model.encode_image)
         patch_float(model.encode_text)
 
-        # 强制整个模型的 dtype 变为 float32
+        # Force the entire model's dtype to float32
         model.float()
 
     return model

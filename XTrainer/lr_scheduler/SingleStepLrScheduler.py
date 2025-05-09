@@ -4,29 +4,25 @@ from .build import LRSCHEDULER_REGISTRY
 @LRSCHEDULER_REGISTRY.register()
 class SingleStepLrScheduler(StepLR):
     """
-    单步学习率调度器
-    SingleStepLrScheduler 是 torch.optim.lr_scheduler.StepLR 的封装类，
-    使用注册机制方便在项目中统一管理学习率调度器。
+    Single-step learning rate scheduler.
+    SingleStepLrScheduler is a wrapper class for torch.optim.lr_scheduler.StepLR,
+    using a registration mechanism to facilitate unified management of learning rate schedulers in the project.
 
-    参数:
-        - cfg (Config): 包含学习率调度器相关参数的配置对象。
-        - optimizer (torch.optim.Optimizer): 训练过程中使用的优化器。
+    Parameters:
+        - cfg (Config): Configuration object containing parameters related to the learning rate scheduler.
+        - optimizer (torch.optim.Optimizer): Optimizer used during training.
     
-    相关配置项:
-        - cfg.LR_SCHEDULER.STEP_SIZE: 步长，多少个 epoch 后降低学习率。
-        - cfg.LR_SCHEDULER.GAMMA: 学习率衰减系数。
+    Related configuration items:
+        - cfg.LR_SCHEDULER.STEP_SIZE: Step size, the number of epochs after which the learning rate is reduced.
+        - cfg.LR_SCHEDULER.GAMMA: Learning rate decay factor.
     """
     def __init__(self, cfg, optimizer):
 
-        step_size = int(cfg.LR_SCHEDULER.STEP_SIZE) # 学习率下降的周期数 
-        assert step_size > 0, "步长必须大于 0"
+        step_size = int(cfg.LR_SCHEDULER.STEP_SIZE) # Number of epochs after which the learning rate is reduced
+        assert step_size > 0, "Step size must be greater than 0"
             
         super().__init__(
             optimizer=optimizer,
-            step_size=step_size, # 学习率下降的周期数
-            gamma=float(cfg.LR_SCHEDULER.GAMMA) # 衰减率
-<<<<<<< HEAD
+            step_size=step_size, # Number of epochs after which the learning rate is reduced
+            gamma=float(cfg.LR_SCHEDULER.GAMMA) # Decay factor
         )
-=======
-        )
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894

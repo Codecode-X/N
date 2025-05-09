@@ -4,33 +4,33 @@ from .warmup import build_warmup
 LRSCHEDULER_REGISTRY = Registry("LRSCHEDULER")
 
 def build_lr_scheduler(cfg, optimizer):
-    """根据配置中的学习率调度器名称 (cfg.LR_SCHEDULER.NAME) 构建相应的学习率调度器。
+    """Build the learning rate scheduler based on the name specified in the configuration (cfg.LR_SCHEDULER.NAME).
     
-    参数：
-        - cfg (CfgNode): 配置。
-        - optimizer (Optimizer): 优化器。
+    Args:
+        - cfg (CfgNode): Configuration.
+        - optimizer (Optimizer): Optimizer.
     
-    返回：
-        - 实例化后的学习率调度器对象。
+    Returns:
+        - The instantiated learning rate scheduler object.
     
-    主要步骤：
-    1. 检查学习率调度器是否被注册。
-    2. 实例化学习率调度器。
-    3. 如果学习率调度器有预热调度器，则构建预热调度器并应用到学习率调度器上。
-    4. 返回学习率调度器对象。
+    Main steps:
+    1. Check if the learning rate scheduler is registered.
+    2. Instantiate the learning rate scheduler.
+    3. If the learning rate scheduler has a warmup scheduler, build the warmup scheduler and apply it to the learning rate scheduler.
+    4. Return the learning rate scheduler object.
     """
-    avai_lr_schedulers = LRSCHEDULER_REGISTRY.registered_names() # 获取所有已经注册的学习率调度器
-    lr_scheduler_name = cfg.LR_SCHEDULER.NAME # 获取配置中的学习率调度器名称
+    avai_lr_schedulers = LRSCHEDULER_REGISTRY.registered_names() # Get all registered learning rate schedulers
+    lr_scheduler_name = cfg.LR_SCHEDULER.NAME # Get the learning rate scheduler name from the configuration
 
-    check_availability(lr_scheduler_name, avai_lr_schedulers) # 检查学习率调度器是否被注册
-    if cfg.VERBOSE: # 是否输出信息
+    check_availability(lr_scheduler_name, avai_lr_schedulers) # Check if the learning rate scheduler is registered
+    if cfg.VERBOSE: # Whether to output information
         print("Loading lr_scheduler: {}".format(lr_scheduler_name))
 
-    # 实例化学习率调度器
+    # Instantiate the learning rate scheduler
     lr_scheduler = LRSCHEDULER_REGISTRY.get(lr_scheduler_name)(cfg, optimizer)
 
-    # 如果学习率调度器有预热调度器
+    # If the learning rate scheduler has a warmup scheduler
     if hasattr(cfg.LR_SCHEDULER, "WARMUP") and cfg.LR_SCHEDULER.WARMUP is not None:
-        lr_scheduler = build_warmup(cfg, lr_scheduler) # 构建预热调度器, 将预热调度器应用到学习率调度器上
+        lr_scheduler = build_warmup(cfg, lr_scheduler) # Build the warmup scheduler and apply it to the learning rate scheduler
 
     return lr_scheduler

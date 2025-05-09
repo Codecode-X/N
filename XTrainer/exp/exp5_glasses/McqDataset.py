@@ -51,14 +51,14 @@ class McqDataset(Dataset):
         
         # Check if cache file exists
         if os.path.exists(cache_path):
-            print(f"正在加载MCQ数据集 cache: {cache_path} of {self.csv_path} ...")
+            print(f"Loading MCQ dataset cache: {cache_path} of {self.csv_path} ...")
             cached_data = torch.load(cache_path, weights_only=False)
             self.image_features = cached_data['image_features']
             self.captions_feats = cached_data['captions_feats']
             self.level_H = cached_data['level_H_list']
             self.labels = cached_data['labels']
             self.types = cached_data['types']
-            # self.types = [ANSWERTYPE_ID_MAP.get(d, -1) for d in cached_data['types']] # 改为在存缓存时转换
+            # self.types = [ANSWERTYPE_ID_MAP.get(d, -1) for d in cached_data['types']] # Convert when saving to cache
             print(f"Loaded {len(self.image_features)} samples from cache")
             return
         
@@ -68,13 +68,13 @@ class McqDataset(Dataset):
         self.captions_feats = [] 
         self.level_H = []
         self.labels = [] # Correct answer index (0-3)
-        self.types = [] # 正确答案的类型 (0-2)
+        self.types = [] # Correct answer type (0-2)
         
         for idx, row in tqdm(self.data.iterrows(), total=len(self.data)):
             img_path = row['image_path']
 
-            # 提取图像特征
-            img_feature = extract_img_features(img_path) # 原始CLIP提取的图像特征
+            # Extract image features
+            img_feature = extract_img_features(img_path) # Image features extracted by the original CLIP
             self.image_features.append(img_feature)
             
             # Extract text features for all options
@@ -83,7 +83,7 @@ class McqDataset(Dataset):
 
             for i in range(4):
                 caption = row[f'caption_{i}']
-                h, level_h_list = extract_sentence_features(caption) # 原始CLIP提取的文本特征 | h:[embed_dim], level_h_list:[embed_dim]*num_layers
+                h, level_h_list = extract_sentence_features(caption) # Text features extracted by the original CLIP | h:[embed_dim], level_h_list:[embed_dim]*num_layers
                 row_h.append(h) 
                 row_level_h.append(level_h_list)
             self.captions_feats.append(row_h)
@@ -127,13 +127,13 @@ def evaluate_model_mcq(model, data_loader, test_raw_clip=False, device='cuda'):
     """
     Evaluate the CLIPGlassesFrame model on the validation set.
     
-    参数:
+    Args:
         - model: The CLIPGlassesFrame model
         - data_loader: DataLoader for the validation set
         - test_raw_clip: Whether to test the raw CLIP model
         - device: Device to run the model on (CPU or GPU)
         
-    返回:
+    Returns:
         - val_acc: Validation accuracy
         - val_loss: Validation loss
         - all_predictions: List of all predictions
@@ -166,16 +166,16 @@ def evaluate_model_mcq(model, data_loader, test_raw_clip=False, device='cuda'):
             # Process each option
             all_scores = [None] * num_options  # [batch_size, batch_size] * num_options
             for i in range(num_options):
-                # mini-batch中每个图像和第i个选项文本特征的匹配得分
+                # Matching scores between each image in the mini-batch and the i-th option text features
                 choice_h = caption_feats[:, i] # [batch_size, embed_dim]
                 level_h_list = level_H_list[:, i] # [batch_size, num_layers, embed_dim]
                 scores, _ = model(img_features, choice_h, level_h_list) # [batch_size, batch_size]
                 all_scores[i] = scores # [batch_size, batch_size]
             
-            # # 错误方式（直接使用全矩阵）
-            # logits = torch.stack(all_scores, dim=1)  # 得到 [B, C, B]
-            # 正确方式（取对角线）
-            logits = torch.stack([s.diag() for s in all_scores], dim=1) # 只计算和图片对应的选项得分 [B, C]
+            # # Incorrect method (directly using the full matrix)
+            # logits = torch.stack(all_scores, dim=1)  # [B, C, B]
+            # Correct method (take the diagonal)
+            logits = torch.stack([s.diag() for s in all_scores], dim=1) # Only calculate scores for image-option pairs [B, C]
             
             # Compute cross-entropy loss
             loss = F.cross_entropy(logits, labels)

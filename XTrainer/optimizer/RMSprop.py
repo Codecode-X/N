@@ -3,27 +3,27 @@ from torch.optim import RMSprop as TorchRMSprop
 
 @OPTIMIZER_REGISTRY.register()
 class RMSprop(TorchRMSprop):
-    """ RMSprop 优化器 """
+    """ RMSprop optimizer """
     def __init__(self, cfg, params=None):
         """
-        初始化 RMSprop 优化器
+        Initialize the RMSprop optimizer
 
-        参数:
-            - cfg (CfgNode): 配置
-            - params (iterable): 模型参数
+        Args:
+            - cfg (CfgNode): Configuration
+            - params (iterable): Model parameters
 
-        配置:
-            - 优化器默认参数
-                - OPTIMIZER.LR (float): 学习率
-                - OPTIMIZER.alpha (float): 移动平均系数
-                - OPTIMIZER.eps (float): 除数中的常数，避免除零错误
-                - OPTIMIZER.weight_decay (float): 权重衰减
-                - OPTIMIZER.momentum (float): 动量
-                - OPTIMIZER.centered (bool): 是否使用中心化的 RMSprop
+        Configuration:
+            - Default optimizer parameters
+                - OPTIMIZER.LR (float): Learning rate
+                - OPTIMIZER.alpha (float): Smoothing constant
+                - OPTIMIZER.eps (float): Term added to the denominator to improve numerical stability
+                - OPTIMIZER.weight_decay (float): Weight decay (L2 penalty)
+                - OPTIMIZER.momentum (float): Momentum factor
+                - OPTIMIZER.centered (bool): Whether to use centered RMSprop
         """
         
-        # ---读取配置---
-        # 读取优化器的默认参数
+        # ---Read configuration---
+        # Read default optimizer parameters
         lr = float(cfg.OPTIMIZER.LR)
         alpha = float(cfg.OPTIMIZER.alpha)
         eps = float(cfg.OPTIMIZER.eps)
@@ -31,7 +31,7 @@ class RMSprop(TorchRMSprop):
         momentum = float(cfg.OPTIMIZER.momentum)
         centered = bool(cfg.OPTIMIZER.centered)
 
-        # ---检查参数有效性---
+        # ---Validate parameters---
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= alpha:
@@ -41,7 +41,7 @@ class RMSprop(TorchRMSprop):
         if not 0.0 <= momentum:
             raise ValueError("Invalid momentum value: {}".format(momentum))
         
-        # ---传入优化器的默认参数给父类---
+        # ---Pass default parameters to the parent class---
         super().__init__(
             params,
             lr=lr,
@@ -49,5 +49,5 @@ class RMSprop(TorchRMSprop):
             weight_decay=weight_decay,
             alpha=alpha,
             eps=eps,
-            centered=centered  # 是否使用中心化的 RMSprop
+            centered=centered  # Whether to use centered RMSprop
         )

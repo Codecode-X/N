@@ -13,9 +13,9 @@ import warnings
 from typing import Union, List
 from utils import SimpleTokenizer as Tokenizer
 
-_tokenizer = Tokenizer()  # 初始化分词器
+_tokenizer = Tokenizer()  # Initialize tokenizer
 
-# 可用的预训练模型
+# Available pretrained models
 _MODELS_URL = {
     "RN50": "https://openaipublic.azureedge.net/clip/models/afeb0e10f9e5a86da6080e35cf09123aca3b358a0c3e3b6c78a7b63bc04b6762/RN50.pt",
     "RN101": "https://openaipublic.azureedge.net/clip/models/8fa8567bab74a42d41c5915025a8e4538c3bdbe8804a470a72f30b0d94fab599/RN101.pt",
@@ -32,63 +32,62 @@ _MODELS_URL = {
 class Clip(ModelBase):
 
     def __init__(self,
-                 cfg, # 配置
+                 cfg,  # Configuration
                  embed_dim: int,
-                 # 视觉 (Vision) 部分
-                 image_resolution: int, # 输入图像的分辨率 (如 224)
-                 vision_layers: Union[Tuple[int, int, int, int], int], # 视觉 Transformer 的层数
-                 vision_width: int,  # 视觉 Transformer 的隐藏层宽度
-                 vision_patch_size: int,  # Patch 的大小 (ViT 模型)
-                 # 文本 (Text) 部分
-                 context_length: int,  # 最大文本长度 (序列长度)
-                 vocab_size: int, # 词表大小 (Embedding 层的输入维度)
-                 transformer_width: int, # Transformer 的隐藏层宽度
-                 transformer_heads: int, # Transformer 的注意力头数
-                 transformer_layers: int, # Transformer 的层数
+                 # Vision part
+                 image_resolution: int,  # Input image resolution (e.g., 224)
+                 vision_layers: Union[Tuple[int, int, int, int], int],  # Number of layers in the vision transformer
+                 vision_width: int,  # Hidden layer width of the vision transformer
+                 vision_patch_size: int,  # Patch size (ViT model)
+                 # Text part
+                 context_length: int,  # Maximum text length (sequence length)
+                 vocab_size: int,  # Vocabulary size (input dimension of the embedding layer)
+                 transformer_width: int,  # Hidden layer width of the transformer
+                 transformer_heads: int,  # Number of attention heads in the transformer
+                 transformer_layers: int,  # Number of layers in the transformer
                  ):
 
         """
-        CLIP 模型的初始化函数
+        Initialization function for the CLIP model.
 
-        参数：
-            - cfg (dict): 配置
+        Parameters:
+            - cfg (dict): Configuration
             
-            - embed_dim (int): 嵌入维度 | CLIP 模型的输出特征维度
-            - image_resolution (int): 输入图像的分辨率 | 224
-            - vision_layers (Union[Tuple[int, int, int, int], int]): 视觉 Transformer 的层数 | ResNet: tuple(3, 4, 6, 3) | ViT: int(12)
-            - vision_width (int): 视觉 Transformer 的隐藏层宽度 | ResNet: 64 | ViT: 768
-            - vision_patch_size (int): Patch 的大小 (ViT 模型) | 32
+            - embed_dim (int): Embedding dimension | Output feature dimension of the CLIP model
+            - image_resolution (int): Input image resolution | 224
+            - vision_layers (Union[Tuple[int, int, int, int], int]): Number of layers in the vision transformer | ResNet: tuple(3, 4, 6, 3) | ViT: int(12)
+            - vision_width (int): Hidden layer width of the vision transformer | ResNet: 64 | ViT: 768
+            - vision_patch_size (int): Patch size (ViT model) | 32
             
-            - context_length (int): 最大文本长度 (序列长度) | 77
-            - vocab_size (int): 词表大小 (Embedding 层的输入维度) | 49408
-            - transformer_width (int): Transformer 的隐藏层宽度 | 512
-            - transformer_heads (int): Transformer 的注意力头数 | 8
-            - transformer_layers (int): Transformer 的层数 | 12
+            - context_length (int): Maximum text length (sequence length) | 77
+            - vocab_size (int): Vocabulary size (input dimension of the embedding layer) | 49408
+            - transformer_width (int): Hidden layer width of the transformer | 512
+            - transformer_heads (int): Number of attention heads in the transformer | 8
+            - transformer_layers (int): Number of layers in the transformer | 12
 
-        主要步骤：
-            1. 初始化父类
-            2. 设置设备
-            3. 创建视觉 Transformer (ResNet 或 ViT)
-            4. 创建文本 Transformer
-            5. 创建词嵌入层和位置编码
-            6. 创建 LayerNorm 层
-            7. 创建投影层 (text_projection)
-            8. 创建可训练的 softmax 温度参数 τ
-            9. 初始化权重
-        
+        Main steps:
+            1. Initialize the parent class
+            2. Set the device
+            3. Create the vision transformer (ResNet or ViT)
+            4. Create the text transformer
+            5. Create the token embedding layer and positional encoding
+            6. Create the LayerNorm layer
+            7. Create the projection layer (text_projection)
+            8. Create the trainable softmax temperature parameter τ
+            9. Initialize weights
         """
         super().__init__(cfg)
         self.device = 'cuda' if cfg.USE_CUDA else 'cpu'
 
-        self.output_logits = None  # 记录模型输出结果
-        self.output_featuer = None # 记录模型输出特征
+        self.output_logits = None  # Record model output results
+        self.output_featuer = None  # Record model output features
 
-        self.context_length = context_length # 文本序列长度
+        self.context_length = context_length  # Text sequence length
 
-        # 创建视觉 Transformer
+        # Create the vision transformer
         if isinstance(vision_layers, (tuple, list)):
             vision_heads = vision_width * 32 // 64
-            self.visual = ModifiedResNet(  # 基于 ResNet
+            self.visual = ModifiedResNet(  # Based on ResNet
                 layers=vision_layers,
                 output_dim=embed_dim,
                 heads=vision_heads,
@@ -96,8 +95,8 @@ class Clip(ModelBase):
                 width=vision_width
             )
         else:
-            vision_heads = vision_width // 64    # 计算 Transformer 头数，通常设为 width/64
-            self.visual = VisionTransformer(  # 基于 VIT
+            vision_heads = vision_width // 64  # Calculate the number of transformer heads, usually set to width/64
+            self.visual = VisionTransformer(  # Based on ViT
                 input_resolution=image_resolution,
                 patch_size=vision_patch_size,
                 width=vision_width,
@@ -106,7 +105,7 @@ class Clip(ModelBase):
                 output_dim=embed_dim
             )
         
-        # 构建文本 Transformer
+        # Build the text transformer
         self.transformer = Transformer(
             width=transformer_width,
             layers=transformer_layers,
@@ -114,259 +113,211 @@ class Clip(ModelBase):
             attn_mask=build_attention_mask(self.context_length)
         )
 
-        self.vocab_size = vocab_size  # 词表大小
-        self.token_embedding = nn.Embedding(vocab_size, transformer_width)  # 词嵌入层
-        self.positional_embedding = nn.Parameter(torch.empty(self.context_length, transformer_width))  # 位置编码
-        self.ln_final = LayerNorm(transformer_width)  # LayerNorm 归一化层
+        self.vocab_size = vocab_size  # Vocabulary size
+        self.token_embedding = nn.Embedding(vocab_size, transformer_width)  # Token embedding layer
+        self.positional_embedding = nn.Parameter(torch.empty(self.context_length, transformer_width))  # Positional encoding
+        self.ln_final = LayerNorm(transformer_width)  # LayerNorm normalization layer
 
-        self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))  # project head 将文本特征投影到 embed_dim 维度
+        self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))  # Project head to project text features to embed_dim dimensions
 
-        # 可训练的 logit_scale = log(1 / τ) | CLIP 通过 可训练的 logit_scale 让模型自动调整 τ，适应不同数据和任务。
-        τ = 0.07 # CLIP 训练时的 softmax 温度参数 τ，较小的 τ(较大的 logit_scale)：分布更加陡峭，相似度高的样本更加突出
-        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / τ))  # 训练时学习的是 logit_scale，而不是 τ，直接学习 τ 可能会导致梯度更新过大或过小。
+        # Trainable logit_scale = log(1 / τ) | CLIP uses a trainable logit_scale to let the model automatically adjust τ for different data and tasks.
+        τ = 0.07  # Softmax temperature parameter τ during CLIP training. A smaller τ (larger logit_scale) makes the distribution steeper, highlighting samples with high similarity.
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / τ))  # During training, logit_scale is learned instead of τ to avoid gradient issues.
 
-        self.initialize_parameters() # 初始化权重
+        self.initialize_parameters()  # Initialize weights
 
     @property
     def dtype(self):
         return self.visual.conv1.weight.dtype
     
-    # 权重初始化
+    # Weight initialization
     def initialize_parameters(self):
         """
-        权重初始化 
+        Weight initialization 
         
-        主要步骤：
-            1. 初始化 token_embedding 和 positional_embedding 的权重
-            2. 初始化 视觉编码器 (ResNet) 的权重 | ViT 版本不需要初始化
-            3. 初始化 文本编码器 (Transformer) 的权重
-            4. 初始化 text_projection 的权重
+        Main steps:
+            1. Initialize the weights of token_embedding and positional_embedding
+            2. Initialize the weights of the vision encoder (ResNet) | ViT version does not require initialization
+            3. Initialize the weights of the text encoder (Transformer)
+            4. Initialize the weights of text_projection
 
-        原理:
-            - 若 W_Q, W_K, W_V 的初始化方差过大，注意力计算中的 Softmax 可能会趋向于 0 或 1，导致梯度消失。
-            - 取 std = d^{-0.5}，使得初始化时 QKV 的均值和方差合理，不至于让 Softmax 输出极端值导致梯度问题。
-            - d 是 Transformer 的隐藏层宽度。
+        Principle:
+            - If the variance of W_Q, W_K, W_V initialization is too large, the Softmax in attention calculation may approach 0 or 1, leading to gradient vanishing.
+            - Use std = d^{-0.5} to ensure reasonable mean and variance of QKV during initialization, avoiding extreme Softmax outputs that cause gradient issues.
+            - d is the hidden layer width of the Transformer.
         """
-        # 初始化 token_embedding 和 positional_embedding 的权重为均值为 0，标准差为 0.02 的正态分布
+        # Initialize the weights of token_embedding and positional_embedding with a normal distribution of mean 0 and std 0.02
         nn.init.normal_(self.token_embedding.weight, std=0.02)
         nn.init.normal_(self.positional_embedding, std=0.01)
 
-        # 初始化 视觉编码器 (ResNet) 的权重 -  Xavier 初始化 - 针对 Softmax 激活函数 | ViT 版本不需要初始化
+        # Initialize the weights of the vision encoder (ResNet) - Xavier initialization - for Softmax activation function | ViT version does not require initialization
         if isinstance(self.visual, ModifiedResNet):
-            # 初始化 ResNet 的 attention pooling 层（类似 ViT 的 CLS token 方法，聚合全局特征）的权重
+            # Initialize the weights of the attention pooling layer in ResNet (similar to the CLS token method in ViT, aggregating global features)
             if self.visual.attnpool is not None: 
                 std = self.visual.attnpool.c_proj.in_features ** -0.5
                 nn.init.normal_(self.visual.attnpool.q_proj.weight, std=std)
                 nn.init.normal_(self.visual.attnpool.k_proj.weight, std=std)
                 nn.init.normal_(self.visual.attnpool.v_proj.weight, std=std)
                 nn.init.normal_(self.visual.attnpool.c_proj.weight, std=std)
-            # 初始化 ResNet 残差块中的 BatchNorm 为 0
+            # Initialize the BatchNorm in ResNet residual blocks to 0
             for resnet_block in [self.visual.layer1, self.visual.layer2, self.visual.layer3, self.visual.layer4]:
                 for name, param in resnet_block.named_parameters():
-                    if name.endswith("bn3.weight"): # 仅初始化最后一层的 BatchNorm
+                    if name.endswith("bn3.weight"):  # Only initialize the last BatchNorm
                         nn.init.zeros_(param)
 
-        # 初始化 文本编码器 (Transformer) 的权重
-        # 计算三种标准差
-        proj_std = (self.transformer.width ** -0.5) * ((2 * self.transformer.layers) ** -0.5) # ((2L)^{-0.5}) 防止残差块累积后数值膨胀。
-        attn_std = self.transformer.width ** -0.5  # xavier 初始化 - 针对 Softmax 激活函数 
-        fc_std = (2 * self.transformer.width) ** -0.5  # Kaiming He 初始化 - 针对 ReLU 激活函数
+        # Initialize the weights of the text encoder (Transformer)
+        # Calculate three types of standard deviations
+        proj_std = (self.transformer.width ** -0.5) * ((2 * self.transformer.layers) ** -0.5)  # ((2L)^{-0.5}) prevents residual block accumulation from causing value explosion.
+        attn_std = self.transformer.width ** -0.5  # Xavier initialization - for Softmax activation function 
+        fc_std = (2 * self.transformer.width) ** -0.5  # Kaiming He initialization - for ReLU activation function
         for block in self.transformer.resblocks:
             nn.init.normal_(block.attn.in_proj_weight, std=attn_std)
             nn.init.normal_(block.attn.out_proj.weight, std=proj_std)
             nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
             nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
 
-        # 初始化 文本投影层 - Xavier 初始化
+        # Initialize the text projection layer - Xavier initialization
         if self.text_projection is not None:
             nn.init.normal_(self.text_projection, std=self.transformer.width ** -0.5)
     
 
     def encode_image(self, image):
         """ 
-        视觉编码器，提取图像特征。
+        Vision encoder to extract image features.
 
-        参数：
-            - image (Tensor): 图像数据 | [batch_size, 3, input_size, input_size]
+        Parameters:
+            - image (Tensor): Image data | [batch_size, 3, input_size, input_size]
 
-        返回：
-            - image_features (Tensor): 图像特征 | [batch_size, embed_dim]
+        Returns:
+            - image_features (Tensor): Image features | [batch_size, embed_dim]
         """
         return self.visual(image.type(self.dtype))
 
     def encode_text(self, text):
         """
-        文本编码器，提取文本特征。
+        Text encoder to extract text features.
 
-        参数：
-<<<<<<< HEAD
-            - text (Tensor): 文本数据 | [num_classes, context_length(上下文长度,Clip默认为77)]
+        Parameters:
+            - text (Tensor): Text data | [num_classes, context_length (default 77 for CLIP)]
 
-        返回：
-            - text_features (Tensor): 文本特征 | [num_classes, embed_dim]
-=======
-            - text (Tensor): 文本数据 | [batch_size, context_length]
-
-        返回：
-            - text_features (Tensor): 文本特征 | [batch_size, embed_dim]
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
+        Returns:
+            - text_features (Tensor): Text features | [num_classes, embed_dim]
         
-        主要步骤：
-            1. 将输入文本转换为 token 嵌入
-            2. 加上可训练的位置编码
-            3. 通过 Transformer 进行文本编码
-            4. 通过 layerNorm 层归一化数据
-            5. 将 EOT (End-of-Text) token 对应的特征作为整个文本序列的表示 (类似 Bert 用 [cls] token)
-            6. 通过 `text_projection` 进行线性变换，得到最终的文本特征
+        Main steps:
+            1. Convert input text to token embeddings
+            2. Add trainable positional encoding
+            3. Encode text using the Transformer
+            4. Normalize data using the LayerNorm layer
+            5. Use the EOT (End-of-Text) token's feature as the representation of the entire text sequence (similar to Bert's [cls] token)
+            6. Perform a linear transformation using `text_projection` to obtain the final text features
         """
-<<<<<<< HEAD
-        # 将输入文本转换为 token 嵌入
+        # Convert input text to token embeddings
         x = self.token_embedding(text).type(self.dtype)  # [num_classes, context_length, transformer_width]
-=======
-        # 将输入文本转换为 token 嵌入，形状为 [batch_size, n_ctx(上下文长度), transformer_width]
-        x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
-        # 加上可训练的位置编码，保留序列位置信息
+        # Add trainable positional encoding to retain sequence position information
         x = x + self.positional_embedding.type(self.dtype)
         
-        # 通过 Transformer 进行文本编码
-<<<<<<< HEAD
-        x = x.permute(1, 0, 2)  # 调整维度为 [context_length, num_classes, transformer_width] 以适配 Transformer
+        # Encode text using the Transformer
+        x = x.permute(1, 0, 2)  # Adjust dimensions to [context_length, num_classes, transformer_width] to fit the Transformer
         x, level_x_list = self.transformer(x)
-        x = x.permute(1, 0, 2)  # 还原维度为 [num_classes, context_length, transformer_width]
-        level_x_list = [x.permute(1, 0, 2) for x in level_x_list]  # 将每一层的输出还原维度为 [num_classes, context_length, transformer_width]
+        x = x.permute(1, 0, 2)  # Restore dimensions to [num_classes, context_length, transformer_width]
+        level_x_list = [x.permute(1, 0, 2) for x in level_x_list]  # Restore dimensions for each layer's output
         
-        # 通过 layerNorm 层归一化数据
+        # Normalize data using the LayerNorm layer
         x = self.ln_final(x).type(self.dtype)
-        level_x_list = [self.ln_final(x).type(self.dtype) for x in level_x_list]  # 对每一层的输出进行归一化
+        level_x_list = [self.ln_final(x).type(self.dtype) for x in level_x_list]  # Normalize each layer's output
 
-        # 使用 EOT (End-of-Text) token 对应的特征作为整个文本序列的表示 (类似 Bert 用 [cls] token)
+        # Use the EOT (End-of-Text) token's feature as the representation of the entire text sequence (similar to Bert's [cls] token)
         EOT = x[torch.arange(x.shape[0]), text.argmax(dim=-1)]  
-        level_EOT_list = [x[torch.arange(x.shape[0]), text.argmax(dim=-1)] for x in level_x_list]  # 对每一层的输出进行处理
+        level_EOT_list = [x[torch.arange(x.shape[0]), text.argmax(dim=-1)] for x in level_x_list]  # Process each layer's output
         
-        # 通过 `text_projection` 进行线性变换，得到最终的文本特征
+        # Perform a linear transformation using `text_projection` to obtain the final text features
         text_features  = EOT @ self.text_projection  
-        level_text_features_list = [EOT @ self.text_projection for EOT in level_EOT_list]  # 对每一层的输出进行线性变换
+        level_text_features_list = [EOT @ self.text_projection for EOT in level_EOT_list]  # Perform linear transformation for each layer's output
 
-        return text_features, level_text_features_list # [num_classes, embed_dim], [num_classes, transformer_width] * transformer_layers
-=======
-        x = x.permute(1, 0, 2)  # 调整维度为 [n_ctx, batch_size, transformer_width] 以适配 Transformer
-        x = self.transformer(x)
-        x = x.permute(1, 0, 2)  # 还原维度为 [batch_size, n_ctx, transformer_width]
-
-        # 通过 layerNorm 层归一化数据
-        x = self.ln_final(x).type(self.dtype)
-
-        # 使用 EOT (End-of-Text) token 对应的特征作为整个文本序列的表示 (类似 Bert 用 [cls] token)
-        EOT = x[torch.arange(x.shape[0]), text.argmax(dim=-1)]  
-
-        # 通过 `text_projection` 进行线性变换，得到最终的文本特征
-        text_features  = EOT @ self.text_projection  
-
-        return text_features
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
+        return text_features, level_text_features_list  # [num_classes, embed_dim], [num_classes, transformer_width] * transformer_layers
 
     def init_text_features(self, label_texts:list):
         """
-        提前提取好每个类别的文本特征，保存到 self.text_features 中。
+        Pre-extract text features for each class and save them to self.text_features.
         
-        参数：
-            - label_texts (list): 类别文本列表 | [num_classes] | ['pagoda', 'panda', ..., 'stegosaurus', 'stop_sign']
+        Parameters:
+            - label_texts (list): List of class texts | [num_classes] | ['pagoda', 'panda', ..., 'stegosaurus', 'stop_sign']
         """
-        print("正在提取每个类别的文本特征，并保存到 self.text_features 中...")
-        with torch.no_grad():  # 关闭梯度计算
-            # tokenize 文本标签，转换为 token 嵌入
-            tokenized_texts = tokenize(label_texts, self.context_length) # [num_classes, context_length]
-            # 转移设备
-            tokenized_texts = tokenized_texts.to(self.device) # [num_classes, context_length]
-            # 提取文本特征
-            self.text_features = self.encode_text(tokenized_texts) # [num_classes, embed_dim]
-        print("文本特征提取完成！")
+        print("Extracting text features for each class and saving them to self.text_features...")
+        with torch.no_grad():  # Disable gradient computation
+            # Tokenize text labels and convert to token embeddings
+            tokenized_texts = tokenize(label_texts, self.context_length)  # [num_classes, context_length]
+            # Move to device
+            tokenized_texts = tokenized_texts.to(self.device)  # [num_classes, context_length]
+            # Extract text features
+            self.text_features = self.encode_text(tokenized_texts)  # [num_classes, embed_dim]
+        print("Text feature extraction completed!")
 
     def forward(self, image, return_feature=False):
         """
-        CLIP 前向传播。
+        CLIP forward propagation.
         
-        参数：
-<<<<<<< HEAD
-            - image(torch.Tensor): 输入图像，形状为 (batch_size, 3, height, width)
-=======
-            - image: 图像数据 | [batch, 3, 224, 224]
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
-            - return_feature (bool): 是否返回特征
+        Parameters:
+            - image(torch.Tensor): Input image, shape (batch_size, 3, height, width)
+            - return_feature (bool): Whether to return features
         
-        返回：
-            - output (dict): 输出结果 | 包含 'logits_per_image' 和 'logits_per_text' 两个键，对应图像和文本的相似度
-            - feature (dict): 特征 | 包含 'image' 和 'text' 两个键，对应图像和文本的特征
+        Returns:
+            - output (dict): Output results | Contains 'logits_per_image' and 'logits_per_text' keys, corresponding to image and text similarity
+            - feature (dict): Features | Contains 'image' and 'text' keys, corresponding to image and text features
         
-        主要步骤：
-            1. 提取文本、图像特征
-            2. 归一化特征向量
-            3. 计算 图像 和 文本 间的 余弦相似度
+        Main steps:
+            1. Extract text and image features
+            2. Normalize feature vectors
+            3. Compute cosine similarity between image and text
         """
         
-        # 提取图像特征
+        # Extract image features
         image_features = self.encode_image(image)
 
-        # 读取预加载好的文本特征
+        # Load preloaded text features
         text_features = self.text_features
 
-        # 归一化特征向量：沿着特征维度计算特征向量的模，并用特征向量除以模
+        # Normalize feature vectors: compute the norm along the feature dimension and divide the feature vector by the norm
         image_features = image_features / image_features.norm(dim=1, keepdim=True)
         text_features = text_features / text_features.norm(dim=1, keepdim=True)
 
-        # 计算 图像 和 文本 间的 余弦相似度
-        logit_scale = self.logit_scale.exp() # 温度参数 τ 的倒数
-        logits_per_image = logit_scale * image_features @ text_features.t() # image->text 相似度 | [batch, num_classes]
+        # Compute cosine similarity between image and text
+        logit_scale = self.logit_scale.exp()  # Inverse of the temperature parameter τ
+        logits_per_image = logit_scale * image_features @ text_features.t()  # image->text similarity | [batch, num_classes]
         
-        # 返回结果
+        # Return results
         if return_feature: 
             return logits_per_image, image_features
         else:
             return logits_per_image
-        
-        # 计算文本->图像的相似度
-        # logits_per_text = logits_per_image.t() # text->image 相似度
-        # self.output_logits = {
-        #     'logits_per_image': logits_per_image,
-        #     'logits_per_text': logits_per_text
-        # }
-        # self.output_featuer = {
-        #     'image': image_features,
-        #     'text': text_features
-        # }
-        # if return_feature: 
-        #     return self.output_logits, self.output_featuer
-        # else:
-        #     return self.output_logits
 
-    
+
     @staticmethod
     def build_model(cfg: dict, jit=False):
         """
-        从预训练模型的状态字典 (state_dict / JIT) 构建 CLIP 模型。
+        Build the CLIP model from the state dictionary (state_dict / JIT) of the pretrained model.
         
-        参数：
-            - cfg (dict): 配置
+        Parameters:
+            - cfg (dict): Configuration
 
-        返回：
-            - model (CLIP): 构建的 CLIP 模型
+        Returns:
+            - model (CLIP): The constructed CLIP model
 
-        主要步骤：
-            1. 下载预训练模型的参数
-            2. 读取预训练模型的参数，并实例化 CLIP 模型
-                1. 如果加载为 JIT 模型，则直接返回 JIT 模型
-                2. 如果加载为普通模型，则根据模型参数构建 CLIP 模型
-            3. 返回 eval 模式下的 CLIP 模型
+        Main steps:
+            1. Download the pretrained model parameters
+            2. Load the pretrained model parameters and instantiate the CLIP model
+                1. If loaded as a JIT model, return the JIT model directly
+                2. If loaded as a regular model, construct the CLIP model based on the model parameters
+            3. Return the CLIP model in eval mode
             
         """
-        # ---下载预训练模型的参数---
-        # 从配置中读取 预训练模型名称 和 预训练权重下载保存路径
-        pretrained_name = cfg.MODEL.pretrained  # 例如 'RN50'、'ViT-B/32' 等
+        # ---Download the pretrained model parameters---
+        # Read the pretrained model name and the download/save path for pretrained weights from the configuration
+        pretrained_name = cfg.MODEL.pretrained  # e.g., 'RN50', 'ViT-B/32', etc.
         device = 'cuda' if cfg.USE_CUDA else 'cpu'
         
         download_root = cfg.MODEL.download_root \
-            if hasattr(cfg.MODEL, 'download_root') else os.path.expanduser("~/.cache/clip")  # 预训练权重下载保存路径
+            if hasattr(cfg.MODEL, 'download_root') else os.path.expanduser("~/.cache/clip")  # Path to save pretrained weights
         
         if pretrained_name in _MODELS_URL:
             model_path = utils.download_weight(_MODELS_URL[pretrained_name], download_root)
@@ -375,23 +326,23 @@ class Clip(ModelBase):
         else:
             raise RuntimeError(f"Model {pretrained_name} not found; available models = {_MODELS_URL.keys()}")
         
-        # ---读取预训练模型的参数，并实例化 CLIP 模型---
+        # ---Load the pretrained model parameters and instantiate the CLIP model---
         with open(model_path, 'rb') as opened_file:
-            try: # 首先尝试加载为 JIT 模型
-                jit_model = torch.jit.load(opened_file, map_location="cpu").eval() # eval 模式
+            try: # First, try loading as a JIT model
+                jit_model = torch.jit.load(opened_file, map_location="cpu").eval() # eval mode
                 state_dict = None
             except RuntimeError:
                 warnings.warn(f"File {model_path} is not a JIT archive. Loading as a state dict instead")
-                # 如果加载失败，则尝试加载为普通模型
+                # If loading fails, try loading as a regular model
                 state_dict = torch.load(opened_file, map_location="cpu")
 
         if jit: 
-            # ---加载为 JIT 模型 ---
-            jit_model = utils.patch_jit_model(jit_model, device=device)  # 修复 JIT 模型的设备和 dtype 信息
+            # ---Load as a JIT model---
+            jit_model = utils.patch_jit_model(jit_model, device=device)  # Fix device and dtype information for the JIT model
             return jit_model 
         else:
-            # ---加载为普通模型---
-            state_dict = state_dict or jit_model.state_dict()  # 如果没有 state_dict，则使用 JIT 模型的 state_dict
+            # ---Load as a regular model---
+            state_dict = state_dict or jit_model.state_dict()  # If no state_dict, use the JIT model's state_dict
             vit = "visual.proj" in state_dict
             if vit: # ViT
                 vision_width = state_dict["visual.conv1.weight"].shape[0]
@@ -415,7 +366,7 @@ class Clip(ModelBase):
             transformer_heads = transformer_width // 64
             transformer_layers = len(set(k.split(".")[2] for k in state_dict if k.startswith("transformer.resblocks")))
 
-            # ---实例化 CLIP 模型---
+            # ---Instantiate the CLIP model---
             model = Clip(
                 cfg,
                 embed_dim,
@@ -423,40 +374,32 @@ class Clip(ModelBase):
                 context_length, vocab_size, transformer_width, transformer_heads, transformer_layers
             )
 
-            # ---将预训练模型的参数加载到 CLIP 模型中---
+            # ---Load the pretrained model parameters into the CLIP model---
             for key in ["input_resolution", "context_length", "vocab_size"]:
                 if key in state_dict:
                     del state_dict[key]
-<<<<<<< HEAD
-            convert_weights(model) # clip 默认使用 fp16 精度
+            convert_weights(model) # CLIP defaults to using fp16 precision
             model.load_state_dict(state_dict)
 
-            # 根据 cfg 的精度要求，转换模型的精度
+            # Convert the model's precision based on the cfg requirements
             if cfg.TRAINER.PREC == 'fp32':
                 model.float()
             elif cfg.TRAINER.PREC == 'fp16':
                 pass
             else:
-                raise NotImplementedError(f"Clip 没有实现该精度转换方法：{cfg.TRAINER.PREC}")
+                raise NotImplementedError(f"CLIP does not support this precision conversion method: {cfg.TRAINER.PREC}")
 
-=======
-            convert_weights(model)
-            model.load_state_dict(state_dict)
-
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
-            # 返回 eval 模式下的 CLIP 模型
+            # Return the CLIP model in eval mode
             return model.eval()
 
 
-
-
-# ------以下为 CLIP 模型的子模块或辅助函数的实现------
+# ------Below are the implementations of CLIP model submodules or helper functions------
 
 def build_attention_mask(context_length):
     """
-    构建 因果注意力掩码 (causal attention mask) 
-        - 上三角矩阵
-        - 仅允许 Transformer 看到 当前 Token 及其之前的 Token，防止未来信息泄露。
+    Build a causal attention mask 
+        - Upper triangular matrix
+        - Only allows the Transformer to see the current token and its preceding tokens, preventing future information leakage.
     """
     mask = torch.empty(context_length, context_length)
     mask.fill_(float("-inf"))
@@ -465,73 +408,53 @@ def build_attention_mask(context_length):
 
 def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: bool = False) -> Union[torch.IntTensor, torch.LongTensor]:
     """
-    对输入的字符串或字符串列表进行分词（tokenize），并返回其 token 表示。
+    Tokenize the input string or list of strings and return their token representations.
 
-    参数：
+    Parameters:
     ----------
     texts : Union[str, List[str]]
-<<<<<<< HEAD
-        需要进行分词的文本，可以是 单个字符串 或 字符串列表。
-=======
-        需要进行分词的文本，可以是单个字符串或字符串列表。
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
+        The text(s) to be tokenized, can be a single string or a list of strings.
 
     context_length : int
-        设定的上下文长度（context length），所有 CLIP 模型都使用 77 作为默认上下文长度。
+        The context length to be used (default is 77 for all CLIP models).
 
-    返回：
+    Returns:
     -------
     torch.LongTensor
-<<<<<<< HEAD
-        一个二维张量，包含文本的 token 结果，形状为 (num_texts, context_length)。
-=======
-        一个二维张量，包含文本的 token 结果，形状为 (文本数量，context_length)。
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
+        A 2D tensor containing the tokenized results of the text, with shape (num_texts, context_length).
     """
-    # 如果输入是单个字符串，则转换为列表，确保后续处理统一
+    # If the input is a single string, convert it to a list to ensure uniform processing
     if isinstance(texts, str):
         texts = [texts]
-    # 获取特殊 token：<|startoftext|>（SOT，文本起始标记） <|endoftext|>（EOT，文本结束标记）
+    # Get special tokens: <|startoftext|> (SOT, start of text marker) and <|endoftext|> (EOT, end of text marker)
     sot_token = _tokenizer.encoder["<|startoftext|>"]
     eot_token = _tokenizer.encoder["<|endoftext|>"]
-    # 对每个文本进行编码，并添加起始和结束标记 | 文本 "Hello world" -> [sot_token, tokenized("Hello"), tokenized("world"), eot_token]
-<<<<<<< HEAD
+    # Encode each text and add start and end markers | Text "Hello world" -> [sot_token, tokenized("Hello"), tokenized("world"), eot_token]
     all_tokens = []
     for text in texts:
-        text_token = _tokenizer.encode(text) # text的token列表
-        token = [sot_token] + text_token + [eot_token]  # 列表相加
+        text_token = _tokenizer.encode(text) # Token list of the text
+        token = [sot_token] + text_token + [eot_token]  # Concatenate lists
         all_tokens.append(token)
     
-    # 创建一个形状为 (文本数量，context_length) 的张量，初始值为 0（填充用）
+    # Create a tensor of shape (number of texts, context_length) initialized with 0 (for padding)
     if version.parse(torch.__version__) < version.parse("1.8.0"):
         result = torch.zeros(len(all_tokens), context_length, dtype=torch.long) # shape: (num_texts, context_length)
-=======
-    all_tokens = [[sot_token] + _tokenizer.encode(text) + [eot_token] for text in texts]
-    
-    # 创建一个形状为 (文本数量，context_length) 的张量，初始值为 0（填充用）
-    if version.parse(torch.__version__) < version.parse("1.8.0"):
-        result = torch.zeros(len(all_tokens), context_length, dtype=torch.long)
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
     else:
         result = torch.zeros(len(all_tokens), context_length, dtype=torch.int)
 
-    # 遍历所有 token 序列，将其填充到 `result` 张量中
+    # Iterate through all token sequences and pad them into the `result` tensor
     for i, tokens in enumerate(all_tokens):
-        # 如果 token 数量超过 context_length，则截断，或抛出错误
+        # If the number of tokens exceeds context_length, truncate or raise an error
         if len(tokens) > context_length:
             if truncate:
                 tokens = tokens[:context_length]
                 tokens[-1] = eot_token
             else:          
                 raise RuntimeError(f"Input {texts[i]} is too long for context length {context_length}")
-        # 将 tokens 填充到 result[i]，超出部分自动填充 0
+        # Fill tokens into result[i], with excess parts automatically padded with 0
         result[i, :len(tokens)] = torch.tensor(tokens)
 
-<<<<<<< HEAD
     return result # shape: (num_texts, context_length)
-=======
-    return result
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
 def convert_weights(model: nn.Module):
     """Convert applicable model parameters to fp16"""
@@ -562,7 +485,7 @@ class Bottleneck(nn.Module):
     def __init__(self, inplanes, planes, stride=1):
         super().__init__()
 
-        # all conv layers have stride 1. an avgpool is performed after the second convolution when stride > 1
+        # All conv layers have stride 1. An avgpool is performed after the second convolution when stride > 1
         self.conv1 = nn.Conv2d(inplanes, planes, 1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
         self.relu1 = nn.ReLU(inplace=True)
@@ -581,7 +504,7 @@ class Bottleneck(nn.Module):
         self.stride = stride
 
         if stride > 1 or inplanes != planes * Bottleneck.expansion:
-            # downsampling layer is prepended with an avgpool, and the subsequent convolution has stride 1
+            # Downsampling layer is prepended with an avgpool, and the subsequent convolution has stride 1
             self.downsample = nn.Sequential(OrderedDict([
                 ("-1", nn.AvgPool2d(stride)),
                 ("0", nn.Conv2d(inplanes, planes * self.expansion, 1, stride=1, bias=False)),
@@ -644,8 +567,8 @@ class ModifiedResNet(nn.Module):
     """
     A ResNet class that is similar to torchvision's but contains the following changes:
     - There are now 3 "stem" convolutions as opposed to 1, with an average pool instead of a max pool.
-    - Performs anti-aliasing strided convolutions, where an avgpool is prepended to convolutions with stride > 1
-    - The final pooling layer is a QKV attention instead of an average pool
+    - Performs anti-aliasing strided convolutions, where an avgpool is prepended to convolutions with stride > 1.
+    - The final pooling layer is a QKV attention instead of an average pool.
     """
 
     def __init__(self, layers, output_dim, heads, input_resolution=224, width=64):
@@ -713,13 +636,13 @@ class LayerNorm(nn.LayerNorm):
 
 
 class QuickGELU(nn.Module):
-    """QuickGELU: 通过 x * sigmoid(1.702 * x) 近似 GELU，计算更快，适用于大规模 Transformer 任务"""
+    """QuickGELU: Approximates GELU using x * sigmoid(1.702 * x) for faster computation, suitable for large-scale Transformer tasks."""
     def forward(self, x: torch.Tensor):
         return x * torch.sigmoid(1.702 * x)
 
 
 class ResidualAttentionBlock(nn.Module):
-    """残差注意力模块"""
+    """Residual Attention Block."""
     def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
         super().__init__()
 
@@ -733,24 +656,22 @@ class ResidualAttentionBlock(nn.Module):
         self.ln_2 = LayerNorm(d_model)
         self.attn_mask = attn_mask
 
-    # def attention(self, x: torch.Tensor):
     def attention(self, x: torch.Tensor, attention_maps=None):
         self.attn_mask = self.attn_mask.to(dtype=x.dtype, device=x.device) if self.attn_mask is not None else None
         
-        if attention_maps is None:  # 不可视化注意力热图
+        if attention_maps is None:  # Do not visualize attention heatmaps
             output = self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask)[0]
             return output
-        else:  # 可视化注意力热图
+        else:  # Visualize attention heatmaps
             output, attn_weights = self.attn(x, x, x, need_weights=True, attn_mask=self.attn_mask)
         
-        # ---用于可视化注意力热图---
+        # ---Used for visualizing attention heatmaps---
         if attention_maps is not None:
             attention_maps.append(attn_weights)
-        # ---------------------------------
+        # ---------------------------------------------
 
         return output
     
-    # def forward(self, x: torch.Tensor):
     def forward(self, x: torch.Tensor, attention_maps=None):
         x = x + self.attention(self.ln_1(x), attention_maps)
         x = x + self.mlp(self.ln_2(x))
@@ -758,22 +679,13 @@ class ResidualAttentionBlock(nn.Module):
 
 
 class Transformer(nn.Module):
-    """残差注意力网络"""
+    """Residual Attention Network."""
     def __init__(self, width: int, layers: int, heads: int, attn_mask: torch.Tensor = None):
         super().__init__()
-        self.width = width # Transformer 的隐藏层维度 - 决定了 query/key/value 向量的维度
-        self.layers = layers # Transformer 的层数 - 堆叠的残差注意力块（ResidualAttentionBlock）的数量
+        self.width = width  # Hidden layer dimension of the Transformer - determines the dimensions of query/key/value vectors.
+        self.layers = layers  # Number of Transformer layers - number of stacked ResidualAttentionBlock layers.
         self.resblocks = nn.Sequential(*[ResidualAttentionBlock(width, heads, attn_mask) for _ in range(layers)])
 
-<<<<<<< HEAD
-    # def forward(self, x: torch.Tensor, attention_maps=None):
-    #     if attention_maps is None:
-    #         return self.resblocks(x)
-    #     else:
-    #         for block in self.resblocks:
-    #             x = block(x, attention_maps)
-    #         return x
-    
     def forward(self, x: torch.Tensor, attention_maps=None):
         if attention_maps is None:
             level_list = []
@@ -787,47 +699,35 @@ class Transformer(nn.Module):
                 x = block(x, attention_maps)
                 level_list.append(x.clone())
             return x, level_list
-=======
-    def forward(self, x: torch.Tensor, attention_maps=None):
-        if attention_maps is None:
-            return self.resblocks(x)
-        else:
-            for block in self.resblocks:
-                x = block(x, attention_maps)
-            return x
 
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
 class VisionTransformer(nn.Module):
     def __init__(self, input_resolution: int, patch_size: int, width: int, layers: int, heads: int, output_dim: int):
         """
-        视觉 Transformer (ViT) 结构，适用于图像分类等任务。
+        Vision Transformer (ViT) structure, suitable for image classification tasks.
 
-        参数:
-        - input_resolution (int): 输入图像的分辨率 (例如 224 表示 224x224)。
-        - patch_size (int): 每个 patch 的大小 (例如 16 表示 16x16)。
-        - width (int): Transformer 的隐藏层维度 (即 embedding 维度)。
-        - layers (int): Transformer 的层数 (encoder 块的数量)。
-        - heads (int): 多头注意力机制中的头数。
-        - output_dim (int): 最终输出的特征维度。
+        Parameters:
+        - input_resolution (int): Input image resolution (e.g., 224 for 224x224).
+        - patch_size (int): Size of each patch (e.g., 16 for 16x16).
+        - width (int): Hidden layer dimension of the Transformer (i.e., embedding dimension).
+        - layers (int): Number of Transformer layers (number of encoder blocks).
+        - heads (int): Number of heads in the multi-head attention mechanism.
+        - output_dim (int): Final output feature dimension.
         """
         super().__init__()
-        # 保存输入分辨率和输出维度
-        self.input_resolution = input_resolution  # 输入图像的分辨率，例如 224×224
+        # Save input resolution and output dimension
+        self.input_resolution = input_resolution  # Input image resolution, e.g., 224×224
         self.output_dim = output_dim  
-<<<<<<< HEAD
-        self.patch_size = patch_size  # 每个 patch 的大小，例如 16×16
-=======
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
+        self.patch_size = patch_size  # Size of each patch, e.g., 16×16
         
-        # **卷积层：将输入图像转换为 patch embedding**
-        # 这里使用一个 2D 卷积层，类似于 ViT 直接将图像分割为 patch，并进行 embedding
+        # **Convolutional Layer: Convert input image to patch embedding**
+        # Here, a 2D convolutional layer is used, similar to ViT, to split the image into patches and perform embedding.
         self.conv1 = nn.Conv2d(
-            in_channels=3,      # 输入通道数，RGB 图像为 3
-            out_channels=width, # 输出通道数，即 embedding 维度，即 Transformer 的 隐藏层维度
-            kernel_size=patch_size, # patch 大小，例如 16×16
-            stride=patch_size,   # 步长等于 patch 大小，相当于划分成不重叠的 patch
-            bias=False          # 不使用偏置
+            in_channels=3,      # Number of input channels, RGB image has 3 channels.
+            out_channels=width, # Number of output channels, i.e., embedding dimension, i.e., hidden layer dimension of the Transformer.
+            kernel_size=patch_size, # Patch size, e.g., 16×16.
+            stride=patch_size,   # Stride equal to patch size, effectively splitting into non-overlapping patches.
+            bias=False          # No bias used.
         )
 
         scale = width ** -0.5
@@ -842,46 +742,43 @@ class VisionTransformer(nn.Module):
 
     def forward(self, x: torch.Tensor, attention_maps=None):
         """
-        前向传播
-        参数:
-        - x (Tensor): 输入的图像张量，形状为 (batch_size, 3, input_resolution, input_resolution)
-        - attention_maps(List): 用来记录注意力热图，可视化
-        返回:
-        - x (Tensor): 处理后的特征向量，形状为 (batch_size, output_dim)
+        Forward pass.
+
+        Parameters:
+        - x (Tensor): Input image tensor, shape (batch_size, 3, input_resolution, input_resolution).
+        - attention_maps (List): Used to record attention heatmaps for visualization.
+
+        Returns:
+        - x (Tensor): Processed feature vector, shape (batch_size, output_dim).
         """
-        # **1. Patch Embedding：将输入图像转换为 patch 级别的 token**
+        # **1. Patch Embedding: Convert input image to patch-level tokens**
         x = self.conv1(x)  # shape = [*, width, grid, grid]
         
-        # **2. 调整形状**
+        # **2. Reshape**
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
         
-        # **3. 拼接 x 和 class token**
-        # 利用自动广播扩展为 batchsize 个 class token
+        # **3. Concatenate x and class token**
+        # Use broadcasting to expand to batchsize class tokens.
         batch_class_tokens = self.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], 
                                                                             dtype=x.dtype, device=x.device)
-        x = torch.cat([batch_class_tokens, x], dim=1)  # 形状变为 (batch_size, patch_num + 1, width)
+        x = torch.cat([batch_class_tokens, x], dim=1)  # Shape becomes (batch_size, patch_num + 1, width).
         
-        # **4. 加入位置编码**
+        # **4. Add positional encoding**
         x = x + self.positional_embedding.to(x.dtype)
         
-        x = self.ln_pre(x)  # LN
+        x = self.ln_pre(x)  # LayerNorm
 
-        # **5. 进入 Transformer 编码器**
+        # **5. Pass through Transformer encoder**
         x = x.permute(1, 0, 2)  # (batch_size, seq_len, width) -> (seq_len, batch_size, width)
-<<<<<<< HEAD
         x, _ = self.transformer(x, attention_maps)
-=======
-        x = self.transformer(x, attention_maps)
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
         x = x.permute(1, 0, 2)  # (seq_len, batch_size, width) -> (batch_size, seq_len, width)
 
-        # **6. 取出 CLS token 表示整个视频序列的特征**
-        x = self.ln_post(x[:, 0, :])  # LN
+        # **6. Extract CLS token as the feature representation of the entire sequence**
+        x = self.ln_post(x[:, 0, :])  # LayerNorm
 
-        # **7. 进行投影 (如果启用)**
+        # **7. Perform projection (if enabled)**
         if self.proj is not None:
-            x = x @ self.proj  # 可学习的投影层
+            x = x @ self.proj  # Learnable projection layer.
 
-        return x  # 返回最终特征
-
+        return x  # Return final features.

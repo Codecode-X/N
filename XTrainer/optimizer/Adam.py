@@ -4,42 +4,42 @@ from torch.optim import Adam as TorchAdam
 
 @OPTIMIZER_REGISTRY.register()
 class Adam(TorchAdam):
-    """ Adam 优化器 """
+    """ Adam optimizer """
     def __init__(self, cfg, params=None):
         """
-        初始化 Adam 优化器
+        Initialize the Adam optimizer
 
-        参数:
-            - cfg (CfgNode): 配置
-            - params (iterable): 模型参数
+        Args:
+            - cfg (CfgNode): Configuration
+            - params (iterable): Model parameters
 
-        配置:
-            - 优化器默认参数
-                - OPTIMIZER.LR (float): 学习率
-                - OPTIMIZER.betas (Tuple[float, float]): Adam 的 beta 参数
-                - OPTIMIZER.eps (float): 除数中的常数，避免除零错误
-                - OPTIMIZER.weight_decay (float): 权重衰减
-            - 其他配置
-                - OPTIMIZER.amsgrad (bool): 是否使用 AMSGrad
+        Configuration:
+            - Default optimizer parameters
+                - OPTIMIZER.LR (float): Learning rate
+                - OPTIMIZER.betas (Tuple[float, float]): Beta parameters for Adam
+                - OPTIMIZER.eps (float): Constant for numerical stability
+                - OPTIMIZER.weight_decay (float): Weight decay
+            - Other configurations
+                - OPTIMIZER.amsgrad (bool): Whether to use AMSGrad
 
-        主要步骤:
-            - 读取配置
-            - 检查参数有效性
-            - 传入优化器的默认参数给父类
+        Main steps:
+            - Read configuration
+            - Validate parameters
+            - Pass default parameters to the parent class
 
         """
         
-        # ---读取配置---
-        # 读取优化器的默认参数
+        # ---Read configuration---
+        # Read default optimizer parameters
         lr = float(cfg.OPTIMIZER.LR)
         betas = tuple(map(float, cfg.OPTIMIZER.betas))
         eps = float(cfg.OPTIMIZER.eps)
         weight_decay = float(cfg.OPTIMIZER.weight_decay)
 
-        # 相关设置
-        amsgrad = cfg.OPTIMIZER.get("amsgrad", False) # 是否使用 AMSGrad
+        # Related settings
+        amsgrad = cfg.OPTIMIZER.get("amsgrad", False) # Whether to use AMSGrad
 
-        # ---检查参数有效性---
+        # ---Validate parameters---
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -49,12 +49,12 @@ class Adam(TorchAdam):
         if not 0.0 <= betas[1] < 1.0:
             raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
         
-        # ---传入优化器的默认参数给父类---
+        # ---Pass default parameters to the parent class---
         super().__init__(
             params,
             lr=lr,
             betas=betas,
             weight_decay=weight_decay,
             eps=eps,
-            amsgrad=amsgrad  # 是否使用 AMSGrad
+            amsgrad=amsgrad  # Whether to use AMSGrad
         )

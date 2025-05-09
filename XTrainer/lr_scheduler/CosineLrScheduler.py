@@ -4,24 +4,24 @@ from .build import LRSCHEDULER_REGISTRY
 @LRSCHEDULER_REGISTRY.register()
 class CosineLrScheduler(CosineAnnealingLR):
     """
-    余弦学习率调度器
-    CosineLrScheduler 是 torch.optim.lr_scheduler.CosineAnnealingLR 的封装类，
-    使用注册机制方便在项目中统一管理学习率调度器。
+    Cosine learning rate scheduler.
+    CosineLrScheduler is a wrapper class for torch.optim.lr_scheduler.CosineAnnealingLR,
+    using a registration mechanism to facilitate unified management of learning rate schedulers in the project.
 
-    参数:
-        - cfg (Config): 包含学习率调度器相关参数的配置对象。
-        - optimizer (torch.optim.Optimizer): 训练过程中使用的优化器。
+    Parameters:
+        - cfg (Config): Configuration object containing parameters related to the learning rate scheduler.
+        - optimizer (torch.optim.Optimizer): Optimizer used during training.
 
-    相关配置项:
-        - cfg.TRAIN.MAX_EPOCH (int): 训练的最大周期数。
+    Related configuration items:
+        - cfg.TRAIN.MAX_EPOCH (int): Maximum number of training epochs.
 
     """
     def __init__(self, cfg, optimizer):
-        T_max = int(cfg.TRAIN.MAX_EPOCH) # 最大周期
-        assert isinstance(T_max, int), f"T_max 必须是整数，但得到 {type(T_max)}"
-        assert T_max > 0, "T_max 必须大于 0"
+        T_max = int(cfg.TRAIN.MAX_EPOCH) # Maximum number of epochs
+        assert isinstance(T_max, int), f"T_max must be an integer, but got {type(T_max)}"
+        assert T_max > 0, "T_max must be greater than 0"
         
         super().__init__(
-            optimizer=optimizer, # 优化器
-            T_max=T_max, # 最大周期
+            optimizer=optimizer, # Optimizer
+            T_max=T_max, # Maximum number of epochs
         )

@@ -3,33 +3,33 @@ from torch.optim import SGD as TorchSGD
 
 @OPTIMIZER_REGISTRY.register()
 class SGD(TorchSGD):
-    """ Sgd 优化器 """
+    """ SGD Optimizer """
     def __init__(self, cfg, params=None):
         """
-        初始化 Sgd 优化器
+        Initialize the SGD optimizer
 
-        参数:
-            - cfg (CfgNode): 配置
-            - params (iterable): 模型参数
+        Args:
+            - cfg (CfgNode): Configuration
+            - params (iterable): Model parameters
 
-        配置:
-            - 优化器默认参数
-                - OPTIMIZER.LR (float): 学习率
-                - OPTIMIZER.momentum (float): 动量
-                - OPTIMIZER.weight_decay (float): 权重衰减
-                - OPTIMIZER.dampening (float): 阻尼
-                - OPTIMIZER.nesterov (bool): 是否使用 Nesterov 动量
+        Configuration:
+            - Default optimizer parameters
+                - OPTIMIZER.LR (float): Learning rate
+                - OPTIMIZER.momentum (float): Momentum
+                - OPTIMIZER.weight_decay (float): Weight decay
+                - OPTIMIZER.dampening (float): Dampening
+                - OPTIMIZER.nesterov (bool): Whether to use Nesterov momentum
         """
         
-        # ---读取配置---
-        # 读取优化器的默认参数
+        # ---Read configuration---
+        # Read default parameters for the optimizer
         lr = float(cfg.OPTIMIZER.LR)
         momentum = float(cfg.OPTIMIZER.momentum)
         weight_decay = float(cfg.OPTIMIZER.weight_decay)
         dampening = float(cfg.OPTIMIZER.dampening)
         nesterov = bool(cfg.OPTIMIZER.nesterov)
 
-        # ---检查参数有效性---
+        # ---Check parameter validity---
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= momentum:
@@ -37,12 +37,12 @@ class SGD(TorchSGD):
         if not 0.0 <= dampening:
             raise ValueError("Invalid dampening value: {}".format(dampening))
         
-        # ---传入优化器的默认参数给父类---
+        # ---Pass default parameters to the parent class---
         super().__init__(
             params,
             lr=lr,
             momentum=momentum,
             weight_decay=weight_decay,
             dampening=dampening,
-            nesterov=nesterov  # 是否使用 Nesterov 动量
+            nesterov=nesterov  # Whether to use Nesterov momentum
         )

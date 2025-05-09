@@ -4,27 +4,27 @@ from .build import LRSCHEDULER_REGISTRY
 @LRSCHEDULER_REGISTRY.register()
 class MultiStepLrScheduler(MultiStepLR):
     """
-    多步学习率调度器
-    MultiStepLrScheduler 是 torch.optim.lr_scheduler.MultiStepLR 的封装类，
-    使用注册机制方便在项目中统一管理学习率调度器。
+    Multi-step learning rate scheduler.
+    MultiStepLrScheduler is a wrapper class for torch.optim.lr_scheduler.MultiStepLR,
+    using a registration mechanism to facilitate unified management of learning rate schedulers in the project.
 
-    参数:
-        - cfg (Config): 包含学习率调度器相关参数的配置对象。
-        - optimizer (torch.optim.Optimizer): 训练过程中使用的优化器。
+    Parameters:
+        - cfg (Config): Configuration object containing parameters related to the learning rate scheduler.
+        - optimizer (torch.optim.Optimizer): Optimizer used during training.
 
-    相关配置项:
-        - cfg.LR_SCHEDULER.MILESTONES(list<int>): 学习率下降的周期数。
-        - cfg.LR_SCHEDULER.GAMMA(float): 学习率衰减率。
+    Related configuration items:
+        - cfg.LR_SCHEDULER.MILESTONES(list<int>): Epochs at which the learning rate decreases.
+        - cfg.LR_SCHEDULER.GAMMA(float): Learning rate decay factor.
     """
     def __init__(self, cfg, optimizer):
 
-        milestones = list(map(int, cfg.LR_SCHEDULER.MILESTONES))  # 学习率下降的周期数
-        assert isinstance(milestones, list), f"milestones 必须是列表，但得到 {type(milestones)}"
-        assert len(milestones) > 0, "milestones 列表不能为空"   
-        assert all(isinstance(i, int) for i in milestones), "milestones 必须是整数列表"
+        milestones = list(map(int, cfg.LR_SCHEDULER.MILESTONES))  # Epochs at which the learning rate decreases
+        assert isinstance(milestones, list), f"milestones must be a list, but got {type(milestones)}"
+        assert len(milestones) > 0, "milestones list cannot be empty"   
+        assert all(isinstance(i, int) for i in milestones), "milestones must be a list of integers"
 
         super().__init__(
             optimizer=optimizer,
-            milestones=milestones, # 学习率下降的周期数
-            gamma=float(cfg.LR_SCHEDULER.GAMMA) # 衰减率
+            milestones=milestones, # Epochs at which the learning rate decreases
+            gamma=float(cfg.LR_SCHEDULER.GAMMA) # Decay factor
         )

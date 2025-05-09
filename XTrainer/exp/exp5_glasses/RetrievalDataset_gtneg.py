@@ -17,20 +17,20 @@ class RetrievalNegGtDataset(Dataset):
         self.cfg = cfg
         self.pos_csv_path = cfg['pos_csv_path'] # COCO_val_retrieval.csv
         self.negpos_csv_path = cfg['negpos_csv_path'] # COCO_val_negated_retrieval_llama3.1_rephrased_affneg_true.csv
-        self.data = [] # 在_preprocess_features()中填充 | [{'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'img_path': img_path}), ...]
+        self.data = [] # Filled in _preprocess_features() | [{'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'img_path': img_path}), ...]
         self._preprocess_features()
         
     def _preprocess_features(self):
         """
         Preprocess and cache all image and text features
-            - 如果有预处理数据文件，则直接加载
-            - 如果没有则提取，并保存预处理数据文件，下次直接加载
+            - If there is a preprocessed data file, load it directly
+            - If not, extract features, save the preprocessed data file, and load it next time
         """
         # Create cache file path based on CSV path
         cache_path = f"RetrievalNegGtDataset_cache.pt"
         # Check if cache file exists
         if os.path.exists(cache_path):
-            print(f"正在加载Retrieval-gtNegObj数据集 cache: {cache_path}...")
+            print(f"Loading Retrieval-gtNegObj dataset cache: {cache_path}...")
             self.data = torch.load(cache_path, weights_only=False)
             print(f"Loaded {len(self.data)} samples from cache")
             return
@@ -54,11 +54,11 @@ class RetrievalNegGtDataset(Dataset):
             np_row = np_by_id[img_id]
             p_row = p_by_id[img_id]
             
-            np_captions = eval(np_row['captions']) # 对应 negpos_csv
-            p_captions = eval(p_row['captions']) # 对应 pos_csv
+            np_captions = eval(np_row['captions']) # Corresponding to negpos_csv
+            p_captions = eval(p_row['captions']) # Corresponding to pos_csv
             
             neg_object_list = eval(np_row['negative_objects'])
-            neg_objs_list = extract_objs_features(neg_object_list) # 提取 neg_object_list 中的每个对象的文本特征 | [num_objs, embed_dim]
+            neg_objs_list = extract_objs_features(neg_object_list) # Extract text features for each object in neg_object_list | [num_objs, embed_dim]
 
             for np_cap, p_cap in zip(np_captions, p_captions):
                 # print(f"Processing image_id: {img_id}, np_cap: {np_cap}, p_cap: {p_cap}")
@@ -69,7 +69,7 @@ class RetrievalNegGtDataset(Dataset):
                 I = extract_img_features(image_path=np_row['filepath'])
                 I = torch.tensor(I, dtype=self.cfg['dtype']) # [embed_dim]
                 
-                # 求候选列表neg_objs_list中每个neg_obj与h的余弦相似度, 相似度最大的neg_obj为相应的被否定对象
+                # Compute cosine similarity between each neg_obj in neg_objs_list and h, select the neg_obj with the highest similarity as the corresponding negated object
                 biggest_sim = -float('inf')
                 correct_neg_obj, correct_neg_obj_str = None, None
                 for i, neg_obj in enumerate(neg_objs_list):
@@ -78,10 +78,10 @@ class RetrievalNegGtDataset(Dataset):
                     if sim > biggest_sim:
                         biggest_sim = sim
                         correct_neg_obj = neg_obj
-                        correct_neg_obj_str = neg_object_list[i] # 对应的 neg_object
+                        correct_neg_obj_str = neg_object_list[i] # Corresponding neg_object
                 
-                if correct_neg_obj is None: # 无否定对象
-                    correct_neg_obj = torch.zeros_like(h) # 全0向量-torch.all(correct_neg_obj == 0)
+                if correct_neg_obj is None: # No negated object
+                    correct_neg_obj = torch.zeros_like(h) # Zero vector - torch.all(correct_neg_obj == 0)
                 
                 # print(f"img_id: {img_id}, np_cap: {np_cap}, p_cap: {p_cap}, correct_neg_obj_str: {correct_neg_obj_str}, biggest_sim: {biggest_sim}")
                 self.data.append({'I': I, 'h': h, 'level_h_list': level_h_list, 'l_pos': l_pos, 'neg_obj': correct_neg_obj, 'img_path': img_path, 'img_id': img_id})
@@ -96,65 +96,65 @@ class RetrievalNegGtDataset(Dataset):
     
     def __getitem__(self, idx):
         return {
-            'I': self.data[idx]['I'], # 图像特征 [embed_dim]
-            'h': self.data[idx]['h'], # CLIP文本编码器的输出文本特征(EOS特征)
-            'level_h_list': torch.stack([torch.tensor(l, dtype=self.cfg['dtype']) for l in self.data[idx]['level_h_list']]),  # CLIP文本编码器每一层的EOS特征
+            'I': self.data[idx]['I'], # Image features [embed_dim]
+            'h': self.data[idx]['h'], # Text features output by CLIP text encoder (EOS features)
+            'level_h_list': torch.stack([torch.tensor(l, dtype=self.cfg['dtype']) for l in self.data[idx]['level_h_list']]),  # EOS features from each layer of the CLIP text encoder
             'l_pos': torch.tensor(self.data[idx]['l_pos'], dtype=self.cfg['dtype']),
             'neg_obj': self.data[idx]['neg_obj'].to(dtype=self.cfg['dtype']), # [num_objs, embed_dim]
             'img_path': self.data[idx]['img_path'],
-            'img_id': self.data[idx]['img_id'] # 提取图像ID  
+            'img_id': self.data[idx]['img_id'] # Extract image ID  
         }
 
 
 def evaluate_model_retrieval_withGTNeg(model, data_loader, test_raw_clip=False, with_gt_neg=True, device='cuda'):
     """
-    Evaluate the model on the retrieval task. (h_neg直接给出GT，而不是通过Lens预测)
+    Evaluate the model on the retrieval task. (h_neg is directly provided as GT, not predicted by Lens)
     
-    参数：
-        - model: 待测试模型
-        - data_loader: 验证数据加载器
-        - device: 设备（CPU或GPU）
+    Parameters:
+        - model: The model to be tested
+        - data_loader: Validation data loader
+        - device: Device (CPU or GPU)
     
-    返回：
-        - results: 评估结果字典，包含文本到图像和图像到文本的召回率
-            - txt2img: 文本到图像的召回率 | txt2img[k]表示recall@k
-            - img2txt: 图像到文本的召回率 | img2txt[k]表示recall@k
-            - mean: 平均召回率 | mean[k]表示recall@k
+    Returns:
+        - results: Evaluation results dictionary, including text-to-image and image-to-text recall rates
+            - txt2img: Text-to-image recall rates | txt2img[k] represents recall@k
+            - img2txt: Image-to-text recall rates | img2txt[k] represents recall@k
+            - mean: Mean recall rates | mean[k] represents recall@k
     """
     # Metrics
     txt2img_recalls = {1: 0, 5: 0, 10: 0}
     img2txt_recalls = {1: 0, 5: 0, 10: 0}
     all_image_feats = []
-    all_text_feats  = [] # 原始CLIP最终输出的文本特征
-    all_neg_feats = [] # 被否定对象的文本特征
-    all_level_text_feats = [] # 原始CLIP每一层输出的文本特征列表
+    all_text_feats  = [] # Original CLIP final output text features
+    all_neg_feats = [] # Text features of negated objects
+    all_level_text_feats = [] # List of text features from each layer of the original CLIP
     caption_to_img  = []
     
     with torch.no_grad():
-       # 遍历每一个batch
+       # Iterate through each batch
         for batch in tqdm(data_loader, desc=f"TESTING", total=len(data_loader)):
-            caption_feats = batch['h'].to(device) # CLIP文本编码器最后一层的输出文本特征(EOS特征) [batch_size, embed_dim]
-            level_H_list = batch['level_h_list'].to(device) # [batch_size, num_layers, embed_dim] CLIP文本编码器每一层的EOS特征
-            l_pos = batch['l_pos'].to(device) # 肯定文本特征 [batch_size, embed_dim]
-            l_neg = batch['neg_obj'].to(device) # 被否定对象的文本特征 [batch_size, embed_dim]
-            image_feats = batch['I'].to(device) # 图像特征 [batch_size, embed_dim]
-            image_ids = batch['img_id'].to(device) # 图像ID [batch_size]
+            caption_feats = batch['h'].to(device) # Text features output by the last layer of the CLIP text encoder (EOS features) [batch_size, embed_dim]
+            level_H_list = batch['level_h_list'].to(device) # [batch_size, num_layers, embed_dim] EOS features from each layer of the CLIP text encoder
+            l_pos = batch['l_pos'].to(device) # Positive text features [batch_size, embed_dim]
+            l_neg = batch['neg_obj'].to(device) # Text features of negated objects [batch_size, embed_dim]
+            image_feats = batch['I'].to(device) # Image features [batch_size, embed_dim]
+            image_ids = batch['img_id'].to(device) # Image IDs [batch_size]
             caption_to_img.extend(image_ids.cpu().numpy()) # [N_caps]
             all_image_feats.extend(image_feats.cpu().numpy()) # [N_imgs, embed_dim]
             all_text_feats.extend(caption_feats.cpu().numpy()) # [N_caps, embed_dim]
             all_neg_feats.extend(l_neg.cpu().numpy()) # [N_caps, embed_dim]
             all_level_text_feats.extend(level_H_list.cpu().numpy()) # [N_caps, num_layers, embed_dim]
         
-        # caption_to_img 图像id转为索引 | [0, 0, 1, 1, 2, 2, ...]
+        # Convert caption_to_img image IDs to indices | [0, 0, 1, 1, 2, 2, ...]
         caption_to_img = torch.tensor(caption_to_img, dtype=torch.long)
         unique_img_ids, remapped_ids = torch.unique(caption_to_img, sorted=True, return_inverse=True)
         caption_to_img = remapped_ids.cpu().numpy()
         
-        N_imgs = len(unique_img_ids) # 图像数量
+        N_imgs = len(unique_img_ids) # Number of images
         N_caps = len(caption_to_img)
         print(f"N_imgs: {N_imgs}, N_caps: {N_caps}")
         
-        # Stack 成大 tensor
+        # Stack into large tensors
         all_image_feats = [torch.from_numpy(f) for f in all_image_feats]
         all_text_feats = [torch.from_numpy(f) for f in all_text_feats]
         all_neg_feats = [torch.from_numpy(f) for f in all_neg_feats]
@@ -165,28 +165,28 @@ def evaluate_model_retrieval_withGTNeg(model, data_loader, test_raw_clip=False, 
         l_neg = torch.stack(all_neg_feats, dim=0).to(device) # [N_caps, D]
         level_h = torch.stack(all_level_text_feats, dim=0).to(device) # [N_caps, L, D]
       
-        # ----TEST: 直接使用原始的clip输出计算----- 55.84%
+        # ----TEST: Directly use the original CLIP output for calculation----- 55.84%
         if test_raw_clip:
-            print("直接使用原始的clip输出计算:")
+            print("Directly using the original CLIP output for calculation:")
             I_norm = F.normalize(I_rep, p=2, dim=-1)
             h_norm = F.normalize(h, p=2, dim=-1)
             logit_scale = Clip_model.logit_scale.exp()
             scores_T2I = logit_scale * (h_norm @ I_norm.t())
             scores_I2T = scores_T2I.t()
         # ---------------------------------------
-        else: # 使用当前模型
+        else: # Use the current model
             model.eval()
             if with_gt_neg:
-                print("使用GT neg_obj作为被否定对象的文本特征:")
-                scores_T2I, scores_I2T = model(I_rep, h, level_h, l_neg) # 使用gt 57.74%
+                print("Using GT neg_obj as the text features of the negated object:")
+                scores_T2I, scores_I2T = model(I_rep, h, level_h, l_neg) # Using GT 57.74%
             else:
-                print("使用Lens预测的neg_obj作为被否定对象的文本特征:")
-                scores_T2I, scores_I2T = model(I_rep, h, level_h) # 使用lens预测h_neg 58.77%
+                print("Using Lens-predicted neg_obj as the text features of the negated object:")
+                scores_T2I, scores_I2T = model(I_rep, h, level_h) # Using Lens-predicted h_neg 58.77%
                 # zeor_neg = torch.zeros_like(l_neg)
-                # print(f"使用全0向量作为被否定对象的文本特征: ", zeor_neg)
-                # scores_T2I, scores_I2T = model(I_rep, h, level_h, zeor_neg) # 使用zero # 55.86%
+                # print(f"Using zero vector as the text features of the negated object: ", zeor_neg)
+                # scores_T2I, scores_I2T = model(I_rep, h, level_h, zeor_neg) # Using zero # 55.86%
         
-        # 将 scores_T2I 根据 caption_to_img 从 [N_caps, N_imgs] 还原为 [N_caps, N_imgs]
+        # Map scores_T2I from [N_caps, N_imgs] back to [N_caps, N_imgs] based on caption_to_img
         cti = torch.tensor(caption_to_img, dtype=torch.long, device=device)  # [N_caps]
         unique_vals = torch.unique(cti, sorted=True)
         first_idx = []
@@ -198,7 +198,7 @@ def evaluate_model_retrieval_withGTNeg(model, data_loader, test_raw_clip=False, 
         scores_T2I = scores_T2I[:, first_idx]  # [N_caps, N_imgs]
         scores_I2T = scores_T2I.t()
                 
-        # 评估 Recall@1/5/10  
+        # Evaluate Recall@1/5/10  
         txt2img_hits = {1:0, 5:0, 10:0}
         img2txt_hits = {1:0, 5:0, 10:0}
 
@@ -206,15 +206,15 @@ def evaluate_model_retrieval_withGTNeg(model, data_loader, test_raw_clip=False, 
         for cap_idx, gt_img in enumerate(caption_to_img):
             scores = scores_T2I[cap_idx] # [N_imgs=149]
 
-            # top-k 图像索引
+            # Top-k image indices
             neg_text_feats, topk = torch.topk(scores, k=10, largest=True)
             for k in txt2img_hits:
                 if gt_img in topk[:k]:
                     txt2img_hits[k] += 1
 
         # Image→Text
-        # 先构造每张图的 caption 索引列表
-        img2cap = [[] for _ in range(N_imgs)]  # 例如访问 img2cap[0]，得到图像 0 的所有 caption 索引
+        # First construct a list of caption indices for each image
+        img2cap = [[] for _ in range(N_imgs)]  # For example, accessing img2cap[0] gives all caption indices for image 0
         for cap_idx, img_idx in enumerate(caption_to_img):
             img2cap[img_idx].append(cap_idx)
 
@@ -224,11 +224,11 @@ def evaluate_model_retrieval_withGTNeg(model, data_loader, test_raw_clip=False, 
             scores = scores_I2T[img_idx] # [N_caps]
             neg_text_feats, topk = torch.topk(scores, k=10, largest=True)
             for k in img2txt_hits:
-                # 只要有任一 gt caption 在 top-k 中，就算命中
+                # As long as any gt caption is in the top-k, it counts as a hit
                 if any(cap in topk[:k] for cap in img2cap[img_idx]):
                     img2txt_hits[k] += 1
 
-    # 计算并打印百分比 
+    # Calculate and print percentages 
     total_caps = float(N_caps)
     total_imgs = float(N_imgs)
     txt2img_recalls = {k: txt2img_hits[k]/total_caps*100 for k in txt2img_hits}

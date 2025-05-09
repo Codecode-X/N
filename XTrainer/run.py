@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """ 
 使用示例:
 
@@ -28,9 +27,6 @@
     """
 
 from utils import load_yaml_config, setup_logger, set_random_seed
-=======
-from utils import load_yaml_config, setup_logger, set_random_seed, collect_env_info
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 from engine import build_trainer
 import argparse
 import torch
@@ -47,7 +43,6 @@ def main(args):
     assert args.train or args.eval_only, "训练和评估模式至少要设置一个！"
     assert args.train != args.eval_only, "训练和评估模式不能同时设置！" 
 
-<<<<<<< HEAD
     def modify_fn(cfg):
         """ 修改配置函数 """
         cfg = reset_cfg(cfg, args) # 根据args覆盖cfg
@@ -55,12 +50,6 @@ def main(args):
                                     datetime.datetime.now().strftime(r"%y-%m-%d-%H-%M-%S"))
     # 读取配置并修改    
     cfg = load_yaml_config(args.config_path, save=True, modify_fn=modify_fn) 
-=======
-    # 读取配置文件 并 设置输出目录
-    modify_fn = lambda cfg: setattr(cfg, "OUTPUT_DIR", osp.join(cfg.OUTPUT_DIR,  # 修正: 输出目录 = cfg.OUTPUT_DIR + 当前时间 
-                datetime.datetime.now().strftime(r"%y-%m-%d-%H-%M-%S"))) or cfg  # or cfg: 保证返回 cfg
-    cfg = load_yaml_config(args.config_path, save=True, modify_fn=modify_fn) # 读取配置
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
     
     # 设置日志记录器
     setup_logger(cfg.OUTPUT_DIR) # 设置日志记录器
@@ -82,7 +71,6 @@ def main(args):
 
     # 测试和训练
     if args.eval_only: # 测试模式
-<<<<<<< HEAD
         print("==========仅评估模式==========")
         assert args.model_dir != '', "评估模式下必须提供被评估模型所在目录！"
         if args.load_epoch > 0: # 加载指定训练轮数的模型
@@ -98,14 +86,6 @@ def main(args):
         return
     else: # 训练模式
         print("==========训练模式==========")
-=======
-        assert args.model_dir != '', "评估模式下必须提供被评估模型所在目录！"
-        assert args.load_epoch > 0, "评估模式下必须提供被评估模型的训练轮数！"
-        trainer.load_model(args.model_dir, epoch=args.load_epoch)
-        trainer.test()
-        return
-    else: # 训练模式
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
         trainer.train(start_epoch=0,
                       max_epoch=int(cfg.TRAIN.MAX_EPOCH))
 
@@ -120,22 +100,11 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=-1, help='随机种子')
 
     parser.add_argument("--resume", type=str, default="", help="检查点目录（从该目录恢复训练）")
-<<<<<<< HEAD
     parser.add_argument('--load_epoch', type=int, default=-1, help='加载的模型的训练轮数，0表示直接测试未训练的模型')
-=======
-    parser.add_argument('--load_epoch', type=int, default=0, help='加载的模型的训练轮数')
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894
 
     parser.add_argument('--train', action='store_true', help='设置为训练模式')
     parser.add_argument('--eval_only', action='store_true', help='设置为仅评估模式')
     parser.add_argument('--model_dir', type=str, default='', help='评估模型所在目录')
 
     args = parser.parse_args()
-<<<<<<< HEAD
     main(args)
-=======
-    main(args)
-
-    # python run.py --train --config_path config/defaults.yaml --output-dir output
-    # python run.py --train --config_path config/CoOpClip-VitB16-ep50-Caltech101-SGD.yaml --output-dir output
->>>>>>> 36fe5ca084dec516a944809acf4c7c0af6f81894

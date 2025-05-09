@@ -45,7 +45,7 @@ class RetrievalDataset(Dataset):
         
         # Check if cache file exists
         if os.path.exists(cache_path):
-            print(f"正在加载Retrieval数据集 cache: {cache_path} of {self.csv_path} ...")
+            print(f"Loading Retrieval dataset cache: {cache_path} of {self.csv_path} ...")
             cached_data = torch.load(cache_path, weights_only=False)
             self.image_features = cached_data['image_features']
             self.captions_feats = cached_data['captions_feats']
@@ -57,24 +57,24 @@ class RetrievalDataset(Dataset):
         print(f"Preprocessing dataset features of {self.csv_path} ...")
         
         self.image_features = []
-        self.captions_feats = [] # 原始CLIP输出的文本特征
-        self.level_H = [] # 原始CLIP每一层输出的图像特征列表
+        self.captions_feats = [] # Original CLIP text features
+        self.level_H = [] # List of image features from each layer of original CLIP
         self.image_ids = []
         
         for idx, row in tqdm(self.data.iterrows(), total=len(self.data)):
             img_path = row['filepath']
             image_id = row['image_id']
-            captions = eval(row['captions']) # 每个图片对应的数量不一致
+            captions = eval(row['captions']) # Number of captions per image may vary
 
-            # 提取图像特征
-            img_feature = extract_img_features(img_path) # 原始CLIP提取的图像特征
+            # Extract image features
+            img_feature = extract_img_features(img_path) # Image features extracted by original CLIP
             self.image_features.append(img_feature)
             self.image_ids.append(image_id)
 
             row_h = []
             row_level_h = []
             for caption in captions:
-                h, level_h_list = extract_sentence_features(caption) # 原始CLIP提取的文本特征 | h:[embed_dim], level_h_list:[embed_dim]*num_layers
+                h, level_h_list = extract_sentence_features(caption) # Text features extracted by original CLIP | h:[embed_dim], level_h_list:[embed_dim]*num_layers
                 text_tensor = torch.tensor(h, dtype=torch.float32).to(self.device)
                 row_h.append(text_tensor.cpu().numpy()) 
                 row_level_h.append(level_h_list)
@@ -122,23 +122,23 @@ def evaluate_model_retrieval(model, data_loader, test_raw_clip=False, device='cu
     """
     Evaluate the model on the retrieval task.
     
-    参数：
-        - model: 待测试模型
-        - data_loader: 验证数据加载器
-        - device: 设备（CPU或GPU）
+    Args:
+        - model: Model to be evaluated
+        - data_loader: Validation data loader
+        - device: Device (CPU or GPU)
     
-    返回：
-        - results: 评估结果字典，包含文本到图像和图像到文本的召回率
-            - txt2img: 文本到图像的召回率 | txt2img[k]表示recall@k
-            - img2txt: 图像到文本的召回率 | img2txt[k]表示recall@k
-            - mean: 平均召回率 | mean[k]表示recall@k
+    Returns:
+        - results: Dictionary of evaluation results, including recall rates for text-to-image and image-to-text retrieval
+            - txt2img: Text-to-image recall rates | txt2img[k] represents recall@k
+            - img2txt: Image-to-text recall rates | img2txt[k] represents recall@k
+            - mean: Mean recall rates | mean[k] represents recall@k
     """
     # Metrics
     txt2img_recalls = {1: 0, 5: 0, 10: 0}
     img2txt_recalls = {1: 0, 5: 0, 10: 0}
     all_image_feats = []
-    all_text_feats  = [] # 原始CLIP最终输出的文本特征
-    all_level_text_feats = [] # 原始CLIP每一层输出的文本特征列表
+    all_text_feats  = [] # Final text features from original CLIP
+    all_level_text_feats = [] # List of text features from each layer of original CLIP
     caption_to_img  = []
     
     with torch.no_grad():
@@ -150,41 +150,41 @@ def evaluate_model_retrieval(model, data_loader, test_raw_clip=False, device='cu
             """
             B = image_feats.size(0)
             for batch_idx in range(B):
-                # 把这张图 append 到 all_image_feats
+                # Append this image to all_image_feats
                 all_image_feats.append(image_feats[batch_idx].cpu())
-                img_idx = len(all_image_feats)-1 # 这张图在 list 中的新索引
-                # 把这张图的每条 caption 都收集起来，并记录它们对应 img_idx
+                img_idx = len(all_image_feats)-1 # New index of this image in the list
+                # Collect all captions for this image and record their corresponding img_idx
                 caps_b = caption_feats[batch_idx] # [num_caps_i, D]
                 levels_b = level_H_list[batch_idx] # [num_caps_i, L, D]
                 for cap_f, lvl_f in zip(caps_b, levels_b):
                     all_text_feats.append(cap_f.cpu())  # [D]
                     all_level_text_feats.append(lvl_f.cpu()) # [L, D]
-                    caption_to_img.append(img_idx) # 记录 caption 属于哪张图
+                    caption_to_img.append(img_idx) # Record which image the caption belongs to
 
-        # Stack 成大 tensor
+        # Stack into large tensors
         I = torch.stack(all_image_feats, dim=0).to(device)  # [N_imgs, D]
         h = torch.stack(all_text_feats, dim=0).to(device)  # [N_caps, D]
         level_h = torch.stack(all_level_text_feats, dim=0).to(device) # [N_caps, L, D]
         N_imgs, N_caps = I.size(0), h.size(0)
         
-        # 构造一对一的 I_rep，使其和 h/level_h 在 batch 维度上对齐
+        # Construct one-to-one I_rep to align with h/level_h in the batch dimension
         idx = torch.tensor(caption_to_img, dtype=torch.long, device=device) # [N_caps]
         I_rep = I[idx]  # [N_caps, D]
         
-        # ----TEST: 直接使用原始的clip输出计算-----
+        # ----TEST: Directly use raw CLIP output-----
         if test_raw_clip:
-            print("直接使用原始的clip输出计算:")
+            print("Directly using raw CLIP output:")
             I_norm = F.normalize(I_rep, p=2, dim=-1)
             h_norm = F.normalize(h, p=2, dim=-1)
             logit_scale = Clip_model.logit_scale.exp()
             scores_T2I = logit_scale * (h_norm @ I_norm.t())
             scores_I2T = scores_T2I.t()
-        # ---------------------------------------
-        else: # 使用当前模型
+        # -------------------------------------------
+        else: # Use the current model
             model.eval()
             scores_T2I, scores_I2T = model(I_rep, h, level_h)
         
-        # 将 scores_T2I 根据 caption_to_img 从 [N_caps, N_imgs] 还原为 [N_caps, N_imgs]
+        # Restore scores_T2I from [N_caps, N_imgs] to [N_caps, N_imgs] based on caption_to_img
         cti = torch.tensor(caption_to_img, dtype=torch.long, device=device)  # [N_caps]
         unique_vals = torch.unique(cti, sorted=True)
         first_idx = []
@@ -196,22 +196,22 @@ def evaluate_model_retrieval(model, data_loader, test_raw_clip=False, device='cu
         scores_T2I = scores_T2I[:, first_idx]  # [N_caps, N_imgs]
         scores_I2T = scores_T2I.t()
                 
-        # 评估 Recall@1/5/10  
+        # Evaluate Recall@1/5/10  
         txt2img_hits = {1:0, 5:0, 10:0}
         img2txt_hits = {1:0, 5:0, 10:0}
 
         # Text→Image
         for cap_idx, gt_img in enumerate(caption_to_img):
             scores = scores_T2I[cap_idx] # [N_imgs=149]
-            # top-k 图像索引
+            # Top-k image indices
             neg_text_feats, topk = torch.topk(scores, k=10, largest=True)
             for k in txt2img_hits:
                 if gt_img in topk[:k]:
                     txt2img_hits[k] += 1
 
         # Image→Text
-        # 先构造每张图的 caption 索引列表
-        img2cap = [[] for _ in range(N_imgs)]  # 例如访问 img2cap[0]，得到图像 0 的所有 caption 索引
+        # First construct a list of caption indices for each image
+        img2cap = [[] for _ in range(N_imgs)]  # For example, accessing img2cap[0] gives all caption indices for image 0
         for cap_idx, img_idx in enumerate(caption_to_img):
             img2cap[img_idx].append(cap_idx)
 
@@ -221,11 +221,11 @@ def evaluate_model_retrieval(model, data_loader, test_raw_clip=False, device='cu
             scores = scores_I2T[img_idx] # [N_caps]
             neg_text_feats, topk = torch.topk(scores, k=10, largest=True)
             for k in img2txt_hits:
-                # 只要有任一 gt caption 在 top-k 中，就算命中
+                # If any ground truth caption is in the top-k, count it as a hit
                 if any(cap in topk[:k] for cap in img2cap[img_idx]):
                     img2txt_hits[k] += 1
 
-    # 计算并打印百分比 
+    # Calculate and print percentages 
     total_caps = float(N_caps)
     total_imgs = float(N_imgs)
     txt2img_recalls = {k: txt2img_hits[k]/total_caps*100 for k in txt2img_hits}

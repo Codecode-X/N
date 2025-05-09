@@ -6,71 +6,71 @@ import torch.nn as nn
 OPTIMIZER_REGISTRY = Registry("OPTIMIZER")
 
 def build_optimizer(model, cfg, param_groups=None):
-    """构建优化器。
+    """Build optimizer.
     
-    参数：
-        - model (nn.Module): 模型。
-        - cfg (CfgNode): 配置。
-        - param_groups (Optional[List[Dict]]): 参数组 | 默认为 None。
+    Args:
+        - model (nn.Module): The model.
+        - cfg (CfgNode): Configuration.
+        - param_groups (Optional[List[Dict]]): Parameter groups | Default is None.
         
-    返回：
-        - 实例化后的优化器对象。
+    Returns:
+        - Instantiated optimizer object.
         
-    主要步骤：
-        1. 处理参数 model，确保 model 是 nn.Module 的实例且不是 nn.DataParallel 的实例。
-        2. 读取配置：
-            - OPTIMIZER.NAME (str): 优化器名称。
-            - OPTIMIZER.LR (float): 学习率。
-            - OPTIMIZER.STAGED_LR (bool): 是否采用分阶段学习率。
-                - OPTIMIZER.NEW_LAYERS (list): 新层列表。
-                - OPTIMIZER.BASE_LR_MULT (float): 基础层学习率缩放系数，一般设置小于 1。
-        3. 根据 staged_lr 配置创建待优化的模型参数组。
-        4. 实例化优化器。
-        5. 返回
+    Main steps:
+        1. Process the model parameter, ensuring the model is an instance of nn.Module and not an instance of nn.DataParallel.
+        2. Read configuration:
+            - OPTIMIZER.NAME (str): Optimizer name.
+            - OPTIMIZER.LR (float): Learning rate.
+            - OPTIMIZER.STAGED_LR (bool): Whether to use staged learning rates.
+                - OPTIMIZER.NEW_LAYERS (list): List of new layers.
+                - OPTIMIZER.BASE_LR_MULT (float): Base layer learning rate scaling factor, usually set to less than 1.
+        3. Create model parameter groups to optimize based on staged_lr configuration.
+        4. Instantiate the optimizer.
+        5. Return the optimizer.
     """
-    # ---处理参数 model，确保 model 是 nn.Module 的实例且不是 nn.DataParallel 的实例---
-    assert isinstance(model, nn.Module), "传入 build_optimizer() 中的 model 必须是 nn.Module 的实例"
+    # ---Process the model parameter, ensuring the model is an instance of nn.Module and not an instance of nn.DataParallel---
+    assert isinstance(model, nn.Module), "The model passed to build_optimizer() must be an instance of nn.Module"
     if isinstance(model, nn.DataParallel): model = model.module
 
-    # ---读取配置---
-    optimizer_name = cfg.OPTIMIZER.NAME  # 获取优化器名称
-    avai_optims = OPTIMIZER_REGISTRY.registered_names()  # 获取所有已经注册的优化器
-    check_availability(optimizer_name, avai_optims)  # 检查对应名称的优化器是否存在
+    # ---Read configuration---
+    optimizer_name = cfg.OPTIMIZER.NAME  # Get optimizer name
+    avai_optims = OPTIMIZER_REGISTRY.registered_names()  # Get all registered optimizers
+    check_availability(optimizer_name, avai_optims)  # Check if the optimizer with the given name exists
     if cfg.VERBOSE: print("Loading optimizer: {}".format(optimizer_name))
     
-    lr = float(cfg.OPTIMIZER.LR)  # 学习率
+    lr = float(cfg.OPTIMIZER.LR)  # Learning rate
 
-    staged_lr = cfg.OPTIMIZER.STAGED_LR if hasattr(cfg.OPTIMIZER, "STAGED_LR") else False  # 是否使用分阶段学习率
-    if staged_lr: # 如果使用分阶段学习率
+    staged_lr = cfg.OPTIMIZER.STAGED_LR if hasattr(cfg.OPTIMIZER, "STAGED_LR") else False  # Whether to use staged learning rates
+    if staged_lr: # If using staged learning rates
         if cfg.VERBOSE: print("Using staged_lr for optimizer.")
         base_lr_mult = float(cfg.OPTIMIZER.BASE_LR_MULT)
         new_layers = cfg.OPTIMIZER.NEW_LAYERS 
-        if new_layers is None: warnings.warn("new_layers 为 None (staged_lr 无效)")
-        if isinstance(new_layers, str): new_layers = [new_layers] # 如果 new_layers 是字符串，转换为列表    
+        if new_layers is None: warnings.warn("new_layers is None (staged_lr is ineffective)")
+        if isinstance(new_layers, str): new_layers = [new_layers] # If new_layers is a string, convert it to a list    
 
-    # ---根据 staged_lr 配置创建待优化的模型参数组---
-    # 如果提供了 param_groups, 就直接使用 param_groups 进行参数配置 (staged_lr 将被忽略)
+    # ---Create model parameter groups to optimize based on staged_lr configuration---
+    # If param_groups is provided, use param_groups directly for parameter configuration (staged_lr will be ignored)
     if param_groups is not None and staged_lr:  
-        warnings.warn("由于提供了 param_groups，staged_lr 将被忽略，如果需要使用 staged_lr，请自行绑定 param_groups。")
-    else: # 如果没有提供 param_groups，才根据 staged_lr 配置创建参数组
+        warnings.warn("Since param_groups is provided, staged_lr will be ignored. If you need staged_lr, please bind param_groups manually.")
+    else: # If param_groups is not provided, create parameter groups based on staged_lr configuration
         
-        if staged_lr: # 如果使用分阶段学习率
-            base_params = []  # 基础层的参数列表
-            new_params = []  # 新层的参数列表
-            for name, module in model.named_children():  # 遍历模型的子模块
-                if name in new_layers:  # 如果子模块在新层列表中，即该模块是新层，则从该模块中提取新参数
-                    new_params += [p for p in module.parameters()]  # 添加到新层参数列表
-                else: # 如果子模块不在新层列表中
-                    base_params += [p for p in module.parameters()]  # 添加到基础层参数列表
-            # 创建参数组
-            param_groups = [{"params": base_params, "lr": lr * base_lr_mult},  # 基础层中的参数及其学习率 (lr * base_lr_mult)
-                            {"params": new_params, "lr": lr}]  # 新层中参数的学习率 (lr)
+        if staged_lr: # If using staged learning rates
+            base_params = []  # List of base layer parameters
+            new_params = []  # List of new layer parameters
+            for name, module in model.named_children():  # Iterate through the model's submodules
+                if name in new_layers:  # If the submodule is in the new layer list, i.e., the module is a new layer, extract new parameters from the module
+                    new_params += [p for p in module.parameters()]  # Add to the new layer parameter list
+                else: # If the submodule is not in the new layer list
+                    base_params += [p for p in module.parameters()]  # Add to the base layer parameter list
+            # Create parameter groups
+            param_groups = [{"params": base_params, "lr": lr * base_lr_mult},  # Parameters in the base layer and their learning rate (lr * base_lr_mult)
+                            {"params": new_params, "lr": lr}]  # Learning rate for parameters in the new layer (lr)
                
-        else: # 如果不使用分阶段学习率 
-            param_groups = model.parameters()  # 直接使用模型参数作为参数组
+        else: # If not using staged learning rates 
+            param_groups = model.parameters()  # Directly use model parameters as parameter groups
                 
-    # ---实例化优化器---
+    # ---Instantiate the optimizer---
     optimizer = OPTIMIZER_REGISTRY.get(optimizer_name)(cfg, param_groups)
 
-    # ---返回实例化后的优化器对象---
+    # ---Return the instantiated optimizer object---
     return optimizer

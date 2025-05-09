@@ -6,14 +6,14 @@ sys.path.insert(0, parent_dir)
 from model import build_model
 from utils import load_yaml_config, standard_image_transform
 import torch
-from model.Clip import tokenize  # 分词器
+from model.Clip import tokenize  # Tokenizer
 import numpy as np
 from torchvision.transforms import Compose, ToTensor
 from PIL import Image
 
 def build_clip_model(config_path):
     """
-    构建CLIP模型
+    Build the CLIP model
     """
     cfg = load_yaml_config(config_path, save=None, modify_fn=None) 
     model = build_model(cfg)
@@ -21,7 +21,7 @@ def build_clip_model(config_path):
 
 def freeze_clip_model(model):
     """
-    冻结CLIP模型的参数
+    Freeze the parameters of the CLIP model
     """
     for param in model.parameters():
         param.requires_grad = False
@@ -30,20 +30,20 @@ def freeze_clip_model(model):
 
 config_path = "/root/NP-CLIP/XTrainer/config/CLS/CLS-Clip-VitB32-ep10-Caltech101-AdamW.yaml"
 
-Clip_model = freeze_clip_model(build_clip_model(config_path=config_path)) # 加载CLIP模型
+Clip_model = freeze_clip_model(build_clip_model(config_path=config_path)) # Load the CLIP model
 
 def extract_sentence_features(sentence:str):
     """
-    提取单个句子的CLIP文本特征
+    Extract CLIP text features for a single sentence
     
-    参数：
-        - sentence: 输入句子(str)
+    Args:
+        - sentence: Input sentence (str)
         
-    返回：
-        - text_features(torch.Tensor): CLIP文本编码器的输出文本特征(EOS特征) [embed_dim]
-        - level_text_features_list(list<torch.Tensor>): CLIP文本编码器每一层的EOS特征 [num_layers, embed_dim]
+    Returns:
+        - text_features (torch.Tensor): Text features from the CLIP text encoder (EOS feature) [embed_dim]
+        - level_text_features_list (list<torch.Tensor>): EOS features from each layer of the CLIP text encoder [num_layers, embed_dim]
     """
-    with torch.no_grad():  # 关闭梯度计算
+    with torch.no_grad():  # Disable gradient computation
         tokenized_text = tokenize(sentence) # [num_classes=1, context_length]
         tokenized_text = tokenized_text.to(Clip_model.device) # [num_classes=1, context_length]
         text_features, level_text_features_list = Clip_model.encode_text(tokenized_text) # [num_classes=1, embed_dim]*num_layers
@@ -53,15 +53,15 @@ def extract_sentence_features(sentence:str):
 
 def extract_all_sentence_features(sentences:list):
     """
-    批量并行提取多个句子的CLIP文本特征
+    Extract CLIP text features for multiple sentences in parallel
     
-    参数：
-        - sentences: 输入句子列表(list<str>)
+    Args:
+        - sentences: List of input sentences (list<str>)
         
-    返回：
-        - text_features(torch.Tensor): CLIP文本编码器的输出文本特征(EOS特征) [embed_dim]
+    Returns:
+        - text_features (torch.Tensor): Text features from the CLIP text encoder (EOS feature) [embed_dim]
     """
-    with torch.no_grad():  # 关闭梯度计算
+    with torch.no_grad():  # Disable gradient computation
         tokenized_texts = [tokenize(sentence) for sentence in sentences]
         tokenized_texts = torch.cat(tokenized_texts, dim=0)
         tokenized_texts = tokenized_texts.to(Clip_model.device)
@@ -73,13 +73,13 @@ def extract_all_sentence_features(sentences:list):
 
 def extract_objs_features(objs:list):
     """
-    提取单个句子的CLIP文本特征
+    Extract CLIP text features for a list of objects
     
-    参数：
-        - objs: 对象列表(list<str>)
+    Args:
+        - objs: List of objects (list<str>)
         
-    返回：
-        - objs_features(list<torch.Tensor>: CLIP文本编码器的输出文本特征(EOS特征) [embed_dim]*num_objs
+    Returns:
+        - objs_features (list<torch.Tensor>): Text features from the CLIP text encoder (EOS feature) [embed_dim]*num_objs
     """
     objs_features = []
     for obj in objs:
@@ -92,14 +92,13 @@ def extract_objs_features(objs:list):
 
 
 def extract_img_features(image_path:str):
-    """原始CLIP提取单个图像的CLIP图像特征"""
-    # 加载图像，转为张量[batch_size, 3, input_size, input_size]
-    img = Image.open(image_path)  # 打开图像
-    transform = Compose([standard_image_transform(224, 'BICUBIC'), ToTensor()])  # 定义转换
-    img = transform(img)  # 转换图像
-    img = img.unsqueeze(0)  # 添加 batch 维度
-    img = img.to(device=Clip_model.device)  # 转移到模型的设备上
-    with torch.no_grad():  # 关闭梯度计算
+    """Extract CLIP image features for a single image"""
+    # Load the image and convert it to a tensor [batch_size, 3, input_size, input_size]
+    img = Image.open(image_path)  # Open the image
+    transform = Compose([standard_image_transform(224, 'BICUBIC'), ToTensor()])  # Define transformations
+    img = transform(img)  # Transform the image
+    img = img.unsqueeze(0)  # Add batch dimension
+    img = img.to(device=Clip_model.device)  # Move to the model's device
+    with torch.no_grad():  # Disable gradient computation
         image_features = Clip_model.encode_image(img) # [num_classes, embed_dim]
         return image_features.cpu().numpy()[0] # [embed_dim]
-

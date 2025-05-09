@@ -2,53 +2,55 @@ from collections import defaultdict
 import torch
 
 __all__ = [
-    "AverageMeter",  # 计算并存储平均值和当前值
-    "MetricMeter" # 存储一组指标值
+    "AverageMeter",  # Compute and store the average and current value
+    "MetricMeter"  # Store a set of metric values
 ]
 
 
 class AverageMeter:
-    """计算并存储平均值和当前值。
+    """Compute and store the average and current value.
 
-    示例::
-        >>> # 1. 初始化一个记录损失的计量器
+    Example::
+        >>> # 1. Initialize a meter to track loss
         >>> losses = AverageMeter()
-        >>> # 2. 在每次小批量更新后更新计量器
+        >>> # 2. Update the meter after each mini-batch
         >>> losses.update(loss_value, batch_size)
     """
 
     def __init__(self, ema=False):
         """
-        参数:
-            ema (bool, optional): 是否应用指数移动平均（对新数据更敏感，更快反映数据变化）。
+        Args:
+            ema (bool, optional): Whether to apply Exponential Moving Average (EMA),
+                                  which is more sensitive to new data and reflects changes faster.
         """
-        self.ema = ema # 是否使用指数移动平均
+        self.ema = ema  # Whether to use Exponential Moving Average
         self.reset()
 
     def reset(self):
-        """重置所有值：val(当前损失值), avg, sum, count = 0。"""
+        """Reset all values: val (current loss value), avg, sum, count = 0."""
         self.val = 0
         self.avg = 0
         self.sum = 0
         self.count = 0
 
     def update(self, val, n=1):
-        """更新计量器。
-        参数:
-            val (float): batch_mean_loss(当前批次计算得到损失均值)。
-            n (int): 样本数。
+        """Update the meter.
+        Args:
+            val (float): batch_mean_loss (mean loss value for the current batch).
+            n (int): Number of samples.
         """
-        # 如果 val 是 torch.Tensor 类型，则转换为 Python 标量
+        # If val is of type torch.Tensor, convert it to a Python scalar
         if isinstance(val, torch.Tensor):
             val = val.item()
 
-        # 更新当前值、总和和计数
+        # Update current value, sum, and count
         self.val = val  
-        self.sum += val * n # 当前批次计算得到损失均值 * 当前批次的样本数
+        self.sum += val * n  # Mean loss value for the current batch * number of samples in the batch
         self.count += n
 
-        # 根据是否使用指数移动平均更新平均值
-        # 指数移动平均（EMA）是一种加权的移动平均方法，它在计算过程中赋予最近的数据更高的权重，而较早的数据权重逐渐减小。
+        # Update the average based on whether EMA is used
+        # Exponential Moving Average (EMA) is a weighted moving average method that assigns higher weights
+        # to recent data while gradually reducing the weights of older data.
         if self.ema:
             self.avg = self.avg * 0.9 + self.val * 0.1
         else:
@@ -56,47 +58,47 @@ class AverageMeter:
 
 
 class MetricMeter:
-    """存储一组指标值。
+    """Store a set of metric values.
 
-    示例::
-        >>> # 1. 创建 MetricMeter 实例
+    Example::
+        >>> # 1. Create a MetricMeter instance
         >>> metric = MetricMeter()
-        >>> # 2. 使用字典作为输入进行更新
+        >>> # 2. Update using a dictionary as input
         >>> input_dict = {'loss_1': value_1, 'loss_2': value_2}
         >>> metric.update(input_dict)
-        >>> # 3. 转换为字符串并打印
+        >>> # 3. Convert to string and print
         >>> print(str(metric))
     """
 
     def __init__(self, delimiter=" "):
         """
-        参数:
-            delimiter (str): 指标之间的分隔符。
+        Args:
+            delimiter (str): Separator between metrics.
         """
-        self.meters = defaultdict(AverageMeter) # 用于存储指标的平均值和当前值的字典
-        self.delimiter = delimiter # 分隔符
+        self.meters = defaultdict(AverageMeter)  # Dictionary to store average and current values of metrics
+        self.delimiter = delimiter  # Separator
 
     def update(self, input_dict):
-        """ 更新指标值。
-        参数:
-            input_dict (dict): 包含各个指标的名称和值的字典，用于更新指标。
+        """Update metric values.
+        Args:
+            input_dict (dict): Dictionary containing metric names and values to update.
         """
-        # 如果输入字典为空，则返回
+        # Return if the input dictionary is empty
         if input_dict is None:
             return
 
-        # 如果输入不是字典类型，则抛出类型错误
+        # Raise a TypeError if the input is not a dictionary
         if not isinstance(input_dict, dict):
-            raise TypeError("MetricMeter.update() 的输入必须是字典")
+            raise TypeError("MetricMeter.update() input must be a dictionary")
 
-        # 更新每个指标的值
+        # Update the value of each metric
         for k, v in input_dict.items():
             if isinstance(v, torch.Tensor):
-                v = v.item() # 将 torch.Tensor 转换为 Python 标量
-            self.meters[k].update(v) # 更新指标的值
+                v = v.item()  # Convert torch.Tensor to a Python scalar
+            self.meters[k].update(v)  # Update the metric value
 
     def __str__(self):
-        """将所有指标转换为字符串并连接"""
+        """Convert all metrics to a string and join them."""
         output_str = []
         for name, meter in self.meters.items():
             output_str.append(f"{name} {meter.val:.4f} ({meter.avg:.4f})")

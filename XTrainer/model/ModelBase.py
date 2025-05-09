@@ -3,13 +3,13 @@ import torch.nn as nn
 
 class ModelBase(nn.Module):
     """
-    接口类 模型。
-    继承自 torch.nn.Module，提供模型通用结构。
+    Interface class for models.
+    Inherits from torch.nn.Module and provides a common structure for models.
 
-    子类需要实现以下方法：
-        - __init__()：初始化方法
-        - forward()：前向传播
-        - (可选) build_model()：构建模型（例如：加载预训练模型）
+    Subclasses need to implement the following methods:
+        - __init__(): Initialization method
+        - forward(): Forward propagation
+        - (Optional) build_model(): Build the model (e.g., load a pre-trained model)
     """
 
     def __init__(self, cfg):
@@ -18,16 +18,16 @@ class ModelBase(nn.Module):
     
     def forward(self, x, return_feature=False):
         """
-        前向传播。
-        参数：
-            x (torch.Tensor): 输入数据 [batch, ...]
-            return_feature (bool): 是否返回特征
-        返回：
-            torch.Tensor: 输出结果 [batch, num_classes]
-            (可选) torch.Tensor: 特征 [batch, ...]
+        Forward propagation.
+        Args:
+            x (torch.Tensor): Input data [batch, ...]
+            return_feature (bool): Whether to return features
+        Returns:
+            torch.Tensor: Output results [batch, num_classes]
+            (Optional) torch.Tensor: Features [batch, ...]
         """
         raise NotImplementedError
     
     def build_model(self):
-        """构建模型。(可选)"""
+        """Build the model. (Optional)"""
         pass

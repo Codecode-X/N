@@ -36,7 +36,7 @@ class CLSDataset(Dataset):
         self.csv_path = cfg['csv_path']
         self.df = pd.read_csv(self.csv_path)
         
-        # # 从中随机选5000个样本
+        # # Randomly select 5000 samples
         # if len(self.df) > 5000:
         #     self.df = self.df.sample(n=5000, random_state=3407).reset_index(drop=True)
 
@@ -72,7 +72,7 @@ class CLSDataset(Dataset):
         print(f"Preprocessing dataset features of {self.csv_path} ...")
         self.image_features = []
         self.text_features = []
-        self.level_H = [] # 原始CLIP每一层输出的图像特征列表
+        self.level_H = [] # Original CLIP image feature list for each layer
         self.labels = []
         
         # Extract image features for all images
@@ -126,13 +126,13 @@ def evaluate_model_CLS(model, data_loader, test_raw_clip=False, device='cuda', d
     """
     Evaluate the CLIPGlassesFrame model on the validation set.
     
-    参数:
+    Args:
         - model: The CLIPGlassesFrame model
         - data_loader: DataLoader for the validation set
         - test_raw_clip: Whether to test the raw CLIP model
         - device: Device to run the model on (CPU or GPU)
         
-    返回:
+    Returns:
         - val_acc: Validation accuracy
         - val_loss: Validation loss
         - all_predictions: List of all predictions
@@ -145,9 +145,9 @@ def evaluate_model_CLS(model, data_loader, test_raw_clip=False, device='cuda', d
     all_labels = []
     
     if test_raw_clip:
-        print("测试原始 CLIP 的分类能力")
+        print("Testing the classification ability of the raw CLIP model")
     else:
-        print("测试 CLIPGlasses 的分类能力")
+        print("Testing the classification ability of CLIPGlasses")
         model.eval()
     
     with torch.no_grad():
@@ -174,15 +174,15 @@ def evaluate_model_CLS(model, data_loader, test_raw_clip=False, device='cuda', d
             else: # 53.20%
                 all_scores = [None] * num_cls  # [batch_size, batch_size] * num_options
                 for i in range(num_cls):
-                    # mini-batch中每个图像和第i个选项文本特征的匹配得分
+                    # Matching scores between each image in the mini-batch and the i-th option text feature
                     choice_h = all_class_feats[:, i] # [batch_size, embed_dim]
                     level_h_list = level_H[:, i] # [batch_size, num_layers, embed_dim]
                     _, scores_I2T = model(img_features, choice_h, level_h_list) # [batch_size, batch_size]
                     all_scores[i] = scores_I2T # [batch_size, batch_size]
-                # # 错误方式（直接使用全矩阵）
-                # logits = torch.stack(all_scores, dim=1)  # 得到 [B, C, B]
-                # 正确方式（取对角线）
-                logits_per_image = torch.stack([s.diag() for s in all_scores], dim=1) # 只计算和图片对应的选项得分 [B, C]
+                # # Incorrect method (directly using the full matrix)
+                # logits = torch.stack(all_scores, dim=1)  # Get [B, C, B]
+                # Correct method (take the diagonal)
+                logits_per_image = torch.stack([s.diag() for s in all_scores], dim=1) # Only calculate scores for corresponding options [B, C]
         
             # Compute cross-entropy loss
             loss = F.cross_entropy(logits_per_image, labels)
@@ -205,4 +205,3 @@ def evaluate_model_CLS(model, data_loader, test_raw_clip=False, device='cuda', d
     print("="*50)
     print(f"Validation Accuracy: {val_acc:.2f}%")
     return val_acc, val_loss, all_predictions, all_labels
- 
